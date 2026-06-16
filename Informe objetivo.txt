@@ -1,0 +1,71 @@
+git add .
+git commit -m "Descripción breve de tus cambios"
+git push
+
+
+### Parte 1: La Cuenta de Resultados (Caps. 7-20)
+
+En este estado, Buffett busca "poder de fijación de precios" y eficiencia operativa.
+
+* **Cap. 9-10 (Margen Bruto):** La métrica reina.
+* **Umbral:** $>40\%$ indica ventaja competitiva duradera. Entre $20\%$ y $40\%$ es industria competitiva. $<20\%$ indica ausencia de ventaja.
+
+* **Cap. 12 (Gastos VGA):** Gastos de venta, generales y administrativos.
+* **Umbral:** $<30\%$ del Margen Bruto es fantástico. Si se acerca al $100\%$, el negocio es demasiado competitivo.
+
+* **Cap. 13 (Investigación y Desarrollo - I+D):** Si la empresa debe gastar mucho en innovar para no morir, su foso es frágil.
+* **Umbral:** $<30\%$ del Margen Bruto. Evita tecnológicas que deban reinventarse cada año.
+
+* **Cap. 14 (Depreciación):** Las empresas con ventaja real suelen tener menos costes de activos físicos.
+* **Umbral:** $<10\%$ del Margen Bruto.
+
+* **Cap. 15 (Intereses):** Refleja cuánta deuda necesita el negocio para operar.
+* **Umbral:** $<15\%$ de los ingresos de explotación.
+
+* **Cap. 19 (Beneficio Neto):** Debe mostrar tendencia ascendente constante.
+* **Umbral:** $>20\%$ sobre los ingresos totales es señal de ventaja clara. $<10\%$ es un negocio pobre.
+
+
+### Parte 2: El Balance de Situación (Caps. 21-49)
+
+Buffett analiza la solidez del capital y cómo se financia la empresa.
+
+* **Cap. 24 (Efectivo):** Mucha caja con poca deuda indica que la empresa genera su propio capital.
+
+* **Cap. 26 (Cuentas a Cobrar):** Un porcentaje inferior al de la competencia indica que no necesita "rogar" o dar crédito fácil para vender.
+
+* **Cap. 29 (Propiedad, Planta y Equipo - PP&E):** Menos es mejor. Los negocios excepcionales no requieren inversiones masivas constantes en infraestructura.
+
+* **Cap. 31 (Activos Intangibles):** El valor real de marcas como Coca-Cola no suele figurar en el balance; si aparecen, suelen ser por adquisiciones.
+
+* **Cap. 38-40 (Deuda a Largo Plazo):** Las supercompañías tienen poca o ninguna.
+* **Umbral:** Los beneficios netos de **3 o 4 años** deben ser suficientes para pagar toda la deuda a largo plazo.
+
+* **Cap. 42 (Ratio Deuda/Capital):** Mide el apalancamiento.
+* **Umbral:** Ratio inferior a **0,80**. Cuanto más bajo, mejor.
+
+* **Cap. 45 (Ganancias Retenidas):** El secreto para hacerse rico.
+* **Umbral:** Busca un crecimiento constante de las reservas de alrededor del **10% anual**.
+
+* **Cap. 47-48 (ROE - Retorno sobre Capital):** Muestra la eficiencia de la gerencia.
+* **Umbral:** $>15\%$ de forma constante. Un ROE alto indica que la empresa sabe usar sus beneficios acumulados.
+
+
+### Parte 3: Flujo de Efectivo (Caps. 50-52)
+
+Aquí se verifica si el dinero es real y cómo se asigna.
+
+* **Cap. 51 (CAPEX - Gasto de Capital):** Dinero gastado en mantenimiento de activos.
+* **Umbral:** $<50\%$ de los beneficios netos anuales. Empresas como Moody's usan menos del $5\%$.
+
+* **Cap. 52 (Recompra de Acciones):** Buffett lo prefiere antes que los dividendos porque aumenta tu porcentaje de propiedad sin pagar impuestos adicionales.
+
+
+### Parte 4: Valoración (Caps. 53-57)
+
+* **Enseñanza:** Trata la acción como un "Bono de Capital" (Equity Bond) con un cupón (BPA) creciente.
+
+* **Aplicación Práctica:**
+* **Cuándo Comprar:** Cuando el mercado ofrece un precio que implica un rendimiento (beneficio/precio) superior al de los bonos corporativos, sumando el crecimiento proyectado.
+
+* **Cuándo Vender:** Solo si la ventaja competitiva desaparece, si la empresa se vuelve excesivamente cara (PER muy por encima de la media histórica) o si necesitas capital para una oportunidad mucho mejor.
