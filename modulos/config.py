@@ -3,7 +3,13 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import Path
 from typing import Any
+
+try:
+    from dotenv import load_dotenv
+except Exception:  # pragma: no cover - python-dotenv puede no estar instalado en algunos entornos
+    load_dotenv = None
 
 try:
     import streamlit as st
@@ -11,12 +17,20 @@ except Exception:  # pragma: no cover - permite importar fuera de Streamlit
     st = None
 
 
-def get_secret(name: str, default: Any = None) -> Any:
-    """Lee configuración desde Streamlit secrets o variables de entorno.
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DOTENV_PATH = PROJECT_ROOT / ".env"
 
-    Orden de prioridad:
+if load_dotenv is not None:
+    # override=False mantiene prioridad para variables ya exportadas por el sistema/hosting.
+    load_dotenv(DOTENV_PATH, override=False)
+
+
+def get_secret(name: str, default: Any = None) -> Any:
+    """Lee configuración desde Streamlit secrets, variables de entorno o .env local.
+
+    Orden de prioridad efectivo:
     1. st.secrets[name], cuando Streamlit está disponible.
-    2. os.environ[name].
+    2. os.environ[name]. Aquí también entran variables cargadas desde .env.
     3. default.
     """
     if st is not None:
