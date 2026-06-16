@@ -1,0 +1,8 @@
+.venv/
+__pycache__/
+*.pyc
+cache_datos/
+.env
+.streamlit/secrets.toml
+data/telegram_alert_state.json
+data/telegram_subscribers.json
