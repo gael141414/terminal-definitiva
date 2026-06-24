@@ -6,6 +6,8 @@ import pandas as pd
 import streamlit as st
 import yfinance as yf
 
+from modulos.watchlist_alerts import alert_summary, build_watchlist_alerts
+
 # Definimos la ruta de la base de datos
 DB_FOLDER = "data"
 DB_FILE = os.path.join(DB_FOLDER, "watchlist.json")
@@ -76,6 +78,50 @@ def _extraer_last_analysis(item: dict[str, Any]) -> dict[str, Any]:
     return analysis if isinstance(analysis, dict) else {}
 
 
+def _render_alerts_panel(df_alerts: pd.DataFrame) -> None:
+    """Panel visual de alertas priorizadas."""
+
+    st.markdown("### 🚨 Alertas inteligentes")
+    st.caption(
+        "Prioriza la watchlist según precio vs target, margen de seguridad, ValueQuant Score, régimen de valoración y antigüedad del análisis."
+    )
+
+    if df_alerts.empty:
+        st.info("No hay alertas disponibles todavía.")
+        return
+
+    summary = alert_summary(df_alerts)
+    a1, a2, a3, a4 = st.columns(4)
+    a1.metric("Alta", summary.get("Alta", 0))
+    a2.metric("Media", summary.get("Media", 0))
+    a3.metric("Baja", summary.get("Baja", 0))
+    a4.metric("Info", summary.get("Info", 0))
+
+    priority_filter = st.multiselect(
+        "Filtrar por prioridad",
+        options=["Alta", "Media", "Baja", "Info"],
+        default=["Alta", "Media"],
+        key="watchlist_alert_priority_filter",
+    )
+
+    filtered_alerts = df_alerts[df_alerts["Prioridad"].isin(priority_filter)] if priority_filter else df_alerts
+
+    if filtered_alerts.empty:
+        st.info("No hay alertas con el filtro seleccionado.")
+        return
+
+    st.dataframe(
+        filtered_alerts[["Prioridad", "Ticker", "Categoría", "Alerta", "Detalle", "Acción sugerida", "Score"]],
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    top_alert = filtered_alerts.iloc[0].to_dict()
+    st.info(
+        f"Prioridad principal: {top_alert.get('Ticker')} — {top_alert.get('Alerta')} | Acción sugerida: {top_alert.get('Acción sugerida')}"
+    )
+
+
 # --- INTERFAZ PRINCIPAL ---
 def ejecutar_watchlist():
     st.markdown("### 📋 Mi Watchlist Institucional")
@@ -130,7 +176,7 @@ def ejecutar_watchlist():
         st.info("Tu Watchlist está vacía. Añade una acción manualmente o guarda un análisis desde 🧩 Research Core → 💾 Seguimiento.")
         return
 
-    with st.spinner("Sincronizando precios y snapshots de análisis..."):
+    with st.spinner("Sincronizando precios, snapshots y alertas inteligentes..."):
         tickers_list = list(db.keys())
         resultados = []
 
@@ -197,6 +243,7 @@ def ejecutar_watchlist():
                 )
 
         df_watch = pd.DataFrame(resultados)
+        df_alerts = build_watchlist_alerts(df_watch)
 
     # -------------------------------------------------------------
     # 3. VISUALIZACIÓN
@@ -216,7 +263,10 @@ def ejecutar_watchlist():
             st.metric("Activos en Seguimiento", len(df_watch))
 
         st.markdown("<br>", unsafe_allow_html=True)
+        _render_alerts_panel(df_alerts)
 
+        st.markdown("---")
+        st.markdown("### Tabla de seguimiento")
         st.dataframe(
             df_watch.style.format(
                 {
@@ -236,5 +286,5 @@ def ejecutar_watchlist():
         )
 
         st.caption(
-            "Los tickers guardados desde Research Core incluyen acción operativa, score, margen de seguridad y target de seguimiento."
+            "Los tickers guardados desde Research Core incluyen acción operativa, score, margen de seguridad, target de seguimiento y alertas inteligentes."
         )
