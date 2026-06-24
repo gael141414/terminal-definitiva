@@ -142,6 +142,8 @@ TOOL_CONSOLIDATION: dict[str, dict[str, str | int | bool]] = {
     "🩻 Radiografía de ETFs (X-Ray)": {"group": "discovery_engine", "status": "merge", "order": 70, "visible_in_mvp": False},
 
     "📋 Mi Watchlist (Cartera)": {"group": "portfolio_decision", "status": "core", "order": 10, "visible_in_mvp": True},
+    "📌 Briefing de Oportunidades": {"group": "portfolio_decision", "status": "core", "order": 15, "visible_in_mvp": True},
+    "📚 Análisis Guardados": {"group": "portfolio_decision", "status": "core", "order": 15, "visible_in_mvp": True},
     "⚖️ Optimizador de Cartera": {"group": "portfolio_decision", "status": "merge", "order": 20, "visible_in_mvp": True},
     "🎲 Monte Carlo Cartera": {"group": "portfolio_decision", "status": "merge", "order": 30, "visible_in_mvp": True},
 

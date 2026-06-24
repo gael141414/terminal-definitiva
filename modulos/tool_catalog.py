@@ -34,6 +34,8 @@ _RAW_TOOL_CATALOG = [
     {"label": "🌐 Escáner Global (Screener)", "bloque": "🔎 Descubrimiento", "input_mode": "standalone", "descripcion": "Filtro global por criterios cuantitativos.", "strategic_group": "discovery"},
     {"label": "🌐 Screener Avanzado (Multi-Factor)", "bloque": "🔎 Descubrimiento", "input_mode": "standalone", "descripcion": "Buscador con filtros dinámicos y ranking multifactor.", "strategic_group": "discovery"},
     {"label": "📋 Mi Watchlist (Cartera)", "bloque": "💼 Cartera y Decisión", "input_mode": "standalone", "descripcion": "Seguimiento de cartera y prioridades de análisis.", "strategic_group": "portfolio"},
+    {"label": "📌 Briefing de Oportunidades", "bloque": "💼 Cartera y Decisión", "input_mode": "standalone", "descripcion": "Vista ejecutiva de oportunidades: revisar hoy, vigilar caída, recalcular y descartar.", "strategic_group": "portfolio"},
+    {"label": "📚 Análisis Guardados", "bloque": "💼 Cartera y Decisión", "input_mode": "standalone", "descripcion": "Histórico de snapshots guardados desde Research Core.", "strategic_group": "portfolio"},
     {"label": "⚖️ Optimizador de Cartera", "bloque": "💼 Cartera y Decisión", "input_mode": "standalone", "descripcion": "Correlación, frontera eficiente y asignación óptima.", "strategic_group": "portfolio"},
     {"label": "🎲 Monte Carlo Cartera", "bloque": "💼 Cartera y Decisión", "input_mode": "standalone", "descripcion": "Proyección de cartera con percentiles y VaR.", "strategic_group": "portfolio"},
     {"label": "🤖 Robo-Advisor & Test Perfil", "bloque": "💼 Cartera y Decisión", "input_mode": "standalone", "descripcion": "Perfil inversor y asignación orientativa.", "strategic_group": "assistant"},
