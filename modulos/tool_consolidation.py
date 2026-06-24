@@ -26,6 +26,14 @@ class ConsolidationGroup:
 
 
 CONSOLIDATION_GROUPS: dict[str, ConsolidationGroup] = {
+    "product_ops": ConsolidationGroup(
+        key="product_ops",
+        name="Product Operations",
+        strategic_area="Product",
+        description="Mapa interno de producto, priorización MVP, arquitectura objetivo y control de consolidación.",
+        target_module="modulos.product_dashboard",
+        priority=0,
+    ),
     "research_core": ConsolidationGroup(
         key="research_core",
         name="Research Core",
@@ -102,6 +110,8 @@ CONSOLIDATION_GROUPS: dict[str, ConsolidationGroup] = {
 
 
 TOOL_CONSOLIDATION: dict[str, dict[str, str | int | bool]] = {
+    "🧭 Mapa del Producto": {"group": "product_ops", "status": "core", "order": 1, "visible_in_mvp": True},
+
     "📊 Resumen Ejecutivo": {"group": "research_core", "status": "core", "order": 10, "visible_in_mvp": True},
     "🔎 Análisis Fundamental": {"group": "research_core", "status": "core", "order": 20, "visible_in_mvp": True},
     "🧠 Auditoría Forense": {"group": "research_core", "status": "core", "order": 30, "visible_in_mvp": True},
