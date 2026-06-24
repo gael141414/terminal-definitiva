@@ -1,9 +1,13 @@
 """Comparativa relativa para Research Core.
 
-Este módulo compara la empresa analizada contra un competidor usando un snapshot
-ligero de mercado y fundamentales disponibles vía yfinance. No recalcula todavía
-el ValueQuant Score completo del competidor; esa ampliación requiere descargar y
-normalizar estados financieros completos del rival.
+Este módulo compara la empresa analizada contra un competidor usando:
+- ValueQuant Score completo de la empresa principal.
+- ValueQuant Score calculado bajo demanda para el competidor.
+- Snapshot ligero de mercado/fundamentales vía yfinance para ambas compañías.
+
+La comparativa sigue siendo una herramienta de orientación: el score del competidor
+se calcula con el mismo motor, pero debe validarse con datos normalizados y una
+valoración específica antes de tomar decisiones de inversión.
 """
 
 from __future__ import annotations
@@ -14,7 +18,13 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
+from balance_analyzer import analizar_balance
+from cashflow_analyzer import analizar_flujo_efectivo
+from income_analyzer import analizar_cuenta_resultados
+from valuator import valorar_empresa
 from modulos.investment_thesis import build_investment_thesis
+from modulos.scoring_engine import calcular_valuequant_score
+from modulos.utils import calcular_score_buffett, cargar_datos
 
 
 @dataclass
@@ -40,13 +50,28 @@ class CompanySnapshot:
 
 
 @dataclass
+class CompetitorScoreBundle:
+    """Score completo calculado bajo demanda para el competidor."""
+
+    ticker: str
+    years: int
+    valuequant_score: Any | None = None
+    buffett_score: float | None = None
+    res_val: dict[str, Any] | None = None
+    data_available: bool = False
+    error: str | None = None
+
+
+@dataclass
 class RelativeComparison:
     """Resultado estructurado de comparación relativa."""
 
     primary: CompanySnapshot
     competitor: CompanySnapshot
+    competitor_score: CompetitorScoreBundle | None
     verdict_rows: list[dict[str, str]]
     metric_rows: list[dict[str, str]]
+    component_rows: list[dict[str, str]]
     limitations: list[str]
 
 
@@ -86,6 +111,11 @@ def _fmt_pct(value: Any, signed: bool = False) -> str:
 def _fmt_ratio(value: Any) -> str:
     number = _as_float(value)
     return f"{number:.1f}x" if number is not None else "N/D"
+
+
+def _fmt_score(value: Any) -> str:
+    number = _as_float(value)
+    return f"{number:.1f}/100" if number is not None else "N/D"
 
 
 def _score_attr(valuequant_score: Any, attr: str, default: Any = None) -> Any:
@@ -176,6 +206,63 @@ def _fetch_yfinance_snapshot(ticker: str) -> CompanySnapshot:
         perf_6m=perf_6m,
         perf_1y=perf_1y,
     )
+
+
+@st.cache_data(show_spinner=False, ttl=3600)
+def _build_competitor_valuequant(ticker: str, years: int = 5) -> CompetitorScoreBundle:
+    """Calcula ValueQuant Score completo del competidor usando el pipeline financiero existente."""
+
+    symbol = (ticker or "").strip().upper()
+    if not symbol:
+        return CompetitorScoreBundle(ticker="N/D", years=years, error="Ticker competidor no configurado.")
+
+    try:
+        is_df, bs_df, cf_df, metrics_df = cargar_datos(symbol, years)
+        if is_df is None or bs_df is None or cf_df is None:
+            return CompetitorScoreBundle(
+                ticker=symbol,
+                years=years,
+                data_available=False,
+                error="FMP no devolvió estados financieros completos para el competidor.",
+            )
+
+        res_is = analizar_cuenta_resultados(is_df, cf_df)
+        res_bs = analizar_balance(bs_df, is_df)
+        res_cf = analizar_flujo_efectivo(cf_df, is_df)
+        res_val = valorar_empresa(is_df, bs_df, cf_df, metrics_df, symbol)
+
+        buffett_score = calcular_score_buffett(
+            res_is["ratios"],
+            res_bs["ratios"],
+            res_cf["ratios"],
+        )
+        valuequant_score = calcular_valuequant_score(
+            ticker=symbol,
+            is_df=is_df,
+            bs_df=bs_df,
+            cf_df=cf_df,
+            res_is=res_is,
+            res_bs=res_bs,
+            res_cf=res_cf,
+            res_val=res_val,
+        )
+
+        return CompetitorScoreBundle(
+            ticker=symbol,
+            years=years,
+            valuequant_score=valuequant_score,
+            buffett_score=float(buffett_score) if buffett_score is not None else None,
+            res_val=res_val,
+            data_available=True,
+            error=None,
+        )
+    except Exception as exc:
+        return CompetitorScoreBundle(
+            ticker=symbol,
+            years=years,
+            data_available=False,
+            error=f"{type(exc).__name__}: {exc}",
+        )
 
 
 def _winner_higher(primary: float | None, competitor: float | None, primary_label: str, competitor_label: str) -> str:
@@ -283,49 +370,92 @@ def _verdict_rows(
     primary: CompanySnapshot,
     competitor_snapshot: CompanySnapshot,
     valuequant_score: Any,
+    competitor_score: CompetitorScoreBundle | None,
     res_val: dict[str, Any] | None,
     nota_buffett: float | None,
 ) -> list[dict[str, str]]:
     thesis = build_investment_thesis(ticker, valuequant_score, res_val, nota_buffett)
     primary_label = ticker.upper()
     competitor_label = competitor.upper()
+    competitor_vq = competitor_score.valuequant_score if competitor_score and competitor_score.data_available else None
 
-    quality_score = _component_score(valuequant_score, "calidad")
-    valuation_score = _component_score(valuequant_score, "valoración")
-    risk_score = _component_score(valuequant_score, "riesgo")
+    primary_final = _score_attr(valuequant_score, "final_score")
+    competitor_final = _score_attr(competitor_vq, "final_score")
+    primary_quality = _component_score(valuequant_score, "calidad")
+    competitor_quality = _component_score(competitor_vq, "calidad")
+    primary_valuation = _component_score(valuequant_score, "valoración")
+    competitor_valuation = _component_score(competitor_vq, "valoración")
+    primary_risk = _component_score(valuequant_score, "riesgo")
+    competitor_risk = _component_score(competitor_vq, "riesgo")
+    primary_growth = _component_score(valuequant_score, "crecimiento")
+    competitor_growth = _component_score(competitor_vq, "crecimiento")
 
     return [
         {
             "Dimensión": "Score agregado",
-            primary_label: _fmt_ratio(_score_attr(valuequant_score, "final_score")) if _score_attr(valuequant_score, "final_score") is not None else "N/D",
-            competitor_label: "Pendiente VQ",
-            "Lectura": "Solo la empresa principal tiene ValueQuant Score completo en este flujo.",
+            primary_label: _fmt_score(primary_final),
+            competitor_label: _fmt_score(competitor_final),
+            "Lectura": f"Ventaja ValueQuant: {_winner_higher(primary_final, competitor_final, primary_label, competitor_label)}.",
         },
         {
-            "Dimensión": "Calidad",
-            primary_label: _fmt_ratio(quality_score) if quality_score is not None else "N/D",
-            competitor_label: "Proxy yfinance",
-            "Lectura": f"Comparar con margen neto, margen operativo y ROE. Ventaja proxy: {_winner_higher(primary.roe, competitor_snapshot.roe, primary_label, competitor_label)} en ROE.",
+            "Dimensión": "Calidad fundamental",
+            primary_label: _fmt_score(primary_quality),
+            competitor_label: _fmt_score(competitor_quality),
+            "Lectura": f"Mayor calidad cuantitativa: {_winner_higher(primary_quality, competitor_quality, primary_label, competitor_label)}.",
         },
         {
             "Dimensión": "Valoración",
-            primary_label: _fmt_ratio(valuation_score) if valuation_score is not None else "N/D",
-            competitor_label: "Proxy yfinance",
-            "Lectura": f"La empresa principal está en régimen '{thesis.valuation_regime}'. En múltiplos, revisar PER/FCF Yield frente al competidor.",
+            primary_label: _fmt_score(primary_valuation),
+            competitor_label: _fmt_score(competitor_valuation),
+            "Lectura": f"Mejor valoración cuantitativa: {_winner_higher(primary_valuation, competitor_valuation, primary_label, competitor_label)}. Régimen principal: {thesis.valuation_regime}.",
         },
         {
-            "Dimensión": "Riesgo",
-            primary_label: _fmt_ratio(risk_score) if risk_score is not None else "N/D",
-            competitor_label: "Proxy yfinance",
-            "Lectura": f"Menor beta relativa: {_winner_lower(primary.beta, competitor_snapshot.beta, primary_label, competitor_label)}.",
+            "Dimensión": "Riesgo y forense",
+            primary_label: _fmt_score(primary_risk),
+            competitor_label: _fmt_score(competitor_risk),
+            "Lectura": f"Mejor perfil de riesgo: {_winner_higher(primary_risk, competitor_risk, primary_label, competitor_label)}.",
         },
         {
-            "Dimensión": "Momentum",
+            "Dimensión": "Crecimiento",
+            primary_label: _fmt_score(primary_growth),
+            competitor_label: _fmt_score(competitor_growth),
+            "Lectura": f"Mejor crecimiento cuantitativo: {_winner_higher(primary_growth, competitor_growth, primary_label, competitor_label)}.",
+        },
+        {
+            "Dimensión": "Momentum 1 año",
             primary_label: _fmt_pct(primary.perf_1y, signed=True),
             competitor_label: _fmt_pct(competitor_snapshot.perf_1y, signed=True),
             "Lectura": f"Mejor comportamiento anual: {_winner_higher(primary.perf_1y, competitor_snapshot.perf_1y, primary_label, competitor_label)}.",
         },
     ]
+
+
+def _component_comparison_rows(valuequant_score: Any, competitor_score: CompetitorScoreBundle | None) -> list[dict[str, str]]:
+    competitor_vq = competitor_score.valuequant_score if competitor_score and competitor_score.data_available else None
+    if valuequant_score is None or competitor_vq is None:
+        return []
+
+    rows: list[dict[str, str]] = []
+    primary_components = _score_attr(valuequant_score, "components", []) or []
+    competitor_components = _score_attr(competitor_vq, "components", []) or []
+    competitor_by_name = {str(getattr(component, "name", "")): component for component in competitor_components}
+
+    primary_ticker = "Empresa principal"
+    competitor_ticker = competitor_score.ticker
+    for component in primary_components:
+        name = str(getattr(component, "name", "N/D"))
+        other = competitor_by_name.get(name)
+        primary_score = _as_float(getattr(component, "score", None))
+        competitor_component_score = _as_float(getattr(other, "score", None)) if other is not None else None
+        rows.append(
+            {
+                "Componente": name,
+                primary_ticker: _fmt_score(primary_score),
+                competitor_ticker: _fmt_score(competitor_component_score),
+                "Ventaja": _winner_higher(primary_score, competitor_component_score, primary_ticker, competitor_ticker),
+            }
+        )
+    return rows
 
 
 def build_relative_comparison(
@@ -334,6 +464,7 @@ def build_relative_comparison(
     valuequant_score: Any,
     res_val: dict[str, Any] | None,
     nota_buffett: float | None,
+    years: int = 5,
 ) -> RelativeComparison | None:
     """Construye la comparación relativa contra el competidor configurado."""
 
@@ -344,18 +475,49 @@ def build_relative_comparison(
     competitor_label = str(competitor).strip().upper()
     primary = _fetch_yfinance_snapshot(primary_label)
     competitor_snapshot = _fetch_yfinance_snapshot(competitor_label)
+    competitor_score = _build_competitor_valuequant(competitor_label, years)
+
+    limitations = [
+        "El score del competidor se calcula bajo demanda con el mismo pipeline, pero no reemplaza una revisión manual del rival.",
+        "Los datos de yfinance pueden diferir de FMP/SEC y deben validarse antes de decidir.",
+        "La comparación de valoración depende de supuestos y puede cambiar si el DCF del competidor no está suficientemente cubierto.",
+    ]
+    if competitor_score.error:
+        limitations.insert(0, f"Score completo del competidor no disponible: {competitor_score.error}")
 
     return RelativeComparison(
         primary=primary,
         competitor=competitor_snapshot,
-        verdict_rows=_verdict_rows(primary_label, competitor_label, primary, competitor_snapshot, valuequant_score, res_val, nota_buffett),
+        competitor_score=competitor_score,
+        verdict_rows=_verdict_rows(
+            primary_label,
+            competitor_label,
+            primary,
+            competitor_snapshot,
+            valuequant_score,
+            competitor_score,
+            res_val,
+            nota_buffett,
+        ),
         metric_rows=_metric_rows(primary, competitor_snapshot, primary_label, competitor_label),
-        limitations=[
-            "El competidor todavía no tiene ValueQuant Score completo dentro de esta vista.",
-            "Los datos de yfinance pueden diferir de FMP/SEC y deben validarse antes de decidir.",
-            "La comparación usa proxies de mercado y fundamentales resumidos; no sustituye análisis financiero completo del rival.",
-        ],
+        component_rows=_component_comparison_rows(valuequant_score, competitor_score),
+        limitations=limitations,
     )
+
+
+def _normalize_rows_for_report(rows: list[dict[str, str]], primary_label: str, competitor_label: str) -> list[dict[str, str]]:
+    normalized: list[dict[str, str]] = []
+    for row in rows:
+        title = row.get("Dimensión") or row.get("Métrica") or row.get("Componente") or "N/D"
+        normalized.append(
+            {
+                "Bloque": title,
+                primary_label: row.get(primary_label) or row.get("Empresa principal") or "N/D",
+                competitor_label: row.get(competitor_label) or row.get(competitor_label.upper()) or row.get(competitor_label.lower()) or "N/D",
+                "Lectura": row.get("Lectura") or row.get("Ventaja") or "",
+            }
+        )
+    return normalized
 
 
 def relative_comparison_markdown_rows(
@@ -364,15 +526,18 @@ def relative_comparison_markdown_rows(
     valuequant_score: Any,
     res_val: dict[str, Any] | None,
     nota_buffett: float | None,
+    years: int = 5,
 ) -> list[dict[str, str]]:
     """Devuelve filas compactas para insertar la comparación en el informe Markdown."""
 
-    comparison = build_relative_comparison(ticker, competitor, valuequant_score, res_val, nota_buffett)
+    comparison = build_relative_comparison(ticker, competitor, valuequant_score, res_val, nota_buffett, years)
     if comparison is None:
         return []
 
-    rows = comparison.verdict_rows + comparison.metric_rows
-    return rows[:18]
+    primary_label = comparison.primary.ticker
+    competitor_label = comparison.competitor.ticker
+    rows = comparison.verdict_rows + comparison.component_rows[:4] + comparison.metric_rows[:10]
+    return _normalize_rows_for_report(rows, primary_label, competitor_label)[:20]
 
 
 def render_relative_comparison(
@@ -381,33 +546,50 @@ def render_relative_comparison(
     valuequant_score: Any,
     res_val: dict[str, Any] | None,
     nota_buffett: float | None,
+    years: int = 5,
 ) -> None:
     """Renderiza la pestaña de comparativa relativa dentro de Research Core."""
 
     st.markdown("### Comparativa relativa contra competidor")
     st.caption(
-        "Comparación ligera basada en ValueQuant para la empresa principal y proxies de yfinance para ambos tickers. "
-        "No recalcula aún el score completo del competidor."
+        "Comparación con ValueQuant Score completo calculado bajo demanda para el competidor, "
+        "más proxies de mercado y múltiplos vía yfinance."
     )
 
-    comparison = build_relative_comparison(ticker, competitor, valuequant_score, res_val, nota_buffett)
+    if not competitor or not str(competitor).strip():
+        st.warning("Configura un ticker competidor para activar esta comparativa.")
+        return
+
+    with st.spinner(f"Calculando score relativo de {ticker.upper()} vs {competitor.upper()}..."):
+        comparison = build_relative_comparison(ticker, competitor, valuequant_score, res_val, nota_buffett, years)
+
     if comparison is None:
         st.warning("Configura un ticker competidor para activar esta comparativa.")
         return
 
     primary_label = comparison.primary.ticker
     competitor_label = comparison.competitor.ticker
+    competitor_vq = comparison.competitor_score.valuequant_score if comparison.competitor_score and comparison.competitor_score.data_available else None
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric(f"{primary_label} precio", _fmt_money(comparison.primary.price))
-    c2.metric(f"{competitor_label} precio", _fmt_money(comparison.competitor.price))
+    c1.metric(f"{primary_label} VQ", _fmt_score(_score_attr(valuequant_score, "final_score")))
+    c2.metric(f"{competitor_label} VQ", _fmt_score(_score_attr(competitor_vq, "final_score")))
     c3.metric(f"{primary_label} FCF Yield", _fmt_pct(comparison.primary.fcf_yield))
     c4.metric(f"{competitor_label} FCF Yield", _fmt_pct(comparison.competitor.fcf_yield))
+
+    if comparison.competitor_score and comparison.competitor_score.error:
+        st.warning(f"Score completo del competidor incompleto: {comparison.competitor_score.error}")
 
     st.markdown("#### Veredicto relativo")
     st.dataframe(pd.DataFrame(comparison.verdict_rows), use_container_width=True, hide_index=True)
 
-    st.markdown("#### Métricas comparables")
+    if comparison.component_rows:
+        st.markdown("#### Desglose ValueQuant por componente")
+        st.dataframe(pd.DataFrame(comparison.component_rows), use_container_width=True, hide_index=True)
+    else:
+        st.info("No hay desglose completo de componentes para el competidor.")
+
+    st.markdown("#### Métricas comparables de mercado")
     st.dataframe(pd.DataFrame(comparison.metric_rows), use_container_width=True, hide_index=True)
 
     st.markdown("#### Limitaciones")
@@ -415,6 +597,6 @@ def render_relative_comparison(
         st.write(f"- {limitation}")
 
     st.info(
-        "Lectura correcta: usa esta pestaña para orientar preguntas de análisis relativo. "
-        "La decisión final debe apoyarse en estados financieros completos y valoración específica de cada compañía."
+        "Lectura correcta: usa esta pestaña para decidir cuál merece prioridad de análisis. "
+        "No es todavía un ranking validado; falta backtesting transversal del score."
     )
