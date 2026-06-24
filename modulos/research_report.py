@@ -16,6 +16,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from modulos.investment_thesis import build_investment_thesis
+from modulos.valuation_sensitivity import build_valuation_sensitivity, sensitivity_markdown_rows
 
 
 DISCLAIMER = (
@@ -200,6 +201,8 @@ def build_research_report_markdown(
     component_rows = _component_rows(valuequant_score)
     financial_rows = _financial_snapshot(res_is, res_bs, res_cf)
     scenario_rows = _valuation_scenario_rows(thesis)
+    sensitivity = build_valuation_sensitivity(thesis)
+    sensitivity_rows = sensitivity_markdown_rows(sensitivity)
     predictive_confidence = _score_attr(valuequant_score, "predictive_confidence")
 
     lines: list[str] = [
@@ -235,6 +238,9 @@ def build_research_report_markdown(
         "### Escenarios de valoración",
         *_markdown_table(scenario_rows),
         "",
+        "### Sensibilidad crecimiento vs tasa de descuento",
+        *(_markdown_table(sensitivity_rows) if sensitivity_rows else ["No hay datos suficientes para construir sensibilidad de valoración."]),
+        "",
         "## 3. Desglose ValueQuant Score",
         *_markdown_table(component_rows),
         "",
@@ -261,6 +267,7 @@ def build_research_report_markdown(
             "## 7. Checklist antes de decidir",
             "- Validar manualmente los datos financieros descargados.",
             "- Revisar supuestos de DCF: crecimiento, márgenes, reinversión y WACC.",
+            "- Revisar la matriz de sensibilidad y confirmar que la tesis no depende solo del escenario optimista.",
             "- Comparar múltiplos, FCF Yield y calidad con competidores directos.",
             "- Verificar si el margen de seguridad procede de supuestos prudentes o de crecimiento agresivo.",
             "- Revisar deuda, recompras, dilución y vencimientos relevantes.",

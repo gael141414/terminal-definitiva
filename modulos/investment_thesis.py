@@ -14,6 +14,8 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
+from modulos.valuation_sensitivity import render_valuation_sensitivity
+
 
 @dataclass
 class ThesisSection:
@@ -607,6 +609,8 @@ def render_investment_thesis(
     with tabs[1]:
         st.markdown("#### Escenarios de valoración")
         st.dataframe(_scenario_dataframe(thesis), use_container_width=True, hide_index=True)
+
+        render_valuation_sensitivity(thesis)
         st.markdown("#### Lectura de valoración")
         for bullet in thesis.sections[2].bullets:
             st.write(f"- {bullet}")
