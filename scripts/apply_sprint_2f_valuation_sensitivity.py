@@ -66,24 +66,25 @@ def patch_research_report() -> bool:
             raise RuntimeError("No se encontró scenario_rows en research_report.py")
         text = text.replace(anchor, anchor + sensitivity_compute, 1)
 
-    sensitivity_section = """        "### Sensibilidad crecimiento vs tasa de descuento",
+    sensitivity_section = '''        "### Sensibilidad crecimiento vs tasa de descuento",
         *(_markdown_table(sensitivity_rows) if sensitivity_rows else ["No hay datos suficientes para construir sensibilidad de valoración."]),
         "",
-"""
+'''
     if "### Sensibilidad crecimiento vs tasa de descuento" not in text:
-        anchor = """        "### Escenarios de valoración",
+        anchor = '''        "### Escenarios de valoración",
         *_markdown_table(scenario_rows),
         "",
-"""
+'''
         if anchor not in text:
             raise RuntimeError("No se encontró la sección de escenarios de valoración en research_report.py")
         text = text.replace(anchor, anchor + sensitivity_section, 1)
 
-    checklist_line = "- Revisar la matriz de sensibilidad y confirmar que la tesis no depende solo del escenario optimista."
-    if checklist_line not in text:
-        anchor = "- Revisar supuestos de DCF: crecimiento, márgenes, reinversión y WACC."
-        if anchor in text:
-            text = text.replace(anchor, anchor + "\n" + checklist_line, 1)
+    checklist_line = '            "- Revisar la matriz de sensibilidad y confirmar que la tesis no depende solo del escenario optimista.",'
+    if "Revisar la matriz de sensibilidad" not in text:
+        anchor = '            "- Revisar supuestos de DCF: crecimiento, márgenes, reinversión y WACC.",'
+        if anchor not in text:
+            raise RuntimeError("No se encontró la línea de checklist DCF en research_report.py")
+        text = text.replace(anchor, anchor + "\n" + checklist_line, 1)
 
     if text != original:
         _backup(RESEARCH_REPORT)
