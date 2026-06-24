@@ -25,6 +25,11 @@ from valuator import valorar_empresa
 from modulos.investment_thesis import build_investment_thesis
 from modulos.scoring_engine import calcular_valuequant_score
 from modulos.utils import calcular_score_buffett, cargar_datos
+from modulos.relative_decision import (
+    build_relative_decision,
+    relative_decision_table_rows,
+    render_relative_decision_panel,
+)
 
 
 @dataclass
@@ -536,8 +541,10 @@ def relative_comparison_markdown_rows(
 
     primary_label = comparison.primary.ticker
     competitor_label = comparison.competitor.ticker
+    decision = build_relative_decision(comparison, valuequant_score, res_val, nota_buffett)
+    decision_rows = relative_decision_table_rows(decision, primary_label, competitor_label)
     rows = comparison.verdict_rows + comparison.component_rows[:4] + comparison.metric_rows[:10]
-    return _normalize_rows_for_report(rows, primary_label, competitor_label)[:20]
+    return (decision_rows + _normalize_rows_for_report(rows, primary_label, competitor_label))[:24]
 
 
 def render_relative_comparison(
@@ -576,6 +583,9 @@ def render_relative_comparison(
     c2.metric(f"{competitor_label} VQ", _fmt_score(_score_attr(competitor_vq, "final_score")))
     c3.metric(f"{primary_label} FCF Yield", _fmt_pct(comparison.primary.fcf_yield))
     c4.metric(f"{competitor_label} FCF Yield", _fmt_pct(comparison.competitor.fcf_yield))
+
+    decision = build_relative_decision(comparison, valuequant_score, res_val, nota_buffett)
+    render_relative_decision_panel(decision)
 
     if comparison.competitor_score and comparison.competitor_score.error:
         st.warning(f"Score completo del competidor incompleto: {comparison.competitor_score.error}")
