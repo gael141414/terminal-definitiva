@@ -37,7 +37,10 @@ from modulos.tool_catalog import (
     TOOL_CATALOG,
     BLOQUES_HERRAMIENTAS,
     HERRAMIENTAS_POR_LABEL,
+    obtener_bloques_por_modo,
     obtener_herramientas_por_bloque,
+    obtener_herramientas_por_bloque_y_modo,
+    obtener_modos_navegacion,
 )
 from modulos.tool_router import CompanyToolContext, render_company_tool, render_independent_tool
 
@@ -1779,12 +1782,50 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-bloques_internos = list(BLOQUES_HERRAMIENTAS)
+modos_navegacion = obtener_modos_navegacion()
+modo_labels = [modo["label"] for modo in modos_navegacion]
+modo_keys = [modo["key"] for modo in modos_navegacion]
+modo_default_idx = modo_keys.index("mvp") if "mvp" in modo_keys else 0
+
+with st.sidebar:
+    st.markdown("### Modo de producto")
+    modo_label = st.radio(
+        "Modo de navegación",
+        modo_labels,
+        index=modo_default_idx,
+        key="vq_navigation_mode",
+        label_visibility="collapsed",
+        help="MVP muestra solo el producto principal. Consolidado agrupa herramientas por arquitectura objetivo. Completo muestra todo.",
+    )
+
+modo_navegacion = modo_keys[modo_labels.index(modo_label)] if modo_label in modo_labels else "mvp"
+modo_meta = next((modo for modo in modos_navegacion if modo["key"] == modo_navegacion), modos_navegacion[0])
+
+bloques_internos = list(obtener_bloques_por_modo(modo_navegacion))
+if not bloques_internos:
+    bloques_internos = list(BLOQUES_HERRAMIENTAS)
+
 menu_interno = ["__home__"] + bloques_internos
 menu_labels = ["Home"] + [BLOQUE_UI.get(b, (strip_visual_prefix(b), "grid"))[0] for b in bloques_internos]
 menu_icons = ["house"] + [BLOQUE_UI.get(b, (strip_visual_prefix(b), "grid"))[1] for b in bloques_internos]
-seleccion_menu = render_option_menu_safe(menu_labels, menu_icons, key="vq_main_nav")
+seleccion_menu = render_option_menu_safe(menu_labels, menu_icons, key=f"vq_main_nav_{modo_navegacion}")
 st.markdown("</div>", unsafe_allow_html=True)
+
+st.markdown(
+    f"""
+    <div class="vq-control-panel" style="padding:.75rem 1rem; margin-bottom:.85rem;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
+            <div>
+                <div class="vq-context-eyebrow">Modo de navegación</div>
+                <div style="color:#FFFFFF; font-weight:800;">{html.escape(str(modo_meta.get('label', 'MVP')))}</div>
+                <div style="color:var(--vq-muted); font-size:.86rem; margin-top:.15rem;">{html.escape(str(modo_meta.get('caption', '')))}</div>
+            </div>
+            <span class="vq-badge vq-badge-success"><i class="bi bi-layers"></i> {html.escape(str(modo_meta.get('badge', 'Producto')))}</span>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 seleccion_idx = menu_labels.index(seleccion_menu) if seleccion_menu in menu_labels else 0
 if menu_interno[seleccion_idx] == "__home__":
@@ -1792,7 +1833,7 @@ if menu_interno[seleccion_idx] == "__home__":
     st.stop()
 
 bloque_actual = menu_interno[seleccion_idx]
-herramientas_bloque = obtener_herramientas_por_bloque(bloque_actual)
+herramientas_bloque = obtener_herramientas_por_bloque_y_modo(bloque_actual, modo_navegacion)
 etiquetas_bloque = [h["label"] for h in herramientas_bloque]
 tool_labels = [strip_visual_prefix(label) for label in etiquetas_bloque]
 tool_icons = [TOOL_UI_ICONS.get(label, "circle") for label in etiquetas_bloque]
