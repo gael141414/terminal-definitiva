@@ -87,6 +87,23 @@ def render_independent_tool(seccion_actual: str, *, etf_input: str = "SPY") -> A
 def render_company_tool(seccion_actual: str, context: CompanyToolContext) -> Any:
     """Renderiza herramientas que requieren datos financieros de una empresa."""
 
+    if seccion_actual == "🧩 Research Core":
+        return safe_call(
+            "modulos.research_core",
+            "ejecutar_research_core",
+            context.ticker,
+            context.is_df,
+            context.bs_df,
+            context.cf_df,
+            context.res_is,
+            context.res_bs,
+            context.res_cf,
+            context.res_val,
+            context.nota_buffett,
+            context.competitor,
+            context.valuequant_score,
+        )
+
     if seccion_actual == "📊 Resumen Ejecutivo":
         return safe_call(
             "modulos.resumen",
