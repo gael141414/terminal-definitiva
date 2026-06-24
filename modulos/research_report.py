@@ -17,6 +17,7 @@ import streamlit.components.v1 as components
 
 from modulos.investment_thesis import build_investment_thesis
 from modulos.valuation_sensitivity import build_valuation_sensitivity, sensitivity_markdown_rows
+from modulos.relative_comparison import relative_comparison_markdown_rows
 
 
 DISCLAIMER = (
@@ -203,6 +204,7 @@ def build_research_report_markdown(
     scenario_rows = _valuation_scenario_rows(thesis)
     sensitivity = build_valuation_sensitivity(thesis)
     sensitivity_rows = sensitivity_markdown_rows(sensitivity)
+    relative_rows = relative_comparison_markdown_rows(ticker, ticker_competidor, valuequant_score, res_val, nota_buffett)
     predictive_confidence = _score_attr(valuequant_score, "predictive_confidence")
 
     lines: list[str] = [
@@ -221,7 +223,10 @@ def build_research_report_markdown(
         f"- **Confianza operativa:** {_fmt_pct(_score_attr(valuequant_score, 'confidence'))}",
         f"- **Confianza predictiva:** {_fmt_pct(predictive_confidence) if predictive_confidence is not None else 'Pendiente de backtesting'}",
         "",
-        "## 2. Valoración y margen de seguridad",
+        "## 2. Comparativa relativa",
+        *(_markdown_table(relative_rows) if relative_rows else ["No hay competidor configurado o datos suficientes para comparación relativa."]),
+        "",
+        "## 3. Valoración y margen de seguridad",
         f"- **Precio actual:** {_fmt_money(thesis.current_price)}",
         f"- **Valor intrínseco / razonable:** {_fmt_money(thesis.intrinsic_value)}",
         f"- **Margen de seguridad:** {_fmt_pct(thesis.margin_of_safety)}",
@@ -241,13 +246,13 @@ def build_research_report_markdown(
         "### Sensibilidad crecimiento vs tasa de descuento",
         *(_markdown_table(sensitivity_rows) if sensitivity_rows else ["No hay datos suficientes para construir sensibilidad de valoración."]),
         "",
-        "## 3. Desglose ValueQuant Score",
+        "## 4. Desglose ValueQuant Score",
         *_markdown_table(component_rows),
         "",
-        "## 4. Snapshot financiero",
+        "## 5. Snapshot financiero",
         *_markdown_table(financial_rows),
         "",
-        "## 5. Tesis de inversión",
+        "## 6. Tesis de inversión",
     ]
 
     for section in thesis.sections:
@@ -257,14 +262,14 @@ def build_research_report_markdown(
         lines.append("")
 
     if thesis.red_flags:
-        lines.extend(["## 6. Banderas rojas", ""])
+        lines.extend(["## 7. Banderas rojas", ""])
         for flag in thesis.red_flags:
             lines.append(f"- {flag}")
         lines.append("")
 
     lines.extend(
         [
-            "## 7. Checklist antes de decidir",
+            "## 8. Checklist antes de decidir",
             "- Validar manualmente los datos financieros descargados.",
             "- Revisar supuestos de DCF: crecimiento, márgenes, reinversión y WACC.",
             "- Revisar la matriz de sensibilidad y confirmar que la tesis no depende solo del escenario optimista.",
@@ -273,7 +278,7 @@ def build_research_report_markdown(
             "- Revisar deuda, recompras, dilución y vencimientos relevantes.",
             "- Confirmar que no hay eventos corporativos o noticias recientes no incorporadas.",
             "",
-            "## 8. Limitaciones",
+            "## 9. Limitaciones",
             "- El score todavía requiere validación histórica formal.",
             "- La confianza predictiva debe interpretarse como pendiente si no hay backtesting suficiente.",
             "- La valoración depende de supuestos sensibles: crecimiento, WACC, márgenes, reinversión y múltiplos terminales.",
