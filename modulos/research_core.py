@@ -17,6 +17,7 @@ import streamlit as st
 from modulos.investment_thesis import render_investment_thesis
 from modulos.module_loader import safe_call
 from modulos.research_report import render_research_report_export
+from modulos.relative_comparison import render_relative_comparison
 
 
 def _score_attr(valuequant_score: Any, attr: str, default: Any = None) -> Any:
@@ -115,6 +116,7 @@ def ejecutar_research_core(
             "🧠 Forense",
             "🔮 Proyección",
             "🧾 Earnings NLP",
+            "⚖️ Comparativa",
         ]
     )
 
@@ -189,3 +191,12 @@ def ejecutar_research_core(
 
     with tabs[6]:
         safe_call("modulos.nlp_analyzer", "render_nlp_dashboard", ticker_input)
+
+    with tabs[7]:
+        render_relative_comparison(
+            ticker=ticker_input,
+            competitor=ticker_competidor,
+            valuequant_score=valuequant_score,
+            res_val=res_val,
+            nota_buffett=nota_buffett,
+        )
