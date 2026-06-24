@@ -27,6 +27,7 @@ from cashflow_analyzer import analizar_flujo_efectivo
 from valuator import valorar_empresa
 from textblob import TextBlob
 from streamlit_lottie import st_lottie
+from modulos.config import CONFIG
 from modulos.roboadvisor import ejecutar_roboadvisor
 from modulos.proyeccion import ejecutar_proyeccion
 from modulos.backtest import ejecutar_maquina_del_tiempo
@@ -131,12 +132,7 @@ def obtener_secreto_streamlit(nombre: str):
 @st.cache_resource(show_spinner=False)
 def obtener_modelo_gemini():
     """Inicializa Gemini una sola vez y evita repetir list_models en cada prompt."""
-    api_key = (
-        obtener_secreto_streamlit("GEMINI_API_KEY")
-        or obtener_secreto_streamlit("GOOGLE_API_KEY")
-        or os.getenv("GEMINI_API_KEY")
-        or os.getenv("GOOGLE_API_KEY")
-    )
+    api_key = CONFIG.gemini_api_key or CONFIG.google_api_key
     if not api_key:
         return None
 
@@ -802,7 +798,7 @@ def ultimo_ratio(resultado, columna):
 APP_DIR = Path(__file__).resolve().parent
 LOGO_PATH = APP_DIR / "logo.png"
 HOME_BG_PATH = APP_DIR / "fondo.png"
-FMP_API_KEY = os.getenv("FMP_API_KEY", "vo1atWFBZwr64ScXucowhC0Wmy3Wweaf")  # Producción: mover a .env o st.secrets.
+FMP_API_KEY = CONFIG.fmp_api_key
 
 
 def asset_to_data_uri(path: Path) -> str:
@@ -1648,10 +1644,9 @@ def obtener_ultimas_noticias(limit: int = 6) -> list[dict[str, str]]:
     logger = logging.getLogger("valuequant.news")
 
     try:
-        try:
-            from modulos.fmp_api import API_KEY as clave_api
-        except ImportError:
-            from modulos.fmp_api import FMP_API_KEY as clave_api
+        clave_api = CONFIG.fmp_api_key
+        if not clave_api:
+            raise RuntimeError("FMP_API_KEY no configurada")
 
         url = "https://financialmodelingprep.com/api/v3/stock_news"
         params = {"tickers": "AAPL,MSFT,NVDA,SPY,QQQ", "limit": limit, "apikey": clave_api}
