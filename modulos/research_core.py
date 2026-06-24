@@ -14,6 +14,7 @@ from typing import Any
 
 import streamlit as st
 
+from modulos.analysis_store import render_save_to_watchlist_panel
 from modulos.investment_thesis import render_investment_thesis
 from modulos.module_loader import safe_call
 from modulos.research_report import render_research_report_export
@@ -111,6 +112,7 @@ def ejecutar_research_core(
     tabs = st.tabs(
         [
             "🧭 Tesis",
+            "💾 Seguimiento",
             "📄 Informe",
             "📊 Resumen",
             "🔎 Fundamental",
@@ -131,6 +133,15 @@ def ejecutar_research_core(
         )
 
     with tabs[1]:
+        render_save_to_watchlist_panel(
+            ticker=ticker_input,
+            competitor=ticker_competidor,
+            valuequant_score=valuequant_score,
+            res_val=res_val,
+            nota_buffett=nota_buffett,
+        )
+
+    with tabs[2]:
         render_research_report_export(
             ticker=ticker_input,
             ticker_competidor=ticker_competidor,
@@ -142,7 +153,7 @@ def ejecutar_research_core(
             res_cf=res_cf,
         )
 
-    with tabs[2]:
+    with tabs[3]:
         safe_call(
             "modulos.resumen",
             "ejecutar_resumen_ejecutivo",
@@ -158,7 +169,7 @@ def ejecutar_research_core(
             valuequant_score,
         )
 
-    with tabs[3]:
+    with tabs[4]:
         safe_call(
             "modulos.fundamental",
             "ejecutar_analisis_fundamental",
@@ -175,7 +186,7 @@ def ejecutar_research_core(
             valuequant_score,
         )
 
-    with tabs[4]:
+    with tabs[5]:
         safe_call(
             "modulos.forense",
             "ejecutar_auditoria_forense",
@@ -187,13 +198,13 @@ def ejecutar_research_core(
             res_bs,
         )
 
-    with tabs[5]:
+    with tabs[6]:
         safe_call("modulos.proyeccion", "ejecutar_proyeccion", ticker_input)
 
-    with tabs[6]:
+    with tabs[7]:
         safe_call("modulos.nlp_analyzer", "render_nlp_dashboard", ticker_input)
 
-    with tabs[7]:
+    with tabs[8]:
         render_relative_comparison(
             ticker=ticker_input,
             competitor=ticker_competidor,
