@@ -9,6 +9,7 @@ from modulos.tool_consolidation import (
 
 
 _RAW_TOOL_CATALOG = [
+    {"label": "🧭 Mapa del Producto", "bloque": "🧭 Producto", "input_mode": "standalone", "descripcion": "Panel interno de arquitectura, MVP, consolidación y priorización del terminal.", "strategic_group": "utility"},
     {"label": "📊 Resumen Ejecutivo", "bloque": "📌 Núcleo Empresa", "input_mode": "company", "descripcion": "Vista de mando con precio, score, riesgos y gráfico institucional.", "strategic_group": "research"},
     {"label": "🔎 Análisis Fundamental", "bloque": "📌 Núcleo Empresa", "input_mode": "company", "descripcion": "Estados financieros, ratios, valoración y comparador.", "strategic_group": "research"},
     {"label": "🧠 Auditoría Forense", "bloque": "📌 Núcleo Empresa", "input_mode": "company", "descripcion": "Banderas rojas contables y calidad de beneficios.", "strategic_group": "research"},
