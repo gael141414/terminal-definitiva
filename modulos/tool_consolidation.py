@@ -152,6 +152,7 @@ TOOL_CONSOLIDATION: dict[str, dict[str, str | int | bool]] = {
     "🎓 Visor de Gurús (Estrategias)": {"group": "investor_assistant", "status": "assistant", "order": 30, "visible_in_mvp": False},
     "🤖 Robo-Advisor & Test Perfil": {"group": "investor_assistant", "status": "assistant", "order": 40, "visible_in_mvp": False},
 
+    "⚙️ Centro de Automatización": {"group": "automation_utility", "status": "core", "order": 5, "visible_in_mvp": True},
     "📲 Automatización Telegram": {"group": "automation_utility", "status": "utility", "order": 10, "visible_in_mvp": False},
 }
 
