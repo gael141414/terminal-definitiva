@@ -42,6 +42,30 @@ _RAW_TOOL_CATALOG = [
 ]
 
 
+NAVIGATION_MODES = {
+    "mvp": {
+        "key": "mvp",
+        "label": "MVP",
+        "caption": "Solo herramientas nucleares para research, discovery, cartera y validación.",
+        "badge": "Producto",
+    },
+    "consolidated": {
+        "key": "consolidated",
+        "label": "Consolidado",
+        "caption": "Herramientas agrupadas por arquitectura objetivo; oculta utilidades accesorias.",
+        "badge": "Arquitectura",
+    },
+    "complete": {
+        "key": "complete",
+        "label": "Completo",
+        "caption": "Todas las herramientas actuales, incluidas utilidades experimentales y post-MVP.",
+        "badge": "Full terminal",
+    },
+}
+
+_NAVIGATION_MODE_ORDER = ("mvp", "consolidated", "complete")
+
+
 def _enrich_tool(tool: dict[str, object]) -> dict[str, object]:
     """Añade metadatos de consolidación a una herramienta del catálogo."""
 
@@ -68,8 +92,62 @@ BLOQUES_HERRAMIENTAS = tuple(dict.fromkeys(h["bloque"] for h in TOOL_CATALOG))
 HERRAMIENTAS_POR_LABEL = {h["label"]: h for h in TOOL_CATALOG}
 
 
+def _sort_tools_for_product(tools: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Ordena herramientas por grupo consolidado y prioridad interna."""
+
+    def sort_key(tool: dict[str, object]) -> tuple[int, int, str]:
+        group_key = str(tool.get("consolidation_group", "unassigned"))
+        group = CONSOLIDATION_GROUPS.get(group_key)
+        group_priority = group.priority if group else 999
+        tool_order = int(tool.get("consolidation_order", 999))
+        return group_priority, tool_order, str(tool.get("label", ""))
+
+    return sorted(tools, key=sort_key)
+
+
+def obtener_modos_navegacion() -> list[dict[str, str]]:
+    """Devuelve los modos de navegación disponibles en orden de producto."""
+
+    return [dict(NAVIGATION_MODES[key]) for key in _NAVIGATION_MODE_ORDER]
+
+
+def _tool_visible_in_mode(tool: dict[str, object], mode: str) -> bool:
+    """Decide si una herramienta aparece en un modo de navegación."""
+
+    if mode == "complete":
+        return True
+    if mode == "mvp":
+        return bool(tool.get("visible_in_mvp"))
+    if mode == "consolidated":
+        return str(tool.get("consolidation_status")) in {"core", "merge"}
+    return True
+
+
+def obtener_catalogo_por_modo(mode: str) -> list[dict[str, object]]:
+    """Devuelve el catálogo filtrado por modo de navegación."""
+
+    return _sort_tools_for_product([tool for tool in TOOL_CATALOG if _tool_visible_in_mode(tool, mode)])
+
+
+def obtener_bloques_por_modo(mode: str) -> tuple[str, ...]:
+    """Devuelve los bloques visibles para el modo seleccionado."""
+
+    tools = obtener_catalogo_por_modo(mode)
+    return tuple(dict.fromkeys(str(tool["bloque"]) for tool in tools))
+
+
 def obtener_herramientas_por_bloque(bloque: str):
     return [h for h in TOOL_CATALOG if h["bloque"] == bloque]
+
+
+def obtener_herramientas_por_bloque_y_modo(bloque: str, mode: str):
+    """Devuelve herramientas de un bloque filtradas por modo de navegación."""
+
+    tools = [
+        h for h in TOOL_CATALOG
+        if h["bloque"] == bloque and _tool_visible_in_mode(h, mode)
+    ]
+    return _sort_tools_for_product(tools)
 
 
 def obtener_herramientas_por_grupo_estrategico(grupo: str):
@@ -83,7 +161,4 @@ def obtener_herramientas_por_grupo_consolidado(grupo: str):
 def obtener_catalogo_mvp():
     """Devuelve solo herramientas candidatas a MVP comercial."""
 
-    return sorted(
-        [h for h in TOOL_CATALOG if h.get("visible_in_mvp")],
-        key=lambda h: (str(h.get("consolidation_group")), int(h.get("consolidation_order", 999))),
-    )
+    return _sort_tools_for_product([h for h in TOOL_CATALOG if h.get("visible_in_mvp")])
