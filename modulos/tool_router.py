@@ -36,6 +36,7 @@ class CompanyToolContext:
 
 
 INDEPENDENT_TOOL_ROUTES: dict[str, tuple[str, str]] = {
+    "🧭 Mapa del Producto": ("modulos.product_dashboard", "render_product_dashboard"),
     "🕰️ Reloj Económico (Regímenes)": ("modulos.reloj_macro", "ejecutar_reloj_macro"),
     "📋 Mi Watchlist (Cartera)": ("modulos.watchlist", "ejecutar_watchlist"),
     "⚖️ Optimizador de Cartera": ("modulos.portfolio", "render_portfolio_manager"),
