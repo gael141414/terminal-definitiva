@@ -39,7 +39,7 @@ CONSOLIDATION_GROUPS: dict[str, ConsolidationGroup] = {
         name="Research Core",
         strategic_area="Research",
         description="Análisis central de empresa: resumen, fundamentales, valoración, forense, tesis y NLP.",
-        target_module="modulos.research_terminal",
+        target_module="modulos.research_core",
         priority=1,
     ),
     "market_timing": ConsolidationGroup(
@@ -112,9 +112,10 @@ CONSOLIDATION_GROUPS: dict[str, ConsolidationGroup] = {
 TOOL_CONSOLIDATION: dict[str, dict[str, str | int | bool]] = {
     "🧭 Mapa del Producto": {"group": "product_ops", "status": "core", "order": 1, "visible_in_mvp": True},
 
-    "📊 Resumen Ejecutivo": {"group": "research_core", "status": "core", "order": 10, "visible_in_mvp": True},
-    "🔎 Análisis Fundamental": {"group": "research_core", "status": "core", "order": 20, "visible_in_mvp": True},
-    "🧠 Auditoría Forense": {"group": "research_core", "status": "core", "order": 30, "visible_in_mvp": True},
+    "🧩 Research Core": {"group": "research_core", "status": "core", "order": 1, "visible_in_mvp": True},
+    "📊 Resumen Ejecutivo": {"group": "research_core", "status": "merge", "order": 10, "visible_in_mvp": True},
+    "🔎 Análisis Fundamental": {"group": "research_core", "status": "merge", "order": 20, "visible_in_mvp": True},
+    "🧠 Auditoría Forense": {"group": "research_core", "status": "merge", "order": 30, "visible_in_mvp": True},
     "🔮 Proyección IA y Catalizadores": {"group": "research_core", "status": "merge", "order": 40, "visible_in_mvp": True},
     "🧠 Earnings Call NLP": {"group": "research_core", "status": "merge", "order": 50, "visible_in_mvp": True},
 
