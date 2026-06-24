@@ -39,6 +39,7 @@ from modulos.tool_catalog import (
     HERRAMIENTAS_POR_LABEL,
     obtener_herramientas_por_bloque,
 )
+from modulos.tool_router import CompanyToolContext, render_company_tool, render_independent_tool
 
 def inyectar_atajo_teclado():
     """Inyecta un listener global de JavaScript para el atajo Ctrl+K / Cmd+K"""
@@ -1898,49 +1899,8 @@ herramientas_independientes = [
 
 # CASOS INDEPENDIENTES (No necesitan darle al botón del sidebar)
 if seccion_actual in herramientas_independientes:
-    # ---------------------------------------------------------
-    # RUTA A: HERRAMIENTAS QUE NO NECESITAN BOTÓN DE "ANALIZAR"
-    # ---------------------------------------------------------
     st.markdown("<br>", unsafe_allow_html=True)
-
-    if seccion_actual == "🕰️ Reloj Económico (Regímenes)":
-        safe_call("modulos.reloj_macro", "ejecutar_reloj_macro")
-
-    elif seccion_actual == "📋 Mi Watchlist (Cartera)":
-        safe_call("modulos.watchlist", "ejecutar_watchlist")
-
-    elif seccion_actual == "⚖️ Optimizador de Cartera":
-        safe_call("modulos.portfolio", "render_portfolio_manager")
-
-    elif seccion_actual == "🎲 Monte Carlo Cartera":
-        safe_call("modulos.montecarlo", "render_montecarlo")
-        
-    elif seccion_actual == "🤖 Robo-Advisor & Test Perfil":
-        safe_call("modulos.roboadvisor", "ejecutar_roboadvisor")
-
-    elif seccion_actual == "📲 Automatización Telegram":
-        safe_call("modulos.automatizacion", "ejecutar_panel_automatizacion")
-
-    elif seccion_actual == "🌐 Escáner Global (Screener)":
-        safe_call("modulos.screener", "ejecutar_escaner_global")
-
-    elif seccion_actual == "🌐 Screener Avanzado (Multi-Factor)":
-        safe_call("modulos.screener_avanzado", "render_screener_avanzado")
-
-    elif seccion_actual == "🩻 Radiografía de ETFs (X-Ray)":
-        safe_call("modulos.etf", "ejecutar_radiografia_etf", etf_input)
-
-    elif seccion_actual == "🚰 Monitor de Liquidez (FED)":
-        safe_call("modulos.liquidez", "ejecutar_monitor_liquidez")
-
-    elif seccion_actual == "🤖 Chatbot Inversor":
-        safe_call("modulos.chatbot", "render_chatbot")
-
-    elif seccion_actual == "💡 Consejos y Mentoría":
-        safe_call("modulos.consejos", "ejecutar_apartado_consejos")
-
-    elif seccion_actual == "⛏️ Minero de Small Caps":
-        safe_call("modulos.minero_smallcaps", "ejecutar_visor_smallcaps")
+    render_independent_tool(seccion_actual, etf_input=etf_input)
 
 # CASOS DE EMPRESA (Requieren pulsar el botón del sidebar la primera vez)
 else:
@@ -2050,81 +2010,23 @@ else:
             status="positive" if ticker_competidor else "warning"
         )
     
-    # Invocamos la herramienta correspondiente
-    if seccion_actual == "📊 Resumen Ejecutivo":
-        safe_call("modulos.resumen", "ejecutar_resumen_ejecutivo",
-            ticker_input,
-            is_df,
-            bs_df,
-            cf_df,
-            res_is,
-            res_bs,
-            res_cf,
-            res_val,
-            nota_buffett,
-            valuequant_score
-        )
-        
-    elif seccion_actual == "🔎 Análisis Fundamental":
-        safe_call("modulos.fundamental", "ejecutar_analisis_fundamental",
-            ticker_input,
-            is_df,
-            bs_df,
-            cf_df,
-            res_is,
-            res_bs,
-            res_cf,
-            res_val,
-            nota_buffett,
-            ticker_competidor,
-            valuequant_score
-        )
-    
-    elif seccion_actual == "📈 Técnico y Opciones":
-        safe_call("modulos.tecnico", "ejecutar_tecnico_y_opciones",ticker_input)
-
-    elif seccion_actual == "🧮 Opciones Avanzadas (BSM)":
-        safe_call("modulos.derivados", "render_derivados",ticker_input)
-
-    elif seccion_actual == "🌍 Radar Macro y Sectores":
-        df_sectores = analizar_rotacion_sectores()
-        safe_call("modulos.macro", "ejecutar_radar_macro",ticker_input, ticker_competidor, df_sectores)
-        
-    elif seccion_actual == "🧠 Auditoría Forense":
-        safe_call("modulos.forense", "ejecutar_auditoria_forense",ticker_input, is_df, bs_df, cf_df, res_val, res_bs)
-
-    elif seccion_actual == "🔭 Predictor de Techos/Suelos":
-        safe_call("modulos.predictor", "ejecutar_predictor_techos_suelos",ticker_input)
-
-    elif seccion_actual == "🔮 Proyección IA y Catalizadores":
-        safe_call("modulos.proyeccion", "ejecutar_proyeccion",ticker_input)
-
-    elif seccion_actual == "⏳ Máquina del Tiempo (Backtest)":
-        safe_call("modulos.backtest", "ejecutar_maquina_del_tiempo",ticker_input)
-
-    elif seccion_actual == "🧪 Backtesting Estrategias":
-        safe_call("modulos.backtester", "render_backtesting_engine",ticker_input)
-
-    elif seccion_actual == "🧠 Earnings Call NLP":
-        safe_call("modulos.nlp_analyzer", "render_nlp_dashboard",ticker_input)
-        
-    elif seccion_actual == "🚀 Radar Multibaggers (Small/Mid Caps)":
-        safe_call("modulos.radar", "ejecutar_radar_multibagger",ticker_input)
-        
-    elif seccion_actual == "🕵️‍♂️ Rastreador de Insiders (SEC)":
-        safe_call("modulos.insiders", "ejecutar_rastreador_insiders",ticker_input)
-
-    elif seccion_actual == "🕵️ Alt Data & Congreso":
-        safe_call("modulos.alt_data", "render_alt_data",ticker_input)
-
-    elif seccion_actual == "🦢 Test Cisnes Negros (Crisis)":
-        safe_call("modulos.cisnes_negros", "ejecutar_simulador_crisis",ticker_input)
-
-    elif seccion_actual == "🛡️ Radar de Coberturas (Hedging)":
-        safe_call("modulos.coberturas", "ejecutar_radar_coberturas",ticker_input)
-
-    elif seccion_actual == "🎓 Visor de Gurús (Estrategias)":
-        safe_call("modulos.gurus", "ejecutar_visor_gurus",ticker_input, res_is, res_bs, res_cf, res_val)
-                           
+    # Invocamos la herramienta correspondiente desde el router central
+    tool_context = CompanyToolContext(
+        ticker=ticker_input,
+        competitor=ticker_competidor,
+        years=años_hist,
+        is_df=is_df,
+        bs_df=bs_df,
+        cf_df=cf_df,
+        metrics_df=metrics_df,
+        res_is=res_is,
+        res_bs=res_bs,
+        res_cf=res_cf,
+        res_val=res_val,
+        nota_buffett=nota_buffett,
+        valuequant_score=valuequant_score,
+        sector_rotation_fn=analizar_rotacion_sectores,
+    )
+    render_company_tool(seccion_actual, tool_context)
 
 # Chat lateral legacy retirado: la nueva arquitectura usa navegación superior sin sidebar.
