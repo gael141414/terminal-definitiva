@@ -23,6 +23,7 @@ import streamlit as st
 import yfinance as yf
 
 from modulos.watchlist_alerts import alert_summary, build_watchlist_alerts
+from modulos.briefing_payloads import build_briefing_payloads
 
 DATA_FOLDER = Path("data")
 WATCHLIST_FILE = DATA_FOLDER / "watchlist.json"
@@ -636,6 +637,51 @@ def _render_export_panel(df_watch: pd.DataFrame, df_alerts: pd.DataFrame, df_bri
         if len(markdown_report) > 6000:
             st.caption("Vista previa truncada. El archivo descargado contiene el briefing completo.")
 
+def _render_payload_panel(df_watch: pd.DataFrame, df_alerts: pd.DataFrame, df_briefing: pd.DataFrame) -> None:
+    """Panel de preparación de formatos compactos del briefing."""
+
+    payloads = build_briefing_payloads(df_watch, df_alerts, df_briefing)
+    suffix = payloads.generated_at.strftime("%Y%m%d_%H%M")
+
+    with st.expander("📨 Preparar briefing para mensajería/email", expanded=False):
+        st.caption(
+            "Genera versiones compactas del briefing para copiar, revisar o descargar. No envía mensajes automáticamente."
+        )
+
+        tab_msg, tab_email, tab_html = st.tabs(["Mensaje compacto", "Email texto", "Email HTML"])
+
+        with tab_msg:
+            st.text_area("Vista previa del mensaje compacto", payloads.compact_text, height=360)
+            st.download_button(
+                "Descargar mensaje compacto",
+                data=payloads.compact_text.encode("utf-8"),
+                file_name=f"valuequant_briefing_compacto_{suffix}.txt",
+                mime="text/plain",
+                use_container_width=True,
+            )
+
+        with tab_email:
+            st.text_input("Asunto sugerido", value=payloads.email_subject)
+            st.text_area("Vista previa email texto", payloads.email_text, height=360)
+            st.download_button(
+                "Descargar email texto",
+                data=payloads.email_text.encode("utf-8"),
+                file_name=f"valuequant_briefing_email_{suffix}.txt",
+                mime="text/plain",
+                use_container_width=True,
+            )
+
+        with tab_html:
+            st.download_button(
+                "Descargar email HTML",
+                data=payloads.email_html.encode("utf-8"),
+                file_name=f"valuequant_briefing_email_{suffix}.html",
+                mime="text/html",
+                use_container_width=True,
+            )
+            st.code(payloads.email_html[:5000], language="html")
+            if len(payloads.email_html) > 5000:
+                st.caption("Vista previa truncada. El archivo descargado contiene el HTML completo.")
 
 def _render_bucket(df: pd.DataFrame, bucket: str, empty_message: str) -> None:
     subset = df[df["Prioridad"] == bucket]
@@ -703,6 +749,7 @@ def render_opportunity_briefing() -> None:
         )
 
     _render_export_panel(df_watch, df_alerts, df_briefing)
+    _render_payload_panel(df_watch, df_alerts, df_briefing)
 
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
         [
