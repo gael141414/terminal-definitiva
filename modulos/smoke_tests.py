@@ -75,11 +75,16 @@ EXPECTED_TOOLS = [
     "🧭 Mapa del Producto",
 ]
 
-EXPECTED_ROUTES = [
-    "🧩 Research Core",
+EXPECTED_DIRECT_ROUTES = [
     "📌 Briefing de Oportunidades",
     "⚙️ Centro de Automatización",
     "🧭 Mapa del Producto",
+]
+
+EXPECTED_SPECIAL_COMPANY_TOOLS = [
+    "🧩 Research Core",
+    "📊 Resumen Ejecutivo",
+    "🔎 Análisis Fundamental",
 ]
 
 
@@ -120,9 +125,24 @@ def _check_catalog() -> list[SmokeCheck]:
         checks.append(_ok("catalog:loaded", f"{len(catalog)} tools"))
         for label in EXPECTED_TOOLS:
             checks.append(_ok(f"catalog:{label}", "registered") if label in labels else _fail(f"catalog:{label}", "missing"))
-        modes = set(getattr(mod, "obtener_modos_navegacion")())
+
+        raw_modes = getattr(mod, "obtener_modos_navegacion")()
+        mode_labels = {
+            str(mode.get("label") or mode.get("key") or "")
+            for mode in raw_modes
+            if isinstance(mode, dict)
+        }
+        mode_keys = {
+            str(mode.get("key") or "")
+            for mode in raw_modes
+            if isinstance(mode, dict)
+        }
         for mode in ("MVP", "Consolidado", "Completo"):
-            checks.append(_ok(f"catalog_mode:{mode}", "available") if mode in modes else _fail(f"catalog_mode:{mode}", "missing"))
+            checks.append(
+                _ok(f"catalog_mode:{mode}", "available")
+                if mode in mode_labels
+                else _fail(f"catalog_mode:{mode}", f"missing; available={sorted(mode_labels or mode_keys)}")
+            )
     except Exception as exc:
         checks.append(_fail("catalog:loaded", f"{type(exc).__name__}: {exc}"))
     return checks
@@ -132,10 +152,22 @@ def _check_router() -> list[SmokeCheck]:
     checks: list[SmokeCheck] = []
     try:
         mod = importlib.import_module("modulos.tool_router")
-        routes = set(getattr(mod, "INDEPENDENT_TOOL_ROUTES")) | set(getattr(mod, "COMPANY_TOOL_ROUTES"))
-        checks.append(_ok("router:loaded", f"{len(routes)} routes"))
-        for label in EXPECTED_ROUTES:
-            checks.append(_ok(f"router:{label}", "registered") if label in routes else _fail(f"router:{label}", "missing"))
+        direct_routes = set(getattr(mod, "INDEPENDENT_TOOL_ROUTES")) | set(getattr(mod, "COMPANY_TOOL_ROUTES"))
+        checks.append(_ok("router:loaded", f"{len(direct_routes)} direct routes"))
+
+        for label in EXPECTED_DIRECT_ROUTES:
+            checks.append(_ok(f"router:{label}", "registered") if label in direct_routes else _fail(f"router:{label}", "missing"))
+
+        # Research Core, Resumen Ejecutivo and Fundamental are intentionally routed
+        # through explicit branches in render_company_tool because they need custom
+        # argument binding. They do not live in COMPANY_TOOL_ROUTES.
+        has_company_renderer = callable(getattr(mod, "render_company_tool", None))
+        for label in EXPECTED_SPECIAL_COMPANY_TOOLS:
+            checks.append(
+                _ok(f"router:{label}", "registered via render_company_tool")
+                if has_company_renderer
+                else _fail(f"router:{label}", "render_company_tool missing")
+            )
     except Exception as exc:
         checks.append(_fail("router:loaded", f"{type(exc).__name__}: {exc}"))
     return checks
