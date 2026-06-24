@@ -24,7 +24,6 @@ DISCLAIMER = (
     "individualizada de compra o venta."
 )
 
-
 PRINT_EXPORT_HELP = (
     "Para generar PDF: descarga el HTML, ábrelo en el navegador y usa Ctrl+P "
     "→ Guardar como PDF. El HTML ya incluye estilos específicos de impresión."
@@ -53,6 +52,11 @@ def _fmt_money(value: Any) -> str:
 def _fmt_pct(value: Any) -> str:
     number = _as_float(value)
     return f"{number * 100:+.1f}%" if number is not None else "N/D"
+
+
+def _fmt_ratio(value: Any) -> str:
+    number = _as_float(value)
+    return f"{number:.1f}x" if number is not None else "N/D"
 
 
 def _score_attr(valuequant_score: Any, attr: str, default: Any = None) -> Any:
@@ -161,6 +165,25 @@ def _markdown_table(rows: list[dict[str, Any]]) -> list[str]:
     return lines
 
 
+def _valuation_scenario_rows(thesis: Any) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    current_price = thesis.current_price
+    for scenario in thesis.valuation_scenarios:
+        if current_price and current_price > 0 and scenario.price:
+            upside = scenario.price / current_price - 1.0
+        else:
+            upside = None
+        rows.append(
+            {
+                "Escenario": scenario.name,
+                "Precio/valor": _fmt_money(scenario.price),
+                "Potencial vs actual": _fmt_pct(upside),
+                "Lectura": scenario.description,
+            }
+        )
+    return rows
+
+
 def build_research_report_markdown(
     ticker: str,
     ticker_competidor: str | None,
@@ -176,6 +199,7 @@ def build_research_report_markdown(
     thesis = build_investment_thesis(ticker, valuequant_score, res_val, nota_buffett)
     component_rows = _component_rows(valuequant_score)
     financial_rows = _financial_snapshot(res_is, res_bs, res_cf)
+    scenario_rows = _valuation_scenario_rows(thesis)
     predictive_confidence = _score_attr(valuequant_score, "predictive_confidence")
 
     lines: list[str] = [
@@ -194,12 +218,22 @@ def build_research_report_markdown(
         f"- **Confianza operativa:** {_fmt_pct(_score_attr(valuequant_score, 'confidence'))}",
         f"- **Confianza predictiva:** {_fmt_pct(predictive_confidence) if predictive_confidence is not None else 'Pendiente de backtesting'}",
         "",
-        "## 2. Valoración y zona de entrada",
+        "## 2. Valoración y margen de seguridad",
         f"- **Precio actual:** {_fmt_money(thesis.current_price)}",
         f"- **Valor intrínseco / razonable:** {_fmt_money(thesis.intrinsic_value)}",
         f"- **Margen de seguridad:** {_fmt_pct(thesis.margin_of_safety)}",
+        f"- **Régimen de valoración:** {thesis.valuation_regime}",
+        f"- **Lectura:** {thesis.valuation_comment}",
+        f"- **FCF Yield:** {_fmt_pct(thesis.fcf_yield)}",
+        f"- **Earnings Yield:** {_fmt_pct(thesis.earnings_yield)}",
+        f"- **PER:** {_fmt_ratio(thesis.pe_actual)}",
+        f"- **P/FCF:** {_fmt_ratio(thesis.pfcf_actual)}",
         f"- **Zona razonable de entrada:** {_fmt_money(thesis.reasonable_entry_price)}",
         f"- **Zona conservadora de entrada:** {_fmt_money(thesis.conservative_entry_price)}",
+        f"- **Zona de oportunidad fuerte:** {_fmt_money(thesis.deep_value_entry_price)}",
+        "",
+        "### Escenarios de valoración",
+        *_markdown_table(scenario_rows),
         "",
         "## 3. Desglose ValueQuant Score",
         *_markdown_table(component_rows),
@@ -227,13 +261,15 @@ def build_research_report_markdown(
             "## 7. Checklist antes de decidir",
             "- Validar manualmente los datos financieros descargados.",
             "- Revisar supuestos de DCF: crecimiento, márgenes, reinversión y WACC.",
-            "- Comparar múltiplos y calidad con competidores directos.",
+            "- Comparar múltiplos, FCF Yield y calidad con competidores directos.",
+            "- Verificar si el margen de seguridad procede de supuestos prudentes o de crecimiento agresivo.",
             "- Revisar deuda, recompras, dilución y vencimientos relevantes.",
             "- Confirmar que no hay eventos corporativos o noticias recientes no incorporadas.",
             "",
             "## 8. Limitaciones",
             "- El score todavía requiere validación histórica formal.",
             "- La confianza predictiva debe interpretarse como pendiente si no hay backtesting suficiente.",
+            "- La valoración depende de supuestos sensibles: crecimiento, WACC, márgenes, reinversión y múltiplos terminales.",
             "- El informe no sustituye análisis financiero profesional ni valoración independiente.",
             "",
         ]
@@ -278,7 +314,7 @@ def _markdown_body_to_html(markdown: str) -> str:
         raw = line.strip()
         if not raw:
             close_blocks()
-            body_lines.append("<div class=\"spacer\"></div>")
+            body_lines.append('<div class="spacer"></div>')
         elif raw.startswith("# "):
             close_blocks()
             body_lines.append(f"<h1>{_inline_markdown_to_html(raw[2:])}</h1>")
@@ -386,12 +422,7 @@ def research_report_to_html(markdown: str, ticker: str) -> str:
       margin-top: 0;
       letter-spacing: -0.03em;
     }}
-    h2 {{
-      color: var(--accent-2);
-      margin-top: 36px;
-      padding-top: 8px;
-      break-after: avoid;
-    }}
+    h2 {{ color: var(--accent-2); margin-top: 36px; padding-top: 8px; break-after: avoid; }}
     h3 {{ color: var(--violet); break-after: avoid; }}
     blockquote {{
       border-left: 4px solid var(--accent);
@@ -401,61 +432,26 @@ def research_report_to_html(markdown: str, ticker: str) -> str:
       margin: 18px 0;
       border-radius: 0 12px 12px 0;
     }}
-    table {{
-      width: 100%;
-      border-collapse: collapse;
-      margin: 18px 0;
-      page-break-inside: avoid;
-    }}
-    th, td {{
-      border: 1px solid #334155;
-      padding: 10px;
-      text-align: left;
-      vertical-align: top;
-    }}
+    table {{ width: 100%; border-collapse: collapse; margin: 18px 0; page-break-inside: avoid; }}
+    th, td {{ border: 1px solid #334155; padding: 10px; text-align: left; vertical-align: top; }}
     th {{ background: #1e293b; color: #f8fafc; }}
     tr:nth-child(even) td {{ background: rgba(30, 41, 59, 0.38); }}
     ul {{ padding-left: 22px; }}
     li {{ margin: 7px 0; }}
     strong {{ color: #f8fafc; }}
     .spacer {{ height: 8px; }}
-    .footer {{
-      margin-top: 42px;
-      color: var(--muted);
-      font-size: 12px;
-      border-top: 1px solid var(--border);
-      padding-top: 14px;
-    }}
+    .footer {{ margin-top: 42px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--border); padding-top: 14px; }}
 
-    @page {{
-      size: A4;
-      margin: 16mm 14mm;
-    }}
+    @page {{ size: A4; margin: 16mm 14mm; }}
 
     @media print {{
-      body {{
-        background: #ffffff !important;
-        color: #111827 !important;
-        padding: 0;
-        font-size: 11pt;
-      }}
+      body {{ background: #ffffff !important; color: #111827 !important; padding: 0; font-size: 11pt; }}
       .toolbar {{ display: none !important; }}
-      main {{
-        max-width: none;
-        border: none;
-        box-shadow: none;
-        border-radius: 0;
-        padding: 0;
-        background: #ffffff !important;
-      }}
+      main {{ max-width: none; border: none; box-shadow: none; border-radius: 0; padding: 0; background: #ffffff !important; }}
       h1 {{ color: #111827 !important; border-bottom: 1px solid #cbd5e1; }}
       h2 {{ color: #1d4ed8 !important; page-break-after: avoid; }}
       h3 {{ color: #334155 !important; page-break-after: avoid; }}
-      blockquote {{
-        background: #f8fafc !important;
-        color: #334155 !important;
-        border-left-color: #0284c7;
-      }}
+      blockquote {{ background: #f8fafc !important; color: #334155 !important; border-left-color: #0284c7; }}
       th {{ background: #e5e7eb !important; color: #111827 !important; }}
       td, th {{ border-color: #cbd5e1 !important; }}
       tr:nth-child(even) td {{ background: #f8fafc !important; }}
@@ -466,16 +462,12 @@ def research_report_to_html(markdown: str, ticker: str) -> str:
 </head>
 <body>
   <div class=\"toolbar\">
-    <div>
-      <strong>ValueQuant Terminal</strong> · {escape(ticker)} · generado {generated_at}
-    </div>
+    <div><strong>ValueQuant Terminal</strong> · {escape(ticker)} · generado {generated_at}</div>
     <button class=\"print-button\" onclick=\"window.print()\">Imprimir / Guardar PDF</button>
   </div>
   <main>
     {body_html}
-    <div class=\"footer\">
-      Generado por ValueQuant Terminal. {escape(PRINT_EXPORT_HELP)}
-    </div>
+    <div class=\"footer\">Generado por ValueQuant Terminal. {escape(PRINT_EXPORT_HELP)}</div>
   </main>
 </body>
 </html>
@@ -496,8 +488,8 @@ def render_research_report_export(
 
     st.markdown("### Informe Research Core")
     st.caption(
-        "Informe completo en Markdown y HTML imprimible con tesis, valoración, score, snapshot financiero, "
-        "riesgos y checklist de revisión."
+        "Informe completo en Markdown y HTML imprimible con tesis, escenarios de valoración, margen de seguridad, "
+        "score, snapshot financiero, riesgos y checklist de revisión."
     )
 
     markdown = build_research_report_markdown(
