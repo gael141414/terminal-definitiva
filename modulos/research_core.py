@@ -2,7 +2,7 @@
 
 Este módulo integra las vistas nucleares de análisis de empresa en un único flujo:
 score, tesis, resumen ejecutivo, análisis fundamental, auditoría forense,
-proyección y earnings call NLP.
+proyección, earnings call NLP e informe exportable.
 
 No sustituye todavía a los módulos originales. Los orquesta mediante lazy loading
 para que cualquier fallo quede aislado dentro de la pestaña correspondiente.
@@ -16,6 +16,7 @@ import streamlit as st
 
 from modulos.investment_thesis import render_investment_thesis
 from modulos.module_loader import safe_call
+from modulos.research_report import render_research_report_export
 
 
 def _score_attr(valuequant_score: Any, attr: str, default: Any = None) -> Any:
@@ -72,7 +73,7 @@ def _render_research_header(
     st.markdown(f"## 🧩 Research Core — {ticker_input}")
     st.caption(
         "Vista consolidada de análisis de empresa: score, tesis, fundamentales, valoración, "
-        "forense, escenarios y narrativa directiva."
+        "forense, escenarios, narrativa directiva e informe exportable."
     )
 
     c1, c2, c3, c4, c5 = st.columns(5)
@@ -108,6 +109,7 @@ def ejecutar_research_core(
     tabs = st.tabs(
         [
             "🧭 Tesis",
+            "📄 Informe",
             "📊 Resumen",
             "🔎 Fundamental",
             "🧠 Forense",
@@ -126,6 +128,18 @@ def ejecutar_research_core(
         )
 
     with tabs[1]:
+        render_research_report_export(
+            ticker=ticker_input,
+            ticker_competidor=ticker_competidor,
+            valuequant_score=valuequant_score,
+            res_val=res_val,
+            nota_buffett=nota_buffett,
+            res_is=res_is,
+            res_bs=res_bs,
+            res_cf=res_cf,
+        )
+
+    with tabs[2]:
         safe_call(
             "modulos.resumen",
             "ejecutar_resumen_ejecutivo",
@@ -141,7 +155,7 @@ def ejecutar_research_core(
             valuequant_score,
         )
 
-    with tabs[2]:
+    with tabs[3]:
         safe_call(
             "modulos.fundamental",
             "ejecutar_analisis_fundamental",
@@ -158,7 +172,7 @@ def ejecutar_research_core(
             valuequant_score,
         )
 
-    with tabs[3]:
+    with tabs[4]:
         safe_call(
             "modulos.forense",
             "ejecutar_auditoria_forense",
@@ -170,8 +184,8 @@ def ejecutar_research_core(
             res_bs,
         )
 
-    with tabs[4]:
+    with tabs[5]:
         safe_call("modulos.proyeccion", "ejecutar_proyeccion", ticker_input)
 
-    with tabs[5]:
+    with tabs[6]:
         safe_call("modulos.nlp_analyzer", "render_nlp_dashboard", ticker_input)
