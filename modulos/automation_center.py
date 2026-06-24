@@ -15,6 +15,7 @@ import streamlit as st
 
 from modulos.config import CONFIG
 from modulos.automation_logs import log_briefing_generated, render_automation_log_panel
+from modulos.automation_schedule import load_automation_settings, render_schedule_control_panel
 from modulos.briefing_payloads import build_briefing_payloads
 from modulos.manual_delivery import render_manual_telegram_panel, telegram_status
 from modulos.opportunity_briefing import build_opportunity_briefing
@@ -34,17 +35,24 @@ def _status_chip(label: str, ok: bool, detail: str = "") -> None:
 def _render_configuration_status() -> None:
     st.subheader("Estado de configuración")
 
-    c1, c2, c3 = st.columns(3)
+    settings = load_automation_settings()
+
+    c1, c2, c3, c4 = st.columns(4)
     with c1:
         _status_chip("FMP API", _configured(CONFIG.fmp_api_key), "datos fundamentales")
     with c2:
         _status_chip("Telegram token", _configured(CONFIG.telegram_bot_token), "envío manual")
     with c3:
         _status_chip("Telegram chat", _configured(CONFIG.telegram_chat_id), "destino")
+    with c4:
+        if settings.automation_enabled:
+            st.info(f"🟡 Frecuencia: {settings.frequency}")
+        else:
+            st.info("⚪ Automatización: no activa")
 
     status = telegram_status()
     if status.configured:
-        st.info("Telegram está listo para envío manual confirmado. No hay automatizaciones activas.")
+        st.info("Telegram está listo para envío manual confirmado. No hay automatizaciones en segundo plano.")
     else:
         st.caption(status.detail)
         with st.expander("Cómo configurar Telegram", expanded=False):
@@ -152,8 +160,8 @@ def render_automation_center() -> None:
 
     st.title("⚙️ Centro de Automatización")
     st.caption(
-        "Panel de control para validar configuración, preparar payloads y ejecutar envíos manuales. "
-        "No hay programación automática ni procesos en segundo plano."
+        "Panel de control para validar configuración, preparar payloads, controlar frecuencia "
+        "y ejecutar envíos manuales. No hay procesos en segundo plano."
     )
 
     _render_configuration_status()
@@ -163,13 +171,22 @@ def render_automation_center() -> None:
         df_watch, df_alerts, df_briefing = build_opportunity_briefing()
         log_briefing_generated(df_watch, df_alerts, df_briefing)
 
-    tab_status, tab_payloads, tab_logs, tab_roadmap = st.tabs(["Resumen", "Payloads y envío", "Historial", "Roadmap"])
+    tab_status, tab_payloads, tab_schedule, tab_logs, tab_roadmap = st.tabs([
+        "Resumen",
+        "Payloads y envío",
+        "Programación segura",
+        "Historial",
+        "Roadmap",
+    ])
 
     with tab_status:
         _render_briefing_summary(df_watch, df_alerts, df_briefing)
 
     with tab_payloads:
         _render_payloads(df_watch, df_alerts, df_briefing)
+
+    with tab_schedule:
+        render_schedule_control_panel()
 
     with tab_logs:
         render_automation_log_panel()
@@ -183,13 +200,15 @@ def render_automation_center() -> None:
             - Payload compacto/email: operativo.
             - Telegram: envío manual con confirmación explícita.
             - Historial de generación/envío: operativo.
-            - Automatización periódica: no activada.
+            - Control de frecuencia: operativo.
+            - Automatización periódica real: no activada.
 
             **Antes de programar envíos reales**
             1. Validar que el briefing no contiene datos incorrectos.
             2. Confirmar formato de Telegram/email durante varios días.
             3. Revisar el historial de envíos y errores.
-            4. Crear control de frecuencia y activación explícita por usuario.
+            4. Mantener el interruptor de automatización desactivado hasta que el flujo sea fiable.
+            5. Crear un ejecutor externo controlado, no dependiente de reruns de Streamlit.
             """
         )
         st.info(f"Última generación de panel: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
