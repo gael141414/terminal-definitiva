@@ -1,8 +1,8 @@
 """Generador de informes para Research Core.
 
-Este módulo convierte la tesis de inversión, los scores y los outputs financieros
-principales en un informe descargable en Markdown y HTML. La salida está pensada
-para revisión humana: no constituye asesoramiento financiero personalizado.
+Convierte la tesis de inversión, los scores y los outputs financieros principales
+en un informe descargable en Markdown y HTML. La salida está pensada para
+revisión humana: no constituye asesoramiento financiero personalizado.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
-from modulos.investment_thesis import build_investment_thesis, thesis_to_markdown
+from modulos.investment_thesis import build_investment_thesis
 
 
 DISCLAIMER = (
@@ -73,6 +73,18 @@ def _safe_dataframe(value: Any) -> pd.DataFrame | None:
     return None
 
 
+def _extract_ratios(resultado: dict[str, Any] | None) -> pd.DataFrame | None:
+    """Extrae un DataFrame de ratios sin evaluar DataFrames en contexto booleano."""
+
+    if not isinstance(resultado, dict):
+        return None
+    for key in ("ratios", "data", "df", "metrics"):
+        df = _safe_dataframe(resultado.get(key))
+        if df is not None:
+            return df
+    return None
+
+
 def _latest_available_value(df: pd.DataFrame | None, candidates: list[str]) -> Any:
     if df is None or df.empty:
         return None
@@ -93,12 +105,6 @@ def _latest_available_value(df: pd.DataFrame | None, candidates: list[str]) -> A
     return None
 
 
-def _extract_ratios(resultado: dict[str, Any] | None) -> pd.DataFrame | None:
-    if not isinstance(resultado, dict):
-        return None
-    return _safe_dataframe(resultado.get("ratios")) or _safe_dataframe(resultado.get("data"))
-
-
 def _financial_snapshot(
     res_is: dict[str, Any] | None,
     res_bs: dict[str, Any] | None,
@@ -109,41 +115,17 @@ def _financial_snapshot(
     cf_ratios = _extract_ratios(res_cf)
 
     metrics = [
-        (
-            "Margen neto",
-            _latest_available_value(is_ratios, ["Margen Neto", "Net Margin", "net_margin"]),
-            "pct",
-        ),
-        (
-            "Margen bruto",
-            _latest_available_value(is_ratios, ["Margen Bruto", "Gross Margin", "gross_margin"]),
-            "pct",
-        ),
-        (
-            "ROE",
-            _latest_available_value(bs_ratios, ["ROE", "Return on Equity", "roe"]),
-            "pct",
-        ),
-        (
-            "ROIC",
-            _latest_available_value(bs_ratios, ["ROIC", "roic"]),
-            "pct",
-        ),
+        ("Margen neto", _latest_available_value(is_ratios, ["Margen Neto", "Net Margin", "net_margin"]), "pct"),
+        ("Margen bruto", _latest_available_value(is_ratios, ["Margen Bruto", "Gross Margin", "gross_margin"]), "pct"),
+        ("ROE", _latest_available_value(bs_ratios, ["ROE", "Return on Equity", "roe"]), "pct"),
+        ("ROIC", _latest_available_value(bs_ratios, ["ROIC", "roic"]), "pct"),
         (
             "Deuda/Capital",
             _latest_available_value(bs_ratios, ["Deuda/Capital", "Debt/Equity", "Debt to Equity", "debt_to_equity"]),
             "x",
         ),
-        (
-            "FCF",
-            _latest_available_value(cf_ratios, ["FCF", "Free Cash Flow", "free_cash_flow"]),
-            "money",
-        ),
-        (
-            "CAPEX/OCF",
-            _latest_available_value(cf_ratios, ["CAPEX/OCF", "Capex/OCF", "capex_ocf"]),
-            "pct",
-        ),
+        ("FCF", _latest_available_value(cf_ratios, ["FCF", "Free Cash Flow", "free_cash_flow"]), "money"),
+        ("CAPEX/OCF", _latest_available_value(cf_ratios, ["CAPEX/OCF", "Capex/OCF", "capex_ocf"]), "pct"),
     ]
 
     rows: list[dict[str, str]] = []
@@ -186,6 +168,7 @@ def build_research_report_markdown(
     thesis = build_investment_thesis(ticker, valuequant_score, res_val, nota_buffett)
     component_rows = _component_rows(valuequant_score)
     financial_rows = _financial_snapshot(res_is, res_bs, res_cf)
+    predictive_confidence = _score_attr(valuequant_score, "predictive_confidence")
 
     lines: list[str] = [
         f"# Informe Research Core — {ticker}",
@@ -201,7 +184,7 @@ def build_research_report_markdown(
         f"- **Buffett Quality:** {_fmt_score(thesis.buffett_score)}",
         f"- **Cobertura de datos:** {_fmt_pct(_score_attr(valuequant_score, 'data_coverage'))}",
         f"- **Confianza operativa:** {_fmt_pct(_score_attr(valuequant_score, 'confidence'))}",
-        f"- **Confianza predictiva:** {_fmt_pct(_score_attr(valuequant_score, 'predictive_confidence')) if _score_attr(valuequant_score, 'predictive_confidence') is not None else 'Pendiente de backtesting'}",
+        f"- **Confianza predictiva:** {_fmt_pct(predictive_confidence) if predictive_confidence is not None else 'Pendiente de backtesting'}",
         "",
         "## 2. Valoración y zona de entrada",
         f"- **Precio actual:** {_fmt_money(thesis.current_price)}",
@@ -273,8 +256,7 @@ def research_report_to_html(markdown: str, ticker: str) -> str:
         if not raw:
             close_blocks()
             body_lines.append("<br>")
-            continue
-        if raw.startswith("# "):
+        elif raw.startswith("# "):
             close_blocks()
             body_lines.append(f"<h1>{raw[2:]}</h1>")
         elif raw.startswith("## "):
