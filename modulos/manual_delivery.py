@@ -15,6 +15,7 @@ import streamlit as st
 
 from modulos.config import CONFIG
 from modulos.briefing_payloads import BriefingPayloads
+from modulos.automation_logs import log_delivery_attempt
 
 
 MAX_TELEGRAM_MESSAGE_CHARS = 3900
@@ -94,11 +95,26 @@ def send_telegram_text(text: str) -> DeliveryResult:
 
     status = telegram_status()
     if not status.configured:
+        log_delivery_attempt(
+            channel="telegram",
+            status="error",
+            detail=status.detail,
+            sent_parts=0,
+            message=text,
+        )
         return DeliveryResult(False, 0, status.detail)
 
     parts = _split_message(text)
     if not parts:
-        return DeliveryResult(False, 0, "No hay contenido para enviar.")
+        detail = "No hay contenido para enviar."
+        log_delivery_attempt(
+            channel="telegram",
+            status="error",
+            detail=detail,
+            sent_parts=0,
+            message=text,
+        )
+        return DeliveryResult(False, 0, detail)
 
     token = str(CONFIG.telegram_bot_token).strip()
     chat_id = str(CONFIG.telegram_chat_id).strip()
@@ -119,15 +135,47 @@ def send_telegram_text(text: str) -> DeliveryResult:
                 response_body = resp.read().decode("utf-8", errors="replace")
                 data = json.loads(response_body) if response_body else {}
                 if not data.get("ok", False):
-                    return DeliveryResult(False, sent, f"Telegram rechazó el envío: {data}")
+                    detail = f"Telegram rechazó el envío: {data}"
+                    log_delivery_attempt(
+                        channel="telegram",
+                        status="error",
+                        detail=detail,
+                        sent_parts=sent,
+                        message=text,
+                    )
+                    return DeliveryResult(False, sent, detail)
             sent += 1
     except error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace") if exc.fp else str(exc)
-        return DeliveryResult(False, sent, f"Error HTTP de Telegram: {exc.code} — {detail}")
+        detail_body = exc.read().decode("utf-8", errors="replace") if exc.fp else str(exc)
+        detail = f"Error HTTP de Telegram: {exc.code} — {detail_body}"
+        log_delivery_attempt(
+            channel="telegram",
+            status="error",
+            detail=detail,
+            sent_parts=sent,
+            message=text,
+        )
+        return DeliveryResult(False, sent, detail)
     except Exception as exc:
-        return DeliveryResult(False, sent, f"Error enviando a Telegram: {exc}")
+        detail = f"Error enviando a Telegram: {exc}"
+        log_delivery_attempt(
+            channel="telegram",
+            status="error",
+            detail=detail,
+            sent_parts=sent,
+            message=text,
+        )
+        return DeliveryResult(False, sent, detail)
 
-    return DeliveryResult(True, sent, f"Enviado correctamente en {sent} parte(s).")
+    detail = f"Enviado correctamente en {sent} parte(s)."
+    log_delivery_attempt(
+        channel="telegram",
+        status="ok",
+        detail=detail,
+        sent_parts=sent,
+        message=text,
+    )
+    return DeliveryResult(True, sent, detail)
 
 
 def render_manual_telegram_panel(payloads: BriefingPayloads) -> None:
