@@ -14,8 +14,9 @@ import json
 import streamlit as st
 
 from modulos.config import CONFIG
-from modulos.briefing_payloads import BriefingPayloads
 from modulos.automation_logs import log_delivery_attempt
+from modulos.automation_schedule import evaluate_delivery_frequency, load_automation_settings
+from modulos.briefing_payloads import BriefingPayloads
 
 
 MAX_TELEGRAM_MESSAGE_CHARS = 3900
@@ -182,6 +183,12 @@ def render_manual_telegram_panel(payloads: BriefingPayloads) -> None:
     """Panel Streamlit para revisar y enviar manualmente el briefing a Telegram."""
 
     status = telegram_status()
+    schedule_settings = load_automation_settings()
+    frequency_decision = evaluate_delivery_frequency(
+        channel="telegram",
+        frequency=schedule_settings.frequency,
+        max_deliveries_per_period=schedule_settings.max_deliveries_per_period,
+    )
 
     with st.expander("📲 Envío manual a Telegram", expanded=False):
         st.caption(
@@ -198,6 +205,20 @@ def render_manual_telegram_panel(payloads: BriefingPayloads) -> None:
                 language="bash",
             )
 
+        if frequency_decision.allowed:
+            st.info(frequency_decision.reason)
+            override_frequency = False
+        else:
+            st.warning(frequency_decision.reason)
+            if schedule_settings.allow_manual_override:
+                override_frequency = st.checkbox(
+                    "Permitir envío manual igualmente. Confirmo que acepto saltarme el límite de frecuencia.",
+                    key="manual_telegram_frequency_override",
+                )
+            else:
+                override_frequency = False
+                st.caption("El override manual está desactivado en Programación segura.")
+
         message = st.text_area(
             "Mensaje que se enviará",
             value=payloads.compact_text,
@@ -212,7 +233,8 @@ def render_manual_telegram_panel(payloads: BriefingPayloads) -> None:
             key="manual_telegram_confirm",
         )
 
-        disabled = not status.configured or not confirm or not message.strip()
+        frequency_blocked = not frequency_decision.allowed and not override_frequency
+        disabled = not status.configured or not confirm or not message.strip() or frequency_blocked
         if st.button("📲 Enviar briefing a Telegram", disabled=disabled, use_container_width=True):
             with st.spinner("Enviando briefing a Telegram..."):
                 result = send_telegram_text(message)
