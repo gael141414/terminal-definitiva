@@ -14,6 +14,7 @@ import pandas as pd
 import streamlit as st
 
 from modulos.config import CONFIG
+from modulos.automation_logs import log_briefing_generated, render_automation_log_panel
 from modulos.briefing_payloads import build_briefing_payloads
 from modulos.manual_delivery import render_manual_telegram_panel, telegram_status
 from modulos.opportunity_briefing import build_opportunity_briefing
@@ -160,14 +161,18 @@ def render_automation_center() -> None:
 
     with st.spinner("Construyendo briefing desde watchlist..."):
         df_watch, df_alerts, df_briefing = build_opportunity_briefing()
+        log_briefing_generated(df_watch, df_alerts, df_briefing)
 
-    tab_status, tab_payloads, tab_roadmap = st.tabs(["Resumen", "Payloads y envío", "Roadmap"])
+    tab_status, tab_payloads, tab_logs, tab_roadmap = st.tabs(["Resumen", "Payloads y envío", "Historial", "Roadmap"])
 
     with tab_status:
         _render_briefing_summary(df_watch, df_alerts, df_briefing)
 
     with tab_payloads:
         _render_payloads(df_watch, df_alerts, df_briefing)
+
+    with tab_logs:
+        render_automation_log_panel()
 
     with tab_roadmap:
         st.subheader("Próximos pasos de automatización")
@@ -177,13 +182,14 @@ def render_automation_center() -> None:
             - Generación de briefing: operativa.
             - Payload compacto/email: operativo.
             - Telegram: envío manual con confirmación explícita.
+            - Historial de generación/envío: operativo.
             - Automatización periódica: no activada.
 
             **Antes de programar envíos reales**
             1. Validar que el briefing no contiene datos incorrectos.
             2. Confirmar formato de Telegram/email durante varios días.
-            3. Añadir control de frecuencia y logs.
-            4. Crear una opción de activación explícita por usuario.
+            3. Revisar el historial de envíos y errores.
+            4. Crear control de frecuencia y activación explícita por usuario.
             """
         )
         st.info(f"Última generación de panel: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
