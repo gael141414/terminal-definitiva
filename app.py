@@ -63,6 +63,8 @@ from modulos.alt_data import render_alt_data
 from modulos.ui_components import render_kpi_card
 from charts import render_market_treemap
 
+from modulos.config import CONFIG
+
 def inyectar_atajo_teclado():
     """Inyecta un listener global de JavaScript para el atajo Ctrl+K / Cmd+K"""
     js_code = """
@@ -802,7 +804,7 @@ def ultimo_ratio(resultado, columna):
 APP_DIR = Path(__file__).resolve().parent
 LOGO_PATH = APP_DIR / "logo.png"
 HOME_BG_PATH = APP_DIR / "fondo.png"
-FMP_API_KEY = os.getenv("FMP_API_KEY", "vo1atWFBZwr64ScXucowhC0Wmy3Wweaf")  # Producción: mover a .env o st.secrets.
+FMP_API_KEY = CONFIG.fmp_api_key
 
 
 def asset_to_data_uri(path: Path) -> str:
