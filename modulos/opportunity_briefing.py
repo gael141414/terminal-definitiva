@@ -24,6 +24,7 @@ import yfinance as yf
 
 from modulos.watchlist_alerts import alert_summary, build_watchlist_alerts
 from modulos.briefing_payloads import build_briefing_payloads
+from modulos.manual_delivery import render_manual_telegram_panel
 
 DATA_FOLDER = Path("data")
 WATCHLIST_FILE = DATA_FOLDER / "watchlist.json"
@@ -683,6 +684,12 @@ def _render_payload_panel(df_watch: pd.DataFrame, df_alerts: pd.DataFrame, df_br
             if len(payloads.email_html) > 5000:
                 st.caption("Vista previa truncada. El archivo descargado contiene el HTML completo.")
 
+def _render_manual_delivery_panel(df_watch: pd.DataFrame, df_alerts: pd.DataFrame, df_briefing: pd.DataFrame) -> None:
+    """Panel de envío manual con confirmación explícita."""
+
+    payloads = build_briefing_payloads(df_watch, df_alerts, df_briefing)
+    render_manual_telegram_panel(payloads)
+
 def _render_bucket(df: pd.DataFrame, bucket: str, empty_message: str) -> None:
     subset = df[df["Prioridad"] == bucket]
     if subset.empty:
@@ -750,6 +757,7 @@ def render_opportunity_briefing() -> None:
 
     _render_export_panel(df_watch, df_alerts, df_briefing)
     _render_payload_panel(df_watch, df_alerts, df_briefing)
+    _render_manual_delivery_panel(df_watch, df_alerts, df_briefing)
 
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
         [
