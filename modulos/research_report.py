@@ -7,11 +7,13 @@ revisión humana: no constituye asesoramiento financiero personalizado.
 
 from __future__ import annotations
 
+from datetime import datetime
 from html import escape
 from typing import Any
 
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 from modulos.investment_thesis import build_investment_thesis
 
@@ -20,6 +22,12 @@ DISCLAIMER = (
     "Documento generado automáticamente por ValueQuant Terminal. "
     "No constituye asesoramiento financiero personalizado ni recomendación "
     "individualizada de compra o venta."
+)
+
+
+PRINT_EXPORT_HELP = (
+    "Para generar PDF: descarga el HTML, ábrelo en el navegador y usa Ctrl+P "
+    "→ Guardar como PDF. El HTML ya incluye estilos específicos de impresión."
 )
 
 
@@ -234,10 +242,25 @@ def build_research_report_markdown(
     return "\n".join(lines).strip() + "\n"
 
 
-def research_report_to_html(markdown: str, ticker: str) -> str:
-    """Convierte el informe Markdown a una plantilla HTML sencilla y portable."""
+def _inline_markdown_to_html(text: str) -> str:
+    """Convierte un subconjunto muy pequeño de Markdown inline a HTML seguro."""
 
-    escaped_lines = [escape(line) for line in markdown.splitlines()]
+    escaped = escape(text)
+    parts = escaped.split("**")
+    if len(parts) == 1:
+        return escaped
+
+    rendered: list[str] = []
+    for index, part in enumerate(parts):
+        if index % 2 == 1:
+            rendered.append(f"<strong>{part}</strong>")
+        else:
+            rendered.append(part)
+    return "".join(rendered)
+
+
+def _markdown_body_to_html(markdown: str) -> str:
+    escaped_lines = markdown.splitlines()
     body_lines: list[str] = []
     in_ul = False
     in_table = False
@@ -255,24 +278,25 @@ def research_report_to_html(markdown: str, ticker: str) -> str:
         raw = line.strip()
         if not raw:
             close_blocks()
-            body_lines.append("<br>")
+            body_lines.append("<div class=\"spacer\"></div>")
         elif raw.startswith("# "):
             close_blocks()
-            body_lines.append(f"<h1>{raw[2:]}</h1>")
+            body_lines.append(f"<h1>{_inline_markdown_to_html(raw[2:])}</h1>")
         elif raw.startswith("## "):
             close_blocks()
-            body_lines.append(f"<h2>{raw[3:]}</h2>")
+            body_lines.append(f"<h2>{_inline_markdown_to_html(raw[3:])}</h2>")
         elif raw.startswith("### "):
             close_blocks()
-            body_lines.append(f"<h3>{raw[4:]}</h3>")
-        elif raw.startswith("&gt; "):
+            body_lines.append(f"<h3>{_inline_markdown_to_html(raw[4:])}</h3>")
+        elif raw.startswith("> "):
             close_blocks()
-            body_lines.append(f"<blockquote>{raw[5:]}</blockquote>")
+            body_lines.append(f"<blockquote>{_inline_markdown_to_html(raw[2:])}</blockquote>")
         elif raw.startswith("- "):
             if not in_ul:
+                close_blocks()
                 body_lines.append("<ul>")
                 in_ul = True
-            body_lines.append(f"<li>{raw[2:]}</li>")
+            body_lines.append(f"<li>{_inline_markdown_to_html(raw[2:])}</li>")
         elif raw.startswith("| ") and raw.endswith(" |"):
             if "---" in raw:
                 continue
@@ -281,38 +305,177 @@ def research_report_to_html(markdown: str, ticker: str) -> str:
                 close_blocks()
                 body_lines.append("<table>")
                 in_table = True
-                body_lines.append("<tr>" + "".join(f"<th>{cell}</th>" for cell in cells) + "</tr>")
+                body_lines.append("<tr>" + "".join(f"<th>{_inline_markdown_to_html(cell)}</th>" for cell in cells) + "</tr>")
             else:
-                body_lines.append("<tr>" + "".join(f"<td>{cell}</td>" for cell in cells) + "</tr>")
+                body_lines.append("<tr>" + "".join(f"<td>{_inline_markdown_to_html(cell)}</td>" for cell in cells) + "</tr>")
         else:
             close_blocks()
-            body_lines.append(f"<p>{raw}</p>")
+            body_lines.append(f"<p>{_inline_markdown_to_html(raw)}</p>")
 
     close_blocks()
+    return "\n".join(body_lines)
+
+
+def research_report_to_html(markdown: str, ticker: str) -> str:
+    """Convierte el informe Markdown a HTML imprimible y portable."""
+
+    generated_at = datetime.now().strftime("%Y-%m-%d %H:%M")
+    body_html = _markdown_body_to_html(markdown)
+    title = f"Informe Research Core - {escape(ticker)}"
 
     return f"""<!doctype html>
 <html lang=\"es\">
 <head>
   <meta charset=\"utf-8\">
-  <title>Informe Research Core - {escape(ticker)}</title>
+  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
+  <title>{title}</title>
   <style>
-    body {{ font-family: Inter, Arial, sans-serif; background: #0b1020; color: #e5e7eb; margin: 0; padding: 40px; }}
-    main {{ max-width: 980px; margin: 0 auto; background: #111827; border: 1px solid #243047; border-radius: 18px; padding: 34px; }}
-    h1 {{ color: #f8fafc; border-bottom: 1px solid #334155; padding-bottom: 14px; }}
-    h2 {{ color: #93c5fd; margin-top: 34px; }}
-    h3 {{ color: #c4b5fd; }}
-    blockquote {{ border-left: 4px solid #38bdf8; padding: 10px 16px; background: rgba(56, 189, 248, 0.08); color: #cbd5e1; }}
-    table {{ width: 100%; border-collapse: collapse; margin: 16px 0; }}
-    th, td {{ border: 1px solid #334155; padding: 10px; text-align: left; }}
-    th {{ background: #1e293b; }}
+    :root {{
+      --bg: #0b1020;
+      --panel: #111827;
+      --panel-2: #162033;
+      --border: #243047;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-2: #93c5fd;
+      --violet: #c4b5fd;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      font-family: Inter, Arial, sans-serif;
+      background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.13), transparent 28%), var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 36px;
+      line-height: 1.55;
+    }}
+    .toolbar {{
+      max-width: 1020px;
+      margin: 0 auto 16px auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }}
+    .print-button {{
+      border: 1px solid var(--border);
+      background: var(--panel-2);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+      font-weight: 700;
+    }}
+    .print-button:hover {{ border-color: var(--accent); }}
+    main {{
+      max-width: 1020px;
+      margin: 0 auto;
+      background: rgba(17, 24, 39, 0.96);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 40px;
+      box-shadow: 0 28px 80px rgba(0, 0, 0, 0.35);
+    }}
+    h1 {{
+      color: #f8fafc;
+      border-bottom: 1px solid #334155;
+      padding-bottom: 16px;
+      margin-top: 0;
+      letter-spacing: -0.03em;
+    }}
+    h2 {{
+      color: var(--accent-2);
+      margin-top: 36px;
+      padding-top: 8px;
+      break-after: avoid;
+    }}
+    h3 {{ color: var(--violet); break-after: avoid; }}
+    blockquote {{
+      border-left: 4px solid var(--accent);
+      padding: 12px 18px;
+      background: rgba(56, 189, 248, 0.08);
+      color: #cbd5e1;
+      margin: 18px 0;
+      border-radius: 0 12px 12px 0;
+    }}
+    table {{
+      width: 100%;
+      border-collapse: collapse;
+      margin: 18px 0;
+      page-break-inside: avoid;
+    }}
+    th, td {{
+      border: 1px solid #334155;
+      padding: 10px;
+      text-align: left;
+      vertical-align: top;
+    }}
+    th {{ background: #1e293b; color: #f8fafc; }}
+    tr:nth-child(even) td {{ background: rgba(30, 41, 59, 0.38); }}
+    ul {{ padding-left: 22px; }}
     li {{ margin: 7px 0; }}
-    .footer {{ margin-top: 42px; color: #94a3b8; font-size: 12px; }}
+    strong {{ color: #f8fafc; }}
+    .spacer {{ height: 8px; }}
+    .footer {{
+      margin-top: 42px;
+      color: var(--muted);
+      font-size: 12px;
+      border-top: 1px solid var(--border);
+      padding-top: 14px;
+    }}
+
+    @page {{
+      size: A4;
+      margin: 16mm 14mm;
+    }}
+
+    @media print {{
+      body {{
+        background: #ffffff !important;
+        color: #111827 !important;
+        padding: 0;
+        font-size: 11pt;
+      }}
+      .toolbar {{ display: none !important; }}
+      main {{
+        max-width: none;
+        border: none;
+        box-shadow: none;
+        border-radius: 0;
+        padding: 0;
+        background: #ffffff !important;
+      }}
+      h1 {{ color: #111827 !important; border-bottom: 1px solid #cbd5e1; }}
+      h2 {{ color: #1d4ed8 !important; page-break-after: avoid; }}
+      h3 {{ color: #334155 !important; page-break-after: avoid; }}
+      blockquote {{
+        background: #f8fafc !important;
+        color: #334155 !important;
+        border-left-color: #0284c7;
+      }}
+      th {{ background: #e5e7eb !important; color: #111827 !important; }}
+      td, th {{ border-color: #cbd5e1 !important; }}
+      tr:nth-child(even) td {{ background: #f8fafc !important; }}
+      a {{ color: #111827 !important; text-decoration: none; }}
+      .footer {{ color: #64748b !important; }}
+    }}
   </style>
 </head>
 <body>
+  <div class=\"toolbar\">
+    <div>
+      <strong>ValueQuant Terminal</strong> · {escape(ticker)} · generado {generated_at}
+    </div>
+    <button class=\"print-button\" onclick=\"window.print()\">Imprimir / Guardar PDF</button>
+  </div>
   <main>
-    {''.join(body_lines)}
-    <div class=\"footer\">Generado por ValueQuant Terminal.</div>
+    {body_html}
+    <div class=\"footer\">
+      Generado por ValueQuant Terminal. {escape(PRINT_EXPORT_HELP)}
+    </div>
   </main>
 </body>
 </html>
@@ -333,7 +496,7 @@ def render_research_report_export(
 
     st.markdown("### Informe Research Core")
     st.caption(
-        "Informe completo en Markdown y HTML con tesis, valoración, score, snapshot financiero, "
+        "Informe completo en Markdown y HTML imprimible con tesis, valoración, score, snapshot financiero, "
         "riesgos y checklist de revisión."
     )
 
@@ -349,6 +512,8 @@ def render_research_report_export(
     )
     html = research_report_to_html(markdown, ticker)
 
+    st.info(PRINT_EXPORT_HELP)
+
     col_a, col_b = st.columns(2)
     with col_a:
         st.download_button(
@@ -359,14 +524,16 @@ def render_research_report_export(
         )
     with col_b:
         st.download_button(
-            "Descargar informe HTML",
+            "Descargar HTML imprimible",
             data=html,
-            file_name=f"research_core_{ticker.lower()}.html",
+            file_name=f"research_core_{ticker.lower()}_print.html",
             mime="text/html",
         )
 
-    preview_mode = st.radio("Vista previa", ["Markdown", "HTML fuente"], horizontal=True)
-    if preview_mode == "Markdown":
+    preview_mode = st.radio("Vista previa", ["HTML renderizado", "Markdown", "HTML fuente"], horizontal=True)
+    if preview_mode == "HTML renderizado":
+        components.html(html, height=820, scrolling=True)
+    elif preview_mode == "Markdown":
         st.markdown(markdown)
     else:
         st.code(html, language="html")
