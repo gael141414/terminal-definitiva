@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
-TOOL_CATALOG = [
+from modulos.tool_consolidation import (
+    CONSOLIDATION_GROUPS,
+    get_tool_consolidation,
+)
+
+
+_RAW_TOOL_CATALOG = [
     {"label": "📊 Resumen Ejecutivo", "bloque": "📌 Núcleo Empresa", "input_mode": "company", "descripcion": "Vista de mando con precio, score, riesgos y gráfico institucional.", "strategic_group": "research"},
     {"label": "🔎 Análisis Fundamental", "bloque": "📌 Núcleo Empresa", "input_mode": "company", "descripcion": "Estados financieros, ratios, valoración y comparador.", "strategic_group": "research"},
     {"label": "🧠 Auditoría Forense", "bloque": "📌 Núcleo Empresa", "input_mode": "company", "descripcion": "Banderas rojas contables y calidad de beneficios.", "strategic_group": "research"},
@@ -35,6 +41,29 @@ TOOL_CATALOG = [
     {"label": "💡 Consejos y Mentoría", "bloque": "🧠 IA y Mentoría", "input_mode": "standalone", "descripcion": "Aprendizaje guiado y criterios de inversión.", "strategic_group": "assistant"},
 ]
 
+
+def _enrich_tool(tool: dict[str, object]) -> dict[str, object]:
+    """Añade metadatos de consolidación a una herramienta del catálogo."""
+
+    enriched = dict(tool)
+    metadata = get_tool_consolidation(str(tool["label"]))
+    group_key = str(metadata.get("group", "unassigned"))
+    group = CONSOLIDATION_GROUPS.get(group_key)
+
+    enriched.update(
+        {
+            "consolidation_group": group_key,
+            "consolidation_name": group.name if group else "Sin asignar",
+            "consolidation_status": metadata.get("status", "merge"),
+            "consolidation_order": metadata.get("order", 999),
+            "visible_in_mvp": bool(metadata.get("visible_in_mvp", False)),
+        }
+    )
+    return enriched
+
+
+TOOL_CATALOG = [_enrich_tool(tool) for tool in _RAW_TOOL_CATALOG]
+
 BLOQUES_HERRAMIENTAS = tuple(dict.fromkeys(h["bloque"] for h in TOOL_CATALOG))
 HERRAMIENTAS_POR_LABEL = {h["label"]: h for h in TOOL_CATALOG}
 
@@ -45,3 +74,16 @@ def obtener_herramientas_por_bloque(bloque: str):
 
 def obtener_herramientas_por_grupo_estrategico(grupo: str):
     return [h for h in TOOL_CATALOG if h.get("strategic_group") == grupo]
+
+
+def obtener_herramientas_por_grupo_consolidado(grupo: str):
+    return [h for h in TOOL_CATALOG if h.get("consolidation_group") == grupo]
+
+
+def obtener_catalogo_mvp():
+    """Devuelve solo herramientas candidatas a MVP comercial."""
+
+    return sorted(
+        [h for h in TOOL_CATALOG if h.get("visible_in_mvp")],
+        key=lambda h: (str(h.get("consolidation_group")), int(h.get("consolidation_order", 999))),
+    )
