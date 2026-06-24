@@ -101,6 +101,7 @@ def ejecutar_research_core(
     res_val: dict[str, Any],
     nota_buffett: float,
     ticker_competidor: str,
+    years: int = 5,
     valuequant_score: Any = None,
 ) -> None:
     """Renderiza el flujo consolidado de análisis de empresa."""
@@ -199,4 +200,5 @@ def ejecutar_research_core(
             valuequant_score=valuequant_score,
             res_val=res_val,
             nota_buffett=nota_buffett,
+            years=years,
         )
