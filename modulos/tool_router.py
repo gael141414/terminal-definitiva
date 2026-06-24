@@ -101,6 +101,7 @@ def render_company_tool(seccion_actual: str, context: CompanyToolContext) -> Any
             context.res_val,
             context.nota_buffett,
             context.competitor,
+            context.years,
             context.valuequant_score,
         )
 
