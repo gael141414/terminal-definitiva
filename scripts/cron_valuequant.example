@@ -1,0 +1,12 @@
+# Plantillas cron para ValueQuant Terminal.
+# No se instalan automaticamente. Copia manualmente la linea elegida con `crontab -e`.
+# Ajusta las rutas absolutas antes de usarlas.
+
+# Diario de lunes a viernes a las 08:30, solo genera archivos locales.
+30 8 * * 1-5 /home/gael/Escritorio/terminal-limpia/scripts/valuequant_briefing_daily.local.sh >> /home/gael/Escritorio/terminal-limpia/logs/cron_briefing.log 2>&1
+
+# Semanal, domingos a las 19:00, solo genera archivos locales.
+0 19 * * 0 /home/gael/Escritorio/terminal-limpia/scripts/valuequant_briefing_weekly.local.sh >> /home/gael/Escritorio/terminal-limpia/logs/cron_briefing.log 2>&1
+
+# No uses --force-frequency en cron.
+# No guardes tokens en este archivo.
