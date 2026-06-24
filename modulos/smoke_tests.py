@@ -1,9 +1,4 @@
-"""Local smoke tests for ValueQuant Terminal.
-
-These checks are intentionally lightweight. They validate that critical modules can be
-compiled/imported and that key registries expose the expected routes, without starting
-Streamlit or downloading financial data.
-"""
+"""Lightweight local smoke tests for ValueQuant Terminal."""
 
 from __future__ import annotations
 
@@ -12,8 +7,6 @@ import py_compile
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Iterable
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -90,118 +83,85 @@ EXPECTED_ROUTES = [
 ]
 
 
-class SmokeFailure(RuntimeError):
-    """Raised when smoke tests fail in strict mode."""
+def _ok(name: str, detail: str = "") -> SmokeCheck:
+    return SmokeCheck(name, "OK", detail)
 
 
-def _check_file_exists(relative_path: str) -> SmokeCheck:
-    path = PROJECT_ROOT / relative_path
+def _fail(name: str, detail: str = "") -> SmokeCheck:
+    return SmokeCheck(name, "FAIL", detail)
+
+
+def _check_file(path_text: str) -> list[SmokeCheck]:
+    path = PROJECT_ROOT / path_text
+    checks = [_ok(f"file:{path_text}", "exists") if path.exists() else _fail(f"file:{path_text}", "missing")]
     if path.exists():
-        return SmokeCheck(f"file:{relative_path}", "OK", "exists")
-    return SmokeCheck(f"file:{relative_path}", "FAIL", "missing")
-
-
-def _check_compile(relative_path: str) -> SmokeCheck:
-    path = PROJECT_ROOT / relative_path
-    try:
-        py_compile.compile(str(path), doraise=True)
-        return SmokeCheck(f"compile:{relative_path}", "OK", "compiled")
-    except Exception as exc:  # pragma: no cover - diagnostic path
-        return SmokeCheck(f"compile:{relative_path}", "FAIL", str(exc))
+        try:
+            py_compile.compile(str(path), doraise=True)
+            checks.append(_ok(f"compile:{path_text}", "compiled"))
+        except Exception as exc:
+            checks.append(_fail(f"compile:{path_text}", f"{type(exc).__name__}: {exc}"))
+    return checks
 
 
 def _check_import(module_name: str) -> SmokeCheck:
     try:
         importlib.import_module(module_name)
-        return SmokeCheck(f"import:{module_name}", "OK", "imported")
-    except Exception as exc:  # pragma: no cover - diagnostic path
-        return SmokeCheck(f"import:{module_name}", "FAIL", f"{type(exc).__name__}: {exc}")
+        return _ok(f"import:{module_name}", "imported")
+    except Exception as exc:
+        return _fail(f"import:{module_name}", f"{type(exc).__name__}: {exc}")
 
 
 def _check_catalog() -> list[SmokeCheck]:
     checks: list[SmokeCheck] = []
     try:
-        catalog_mod = importlib.import_module("modulos.tool_catalog")
-        catalog = getattr(catalog_mod, "TOOL_CATALOG")
+        mod = importlib.import_module("modulos.tool_catalog")
+        catalog = getattr(mod, "TOOL_CATALOG")
         labels = {item.get("label") for item in catalog}
-        checks.append(SmokeCheck("catalog:loaded", "OK", f"{len(catalog)} tools"))
-
+        checks.append(_ok("catalog:loaded", f"{len(catalog)} tools"))
         for label in EXPECTED_TOOLS:
-            if label in labels:
-                checks.append(SmokeCheck(f"catalog:{label}", "OK", "registered"))
-            else:
-                checks.append(SmokeCheck(f"catalog:{label}", "FAIL", "missing"))
-
-        modes = getattr(catalog_mod, "obtener_modos_navegacion")()
+            checks.append(_ok(f"catalog:{label}", "registered") if label in labels else _fail(f"catalog:{label}", "missing"))
+        modes = set(getattr(mod, "obtener_modos_navegacion")())
         for mode in ("MVP", "Consolidado", "Completo"):
-            status = "OK" if mode in modes else "FAIL"
-            detail = "available" if status == "OK" else "missing"
-            checks.append(SmokeCheck(f"catalog_mode:{mode}", status, detail))
-    except Exception as exc:  # pragma: no cover - diagnostic path
-        checks.append(SmokeCheck("catalog:loaded", "FAIL", f"{type(exc).__name__}: {exc}"))
+            checks.append(_ok(f"catalog_mode:{mode}", "available") if mode in modes else _fail(f"catalog_mode:{mode}", "missing"))
+    except Exception as exc:
+        checks.append(_fail("catalog:loaded", f"{type(exc).__name__}: {exc}"))
     return checks
 
 
 def _check_router() -> list[SmokeCheck]:
     checks: list[SmokeCheck] = []
     try:
-        router_mod = importlib.import_module("modulos.tool_router")
-        independent_routes = getattr(router_mod, "INDEPENDENT_TOOL_ROUTES")
-        company_routes = getattr(router_mod, "COMPANY_TOOL_ROUTES")
-        routes = set(independent_routes) | set(company_routes)
-        checks.append(SmokeCheck("router:loaded", "OK", f"{len(routes)} routes"))
-
+        mod = importlib.import_module("modulos.tool_router")
+        routes = set(getattr(mod, "INDEPENDENT_TOOL_ROUTES")) | set(getattr(mod, "COMPANY_TOOL_ROUTES"))
+        checks.append(_ok("router:loaded", f"{len(routes)} routes"))
         for label in EXPECTED_ROUTES:
-            if label in routes:
-                checks.append(SmokeCheck(f"router:{label}", "OK", "registered"))
-            else:
-                checks.append(SmokeCheck(f"router:{label}", "FAIL", "missing"))
-    except Exception as exc:  # pragma: no cover - diagnostic path
-        checks.append(SmokeCheck("router:loaded", "FAIL", f"{type(exc).__name__}: {exc}"))
+            checks.append(_ok(f"router:{label}", "registered") if label in routes else _fail(f"router:{label}", "missing"))
+    except Exception as exc:
+        checks.append(_fail("router:loaded", f"{type(exc).__name__}: {exc}"))
     return checks
 
 
 def _check_scoring_model() -> list[SmokeCheck]:
     checks: list[SmokeCheck] = []
     try:
-        scoring_mod = importlib.import_module("modulos.scoring_engine")
-        version = getattr(scoring_mod, "MODEL_VERSION", "")
-        cap = getattr(scoring_mod, "CONFIDENCE_CAP", None)
-        checks.append(
-            SmokeCheck(
-                "scoring:model_version",
-                "OK" if str(version).startswith("VQ_SCORE_") else "FAIL",
-                str(version) or "missing",
-            )
-        )
-        checks.append(
-            SmokeCheck(
-                "scoring:confidence_cap",
-                "OK" if isinstance(cap, (int, float)) and 0 < cap <= 1 else "FAIL",
-                str(cap),
-            )
-        )
-    except Exception as exc:  # pragma: no cover - diagnostic path
-        checks.append(SmokeCheck("scoring:loaded", "FAIL", f"{type(exc).__name__}: {exc}"))
+        mod = importlib.import_module("modulos.scoring_engine")
+        version = getattr(mod, "MODEL_VERSION", "")
+        cap = getattr(mod, "CONFIDENCE_CAP", None)
+        checks.append(_ok("scoring:model_version", str(version)) if str(version).startswith("VQ_SCORE_") else _fail("scoring:model_version", str(version)))
+        checks.append(_ok("scoring:confidence_cap", str(cap)) if isinstance(cap, (int, float)) and 0 < cap <= 1 else _fail("scoring:confidence_cap", str(cap)))
+    except Exception as exc:
+        checks.append(_fail("scoring:loaded", f"{type(exc).__name__}: {exc}"))
     return checks
 
 
-def _run_many(functions: Iterable[Callable[[], SmokeCheck]]) -> list[SmokeCheck]:
-    return [fn() for fn in functions]
-
-
 def run_smoke_tests() -> list[SmokeCheck]:
-    """Run all local smoke checks and return structured results."""
-
     checks: list[SmokeCheck] = []
-
-    checks.extend(_check_file_exists(path) for path in CRITICAL_FILES)
-    checks.extend(_check_compile(path) for path in CRITICAL_FILES)
+    for path in CRITICAL_FILES:
+        checks.extend(_check_file(path))
     checks.extend(_check_import(name) for name in CRITICAL_IMPORTS)
     checks.extend(_check_catalog())
     checks.extend(_check_router())
     checks.extend(_check_scoring_model())
-
     return checks
 
 
@@ -211,21 +171,10 @@ def format_smoke_results(checks: list[SmokeCheck]) -> str:
         prefix = "[OK   ]" if check.ok else "[FAIL ]"
         detail = f" — {check.detail}" if check.detail else ""
         lines.append(f"{prefix} {check.name}{detail}")
-
     failed = [check for check in checks if not check.ok]
     lines.append("")
-    if failed:
-        lines.append(f"Resultado: FAIL ({len(failed)} fallos / {len(checks)} checks)")
-    else:
-        lines.append(f"Resultado: OK ({len(checks)} checks)")
+    lines.append(f"Resultado: {'OK' if not failed else 'FAIL'} ({len(failed)} fallos / {len(checks)} checks)")
     return "\n".join(lines)
-
-
-def assert_smoke_tests_pass(checks: list[SmokeCheck]) -> None:
-    failed = [check for check in checks if not check.ok]
-    if failed:
-        details = "\n".join(f"- {check.name}: {check.detail}" for check in failed)
-        raise SmokeFailure(f"Smoke tests failed:\n{details}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -233,7 +182,6 @@ def main(argv: list[str] | None = None) -> int:
     strict = "--strict" in argv
     checks = run_smoke_tests()
     print(format_smoke_results(checks))
-
     failed = [check for check in checks if not check.ok]
     if strict and failed:
         return 1
