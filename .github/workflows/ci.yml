@@ -24,6 +24,9 @@ jobs:
     name: Smoke tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      FMP_API_KEY: ci_non_secret_fmp_key
+      VALUEQUANT_DEBUG: "false"
 
     steps:
       - name: Checkout repository
@@ -61,7 +64,7 @@ jobs:
 
       - name: Run healthcheck
         run: |
-          python scripts/run_healthcheck.py --ci
+          python scripts/run_healthcheck.py
 
       - name: Run smoke tests
         run: |
