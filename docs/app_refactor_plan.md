@@ -54,12 +54,29 @@ streamlit run app.py
 Extraer de `app.py`:
 
 - `asset_to_data_uri`
-- rutas de logo y fondo
-- helpers de formato visual
+- `strip_visual_prefix`
+- rutas de logo y fondo mediante `build_runtime_paths()`
 
-Destino sugerido:
+Destino:
 
 - `modulos/app_assets.py`
+- reutilización de `modulos/app_runtime.py`
+
+Aplicar la migración con:
+
+```bash
+python scripts/apply_sprint_2c_extract_assets.py
+```
+
+Validación específica:
+
+```bash
+python scripts/apply_sprint_2c_extract_assets.py
+python -m py_compile app.py modulos/app_assets.py scripts/apply_sprint_2c_extract_assets.py
+python scripts/run_healthcheck.py
+python scripts/run_smoke_tests.py --strict
+streamlit run app.py
+```
 
 ### Sprint 2D - Tema visual y CSS
 
