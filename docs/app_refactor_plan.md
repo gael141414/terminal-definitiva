@@ -30,6 +30,24 @@ Se permite mover las constantes de configuración a `modulos/app_runtime.py`, pe
 - Eliminar imports duplicados.
 - Convertir dependencias opcionales a imports tolerantes a fallo.
 - Mantener imports críticos explícitos.
+- Aplicar la migración con `scripts/apply_sprint_2b_import_cleanup.py`.
+
+El script de Sprint 2B debe:
+
+- mantener `st.set_page_config()` al inicio de `app.py`,
+- quitar el segundo `from modulos.config import CONFIG`,
+- convertir `google.generativeai`, `fpdf`, `TextBlob` y `streamlit_lottie` en imports tolerantes a fallo,
+- añadir guardas para Gemini y exportación PDF.
+
+Validación específica:
+
+```bash
+python scripts/apply_sprint_2b_import_cleanup.py
+python -m py_compile app.py scripts/apply_sprint_2b_import_cleanup.py
+python scripts/run_healthcheck.py
+python scripts/run_smoke_tests.py --strict
+streamlit run app.py
+```
 
 ### Sprint 2C - Assets y helpers visuales
 
