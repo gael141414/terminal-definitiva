@@ -1,8 +1,35 @@
+# Python
 .venv/
+venv/
 __pycache__/
-*.pyc
-cache_datos/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local secrets and environment
 .env
+.env.*
+!.env.example
 .streamlit/secrets.toml
-data/telegram_alert_state.json
-data/telegram_subscribers.json
+*.pem
+*.key
+
+# Runtime/generated data
+cache_datos/
+data/
+exports/
+logs/
+
+# Local automation scripts and backups
+*.local.sh
+scripts/*.local.sh
+*.bak
+*.bak_*
+*.tmp
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/

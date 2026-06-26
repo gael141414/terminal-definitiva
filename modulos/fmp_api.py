@@ -4,9 +4,10 @@ import pandas as pd
 import requests
 import streamlit as st
 
+from modulos.config import CONFIG
 
-# TODO(produccion): mover esta clave a .env o st.secrets["FMP_API_KEY"].
-FMP_API_KEY = "vo1atWFBZwr64ScXucowhC0Wmy3Wweaf"
+
+FMP_API_KEY = CONFIG.fmp_api_key
 BASE_URL = "https://financialmodelingprep.com/api/v3"
 STABLE_BASE_URL = "https://financialmodelingprep.com/stable"
 REQUEST_TIMEOUT = 15
@@ -15,6 +16,10 @@ FMP_MAX_LIMIT_CURRENT_PLAN = 5
 
 def _normalizar_ticker(ticker: str) -> str:
     return str(ticker or "").upper().strip()
+
+
+def _fmp_api_disponible() -> bool:
+    return bool(str(FMP_API_KEY or "").strip())
 
 
 def _variantes_ticker_fmp(ticker: str) -> list[str]:
@@ -29,6 +34,8 @@ def _variantes_ticker_fmp(ticker: str) -> list[str]:
 
 def _descargar_json(url: str, params: dict[str, str | int] | None = None) -> list[dict] | None:
     try:
+        if not _fmp_api_disponible():
+            return None
         response = requests.get(url, params=params, timeout=REQUEST_TIMEOUT)
         response.raise_for_status()
         payload = response.json()
@@ -64,6 +71,10 @@ def _probar_endpoint(
         "error": None,
         "sample": None,
     }
+
+    if not _fmp_api_disponible():
+        resultado["error"] = "FMP_API_KEY no configurada. Define la clave en st.secrets o variable de entorno."
+        return resultado
 
     try:
         response = requests.get(url, params=params, timeout=REQUEST_TIMEOUT)
@@ -109,8 +120,12 @@ def _endpoint_a_dataframe(
         if df.empty:
             return None
 
+        metadata_columns = {
+            "symbol", "reportedCurrency", "cik", "fillingDate", "acceptedDate",
+            "calendarYear", "period", "link", "finalLink",
+        }
         for column in df.columns:
-            if column not in {"symbol", "reportedCurrency", "cik", "fillingDate", "acceptedDate", "calendarYear", "period", "link", "finalLink"}:
+            if column not in metadata_columns:
                 converted = pd.to_numeric(df[column], errors="coerce")
                 if converted.notna().any():
                     df[column] = converted
@@ -133,6 +148,9 @@ def _construir_endpoints_fundamentales(
         "cash_flow": [],
         "key_metrics": [],
     }
+
+    if not _fmp_api_disponible():
+        return endpoints
 
     for symbol in variantes_ticker:
         stable_params = {
@@ -163,11 +181,12 @@ def _construir_endpoints_fundamentales(
 
 
 def diagnosticar_conexion_fmp(ticker: str, limite_anios: int = 2) -> dict[str, object]:
-    """Devuelve diagnostico detallado de conectividad FMP sin cachear."""
+    """Devuelve diagnóstico detallado de conectividad FMP sin cachear."""
     ticker_limpio = _normalizar_ticker(ticker)
     endpoints = _construir_endpoints_fundamentales(ticker_limpio, limite_anios)
     diagnostico: dict[str, object] = {
         "ticker": ticker_limpio,
+        "api_key_configurada": _fmp_api_disponible(),
         "variantes_probadas": _variantes_ticker_fmp(ticker_limpio),
         "base_url_legacy": BASE_URL,
         "base_url_stable": STABLE_BASE_URL,
@@ -189,18 +208,11 @@ def extraer_datos_fundamentales_fmp(
     ticker: str,
     limite_anios: int = 10,
 ) -> tuple[pd.DataFrame | None, pd.DataFrame | None, pd.DataFrame | None, pd.DataFrame | None]:
-    """Descarga estados financieros y metricas institucionales desde FMP.
-
-    Args:
-        ticker: Simbolo bursatil.
-        limite_anios: Numero maximo de ejercicios anuales a solicitar.
-
-    Returns:
-        Tupla ``(df_is, df_bs, df_cf, df_metrics)``. Cada DataFrame queda
-        indexado por ``date`` y ordenado de mas antiguo a mas reciente. Si FMP
-        no devuelve datos utilizables, los elementos de la tupla seran ``None``.
-    """
+    """Descarga estados financieros y métricas institucionales desde FMP."""
     try:
+        if not _fmp_api_disponible():
+            return None, None, None, None
+
         ticker_limpio = _normalizar_ticker(ticker)
         limite = min(max(int(limite_anios), 1), FMP_MAX_LIMIT_CURRENT_PLAN)
         if not ticker_limpio:
@@ -223,16 +235,11 @@ def extraer_datos_fundamentales_fmp(
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def obtener_cotizacion_fmp(ticker: str) -> float:
-    """Obtiene la cotizacion actual de FMP.
-
-    Args:
-        ticker: Simbolo bursatil.
-
-    Returns:
-        Precio actual como ``float``. Devuelve ``0.0`` si la API falla o no hay
-        precio disponible.
-    """
+    """Obtiene la cotización actual de FMP."""
     try:
+        if not _fmp_api_disponible():
+            return 0.0
+
         ticker_limpio = _normalizar_ticker(ticker)
         if not ticker_limpio:
             return 0.0
