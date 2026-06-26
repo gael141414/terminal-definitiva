@@ -140,15 +140,31 @@ streamlit run app.py
 
 ### Sprint 2F - Home/dashboard inicial
 
-Extraer:
+Primera extracción segura:
 
-- pantalla inicial
-- tarjetas de bloques
-- resumen de producto
+- `render_module_showcase()`
 
-Destino sugerido:
+Destino:
 
 - `modulos/app_home.py`
+
+No se mueve todavía `render_home_page()` completo porque depende de funciones de mercado, noticias, treemap y rotación sectorial que siguen residiendo en `app.py`. Ese movimiento debe hacerse después de aislar los widgets/datos de mercado.
+
+Aplicar con:
+
+```bash
+python scripts/apply_sprint_2f_extract_home_showcase.py
+```
+
+Validación específica:
+
+```bash
+python scripts/apply_sprint_2f_extract_home_showcase.py
+python -m py_compile app.py modulos/app_home.py scripts/apply_sprint_2f_extract_home_showcase.py
+python scripts/run_healthcheck.py
+python scripts/run_smoke_tests.py --strict
+streamlit run app.py
+```
 
 ### Sprint 2G - Datos externos genéricos
 
