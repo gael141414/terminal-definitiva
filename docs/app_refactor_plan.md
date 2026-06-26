@@ -109,16 +109,34 @@ streamlit run app.py
 
 ### Sprint 2E - Navegación superior
 
-Extraer:
+Extraer de `app.py`:
 
-- navbar
-- selector de modo de producto
-- selector de bloque/herramienta
-- cabeceras de contexto
+- `render_context_header()`
+- `render_option_menu_safe()`
+- `BLOQUE_UI`
+- `TOOL_UI_ICONS`
 
-Destino sugerido:
+Destino:
 
 - `modulos/app_navigation.py`
+
+No se mueve todavía el bloque principal de selección de empresa/herramienta porque mezcla navegación, estado de sesión y controles de análisis. Ese bloque se abordará después de aislar helpers y constantes.
+
+Aplicar con:
+
+```bash
+python scripts/apply_sprint_2e_extract_navigation.py
+```
+
+Validación específica:
+
+```bash
+python scripts/apply_sprint_2e_extract_navigation.py
+python -m py_compile app.py modulos/app_navigation.py scripts/apply_sprint_2e_extract_navigation.py
+python scripts/run_healthcheck.py
+python scripts/run_smoke_tests.py --strict
+streamlit run app.py
+```
 
 ### Sprint 2F - Home/dashboard inicial
 
