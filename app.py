@@ -1,4 +1,12 @@
 import streamlit as st
+
+st.set_page_config(
+    page_title="ValueQuant Terminal",
+    page_icon="logo.png",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+
 import pandas as pd
 import yfinance as yf
 import plotly.graph_objects as go
@@ -94,13 +102,7 @@ def load_lottieurl(url: str):
         return None
 
 # ---------------- CONFIGURACIÓN ---------------- #
-# 1. CONFIGURACIÓN DE PÁGINA (Debe ser el primer comando de Streamlit)
-st.set_page_config(
-    page_title="ValueQuant Terminal",
-    page_icon="logo.png",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
+# 1. CONFIGURACIÓN DE PÁGINA movida al inicio del archivo para cumplir Streamlit.
 
 def obtener_secreto_streamlit(nombre: str):
     """Lee un secreto sin bloquear la app cuando no existe secrets.toml."""
