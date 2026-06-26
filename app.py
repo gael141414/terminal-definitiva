@@ -53,6 +53,8 @@ from balance_analyzer import analizar_balance
 from cashflow_analyzer import analizar_flujo_efectivo
 from valuator import valorar_empresa
 from modulos.config import CONFIG
+from modulos.app_assets import asset_to_data_uri, strip_visual_prefix
+from modulos.app_runtime import build_runtime_paths
 from modulos.module_loader import safe_call
 from modulos.utils import cargar_datos, calcular_score_buffett, analizar_sentimiento_noticias as analizar_sentimiento_noticias_utils
 from modulos.scoring_engine import calcular_valuequant_score
@@ -612,28 +614,11 @@ def ultimo_ratio(resultado, columna):
     return None
 
 # ---------------- TERMINAL UI 2026: ASSETS, CSS, HOME Y NAVEGACIÓN ---------------- #
-APP_DIR = Path(__file__).resolve().parent
-LOGO_PATH = APP_DIR / "logo.png"
-HOME_BG_PATH = APP_DIR / "fondo.png"
+RUNTIME_PATHS = build_runtime_paths(__file__)
+APP_DIR = RUNTIME_PATHS.app_dir
+LOGO_PATH = RUNTIME_PATHS.logo_path
+HOME_BG_PATH = RUNTIME_PATHS.home_bg_path
 FMP_API_KEY = CONFIG.fmp_api_key
-
-
-def asset_to_data_uri(path: Path) -> str:
-    """Convierte un asset local en data URI para usarlo de forma estable en CSS/HTML."""
-    try:
-        if not path.exists():
-            return ""
-        mime = "image/png" if path.suffix.lower() == ".png" else "image/jpeg"
-        encoded = base64.b64encode(path.read_bytes()).decode("utf-8")
-        return f"data:{mime};base64,{encoded}"
-    except Exception:
-        return ""
-
-
-def strip_visual_prefix(texto: str) -> str:
-    """Elimina pictogramas/símbolos iniciales de las etiquetas antiguas sin tocar el router interno."""
-    limpio = re.sub(r"^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9]+", "", texto or "").strip()
-    return limpio or texto
 
 
 def inject_terminal_theme() -> None:
