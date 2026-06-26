@@ -13,7 +13,6 @@ import plotly.graph_objects as go
 import tempfile
 import requests
 import streamlit.components.v1 as components
-import google.generativeai as genai
 import os
 import logging
 import base64
@@ -22,19 +21,37 @@ import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from datetime import datetime, timezone, timedelta, time
-from fpdf import FPDF
+
+try:
+    import google.generativeai as genai
+except Exception:
+    genai = None
+
+try:
+    from fpdf import FPDF
+except Exception:
+    FPDF = None
 
 try:
     from streamlit_option_menu import option_menu
 except Exception:
     option_menu = None
 
+try:
+    from textblob import TextBlob
+except Exception:
+    TextBlob = None
+
+try:
+    from streamlit_lottie import st_lottie
+except Exception:
+    def st_lottie(*args, **kwargs):
+        return None
+
 from income_analyzer import analizar_cuenta_resultados
 from balance_analyzer import analizar_balance
 from cashflow_analyzer import analizar_flujo_efectivo
 from valuator import valorar_empresa
-from textblob import TextBlob
-from streamlit_lottie import st_lottie
 from modulos.config import CONFIG
 from modulos.module_loader import safe_call
 from modulos.utils import cargar_datos, calcular_score_buffett, analizar_sentimiento_noticias as analizar_sentimiento_noticias_utils
@@ -52,7 +69,6 @@ from modulos.tool_catalog import (
 )
 from modulos.tool_router import CompanyToolContext, render_company_tool, render_independent_tool
 
-from modulos.config import CONFIG
 
 def inyectar_atajo_teclado():
     """Inyecta un listener global de JavaScript para el atajo Ctrl+K / Cmd+K"""
@@ -118,6 +134,9 @@ def obtener_modelo_gemini():
     """Inicializa Gemini una sola vez y evita repetir list_models en cada prompt."""
     api_key = CONFIG.gemini_api_key or CONFIG.google_api_key
     if not api_key:
+        return None
+
+    if genai is None:
         return None
 
     try:
@@ -470,6 +489,9 @@ def analizar_sentimiento_noticias(ticker):
 
 def generar_reporte_pdf(ticker, precio, res_val, nota, fcf_yield, buyback_yield):
     """Genera un informe institucional en PDF de 1 página (Tear Sheet)"""
+    if FPDF is None:
+        raise RuntimeError("fpdf2 no está instalado. Instálalo o desactiva la exportación PDF.")
+
     pdf = FPDF()
     pdf.add_page()
     
