@@ -1,4 +1,12 @@
 import streamlit as st
+
+st.set_page_config(
+    page_title="ValueQuant Terminal",
+    page_icon="logo.png",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+
 import pandas as pd
 import yfinance as yf
 import plotly.graph_objects as go
@@ -27,41 +35,22 @@ from cashflow_analyzer import analizar_flujo_efectivo
 from valuator import valorar_empresa
 from textblob import TextBlob
 from streamlit_lottie import st_lottie
-from modulos.roboadvisor import ejecutar_roboadvisor
-from modulos.proyeccion import ejecutar_proyeccion
-from modulos.backtest import ejecutar_maquina_del_tiempo
-from modulos.radar import ejecutar_radar_multibagger
-from modulos.forense import ejecutar_auditoria_forense
-from modulos.insiders import ejecutar_rastreador_insiders
-from modulos.screener import ejecutar_escaner_global
-from modulos.etf import ejecutar_radiografia_etf
-from modulos.resumen import ejecutar_resumen_ejecutivo
-from modulos.fundamental import ejecutar_analisis_fundamental
-from modulos.tecnico import ejecutar_tecnico_y_opciones
-from modulos.macro import ejecutar_radar_macro
-from modulos.reloj_macro import ejecutar_reloj_macro
-from modulos.liquidez import ejecutar_monitor_liquidez
-from modulos.cisnes_negros import ejecutar_simulador_crisis
-from modulos.coberturas import ejecutar_radar_coberturas
-from modulos.chatbot import render_chatbot
-from modulos.consejos import ejecutar_apartado_consejos
-from modulos.predictor import ejecutar_predictor_techos_suelos
-from modulos.minero_smallcaps import ejecutar_visor_smallcaps
-from modulos.nlp_analyzer import render_nlp_dashboard
-from modulos.portfolio import render_portfolio_manager
-from modulos.backtester import render_backtesting_engine
-from modulos.automatizacion import ejecutar_panel_automatizacion
+from modulos.config import CONFIG
+from modulos.module_loader import safe_call
 from modulos.utils import cargar_datos, calcular_score_buffett, analizar_sentimiento_noticias as analizar_sentimiento_noticias_utils
 from modulos.scoring_engine import calcular_valuequant_score
-from modulos.gurus import ejecutar_visor_gurus
-from modulos.watchlist import ejecutar_watchlist
 from modulos.fmp_api import diagnosticar_conexion_fmp
-from modulos.screener_avanzado import render_screener_avanzado
-from modulos.montecarlo import render_montecarlo
-from modulos.derivados import render_derivados
-from modulos.alt_data import render_alt_data
 from modulos.ui_components import render_kpi_card
-from charts import render_market_treemap
+from modulos.tool_catalog import (
+    TOOL_CATALOG,
+    BLOQUES_HERRAMIENTAS,
+    HERRAMIENTAS_POR_LABEL,
+    obtener_bloques_por_modo,
+    obtener_herramientas_por_bloque,
+    obtener_herramientas_por_bloque_y_modo,
+    obtener_modos_navegacion,
+)
+from modulos.tool_router import CompanyToolContext, render_company_tool, render_independent_tool
 
 from modulos.config import CONFIG
 
@@ -115,13 +104,7 @@ def load_lottieurl(url: str):
         return None
 
 # ---------------- CONFIGURACIÓN ---------------- #
-# 1. CONFIGURACIÓN DE PÁGINA (Debe ser el primer comando de Streamlit)
-st.set_page_config(
-    page_title="ValueQuant Terminal",
-    page_icon="logo.png",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
+# 1. CONFIGURACIÓN DE PÁGINA movida al inicio del archivo para cumplir Streamlit.
 
 def obtener_secreto_streamlit(nombre: str):
     """Lee un secreto sin bloquear la app cuando no existe secrets.toml."""
@@ -133,12 +116,7 @@ def obtener_secreto_streamlit(nombre: str):
 @st.cache_resource(show_spinner=False)
 def obtener_modelo_gemini():
     """Inicializa Gemini una sola vez y evita repetir list_models en cada prompt."""
-    api_key = (
-        obtener_secreto_streamlit("GEMINI_API_KEY")
-        or obtener_secreto_streamlit("GOOGLE_API_KEY")
-        or os.getenv("GEMINI_API_KEY")
-        or os.getenv("GOOGLE_API_KEY")
-    )
+    api_key = CONFIG.gemini_api_key or CONFIG.google_api_key
     if not api_key:
         return None
 
@@ -599,195 +577,6 @@ def obtener_datos_directiva(ticker):
         return insiders, instituciones, short_ratio
     except:
         return None, None, None
-
-TOOL_CATALOG = [
-    {
-        "label": "📊 Resumen Ejecutivo",
-        "bloque": "📌 Núcleo Empresa",
-        "input_mode": "company",
-        "descripcion": "Vista de mando con precio, Buffett Score, puntos débiles y gráfico institucional.",
-    },
-    {
-        "label": "🔎 Análisis Fundamental",
-        "bloque": "📌 Núcleo Empresa",
-        "input_mode": "company",
-        "descripcion": "Estados financieros, ratios clave, valoración y comparador contra competidores.",
-    },
-    {
-        "label": "🧠 Auditoría Forense",
-        "bloque": "📌 Núcleo Empresa",
-        "input_mode": "company",
-        "descripcion": "Banderas rojas contables, calidad de beneficios y señales de deterioro.",
-    },
-    {
-        "label": "🔮 Proyección IA y Catalizadores",
-        "bloque": "📌 Núcleo Empresa",
-        "input_mode": "company",
-        "descripcion": "Escenarios futuros, catalizadores y narrativa de crecimiento.",
-    },
-    {
-        "label": "🎓 Visor de Gurús (Estrategias)",
-        "bloque": "📌 Núcleo Empresa",
-        "input_mode": "company",
-        "descripcion": "Lectura de la empresa con marcos de Buffett, Munger y otros estilos value.",
-    },
-    {
-        "label": "📈 Técnico y Opciones",
-        "bloque": "📈 Mercado y Timing",
-        "input_mode": "company",
-        "descripcion": "TradingView, tendencia, volumen, opciones y contexto técnico.",
-    },
-    {
-        "label": "🧮 Opciones Avanzadas (BSM)",
-        "bloque": "📈 Mercado y Timing",
-        "input_mode": "company",
-        "descripcion": "Black-Scholes, griegas y volatility smile con cadena real de opciones.",
-    },
-    {
-        "label": "🌍 Radar Macro y Sectores",
-        "bloque": "📈 Mercado y Timing",
-        "input_mode": "company",
-        "descripcion": "Rotación sectorial, vientos macro y comparación con el mercado.",
-    },
-    {
-        "label": "🕰️ Reloj Económico (Regímenes)",
-        "bloque": "📈 Mercado y Timing",
-        "input_mode": "standalone",
-        "descripcion": "Lectura del ciclo económico por regímenes de mercado.",
-    },
-    {
-        "label": "🚰 Monitor de Liquidez (FED)",
-        "bloque": "📈 Mercado y Timing",
-        "input_mode": "standalone",
-        "descripcion": "Condiciones de liquidez, tipos y presión monetaria.",
-    },
-    {
-        "label": "🔭 Predictor de Techos/Suelos",
-        "bloque": "📈 Mercado y Timing",
-        "input_mode": "company",
-        "descripcion": "Indicadores cuantitativos para detectar zonas de exceso o agotamiento.",
-    },
-    {
-        "label": "🦢 Test Cisnes Negros (Crisis)",
-        "bloque": "🛡️ Riesgo y Defensa",
-        "input_mode": "company",
-        "descripcion": "Stress test ante escenarios extremos y crisis de mercado.",
-    },
-    {
-        "label": "🛡️ Radar de Coberturas (Hedging)",
-        "bloque": "🛡️ Riesgo y Defensa",
-        "input_mode": "company",
-        "descripcion": "Ideas de cobertura y protección para posiciones sensibles.",
-    },
-    {
-        "label": "⏳ Máquina del Tiempo (Backtest)",
-        "bloque": "🛡️ Riesgo y Defensa",
-        "input_mode": "company",
-        "descripcion": "Simulación histórica para evaluar robustez antes de operar.",
-    },
-    {
-        "label": "🧪 Backtesting Estrategias",
-        "bloque": "🛡️ Riesgo y Defensa",
-        "input_mode": "company",
-        "descripcion": "Prueba estrategias técnicas históricas contra buy & hold.",
-    },
-    {
-        "label": "⛏️ Minero de Small Caps",
-        "bloque": "🔎 Descubrimiento",
-        "input_mode": "standalone",
-        "descripcion": "Explorador de small caps con señales de calidad y oportunidad.",
-    },
-    {
-        "label": "🚀 Radar Multibaggers (Small/Mid Caps)",
-        "bloque": "🔎 Descubrimiento",
-        "input_mode": "company",
-        "descripcion": "Diagnóstico de potencial multibagger en empresas pequeñas y medianas.",
-    },
-    {
-        "label": "🕵️‍♂️ Rastreador de Insiders (SEC)",
-        "bloque": "🔎 Descubrimiento",
-        "input_mode": "company",
-        "descripcion": "Compras y ventas de directivos para detectar alineación o alerta.",
-    },
-    {
-        "label": "🕵️ Alt Data & Congreso",
-        "bloque": "🔎 Descubrimiento",
-        "input_mode": "company",
-        "descripcion": "Operaciones políticas y sentimiento mediático para señales alternativas.",
-    },
-    {
-        "label": "🩻 Radiografía de ETFs (X-Ray)",
-        "bloque": "🔎 Descubrimiento",
-        "input_mode": "etf",
-        "descripcion": "Análisis de fondos y ETFs, composición y exposición real.",
-    },
-    {
-        "label": "🌐 Escáner Global (Screener)",
-        "bloque": "🔎 Descubrimiento",
-        "input_mode": "standalone",
-        "descripcion": "Filtro global para encontrar candidatos por criterios cuantitativos.",
-    },
-    {
-        "label": "🌐 Screener Avanzado (Multi-Factor)",
-        "bloque": "🔎 Descubrimiento",
-        "input_mode": "standalone",
-        "descripcion": "Buscador FMP con filtros dinámicos y ranking Magic Formula.",
-    },
-    {
-        "label": "📋 Mi Watchlist (Cartera)",
-        "bloque": "💼 Cartera y Decisión",
-        "input_mode": "standalone",
-        "descripcion": "Seguimiento de cartera, vigilancia y prioridades de análisis.",
-    },
-    {
-        "label": "⚖️ Optimizador de Cartera",
-        "bloque": "💼 Cartera y Decisión",
-        "input_mode": "standalone",
-        "descripcion": "Correlación, frontera eficiente y asignación óptima de capital.",
-    },
-    {
-        "label": "🎲 Monte Carlo Cartera",
-        "bloque": "💼 Cartera y Decisión",
-        "input_mode": "standalone",
-        "descripcion": "Proyección GBM de cartera con fan chart, percentiles y VaR.",
-    },
-    {
-        "label": "🤖 Robo-Advisor & Test Perfil",
-        "bloque": "💼 Cartera y Decisión",
-        "input_mode": "standalone",
-        "descripcion": "Perfil inversor y asignación orientativa según tolerancia al riesgo.",
-    },
-    {
-        "label": "📲 Automatización Telegram",
-        "bloque": "💼 Cartera y Decisión",
-        "input_mode": "standalone",
-        "descripcion": "Cron job headless y briefing diario para Telegram.",
-    },
-    {
-        "label": "🤖 Chatbot Inversor",
-        "bloque": "🧠 IA y Mentoría",
-        "input_mode": "standalone",
-        "descripcion": "Asistente RAG sobre conocimiento value y documentos locales.",
-    },
-    {
-        "label": "🧠 Earnings Call NLP",
-        "bloque": "🧠 IA y Mentoría",
-        "input_mode": "company",
-        "descripcion": "Transcripciones, tono de directiva, problemas y guidance.",
-    },
-    {
-        "label": "💡 Consejos y Mentoría",
-        "bloque": "🧠 IA y Mentoría",
-        "input_mode": "standalone",
-        "descripcion": "Aprendizaje guiado, hábitos de análisis y criterios de inversión.",
-    },
-]
-
-BLOQUES_HERRAMIENTAS = tuple(dict.fromkeys(h["bloque"] for h in TOOL_CATALOG))
-HERRAMIENTAS_POR_LABEL = {h["label"]: h for h in TOOL_CATALOG}
-
-def obtener_herramientas_por_bloque(bloque):
-    return [h for h in TOOL_CATALOG if h["bloque"] == bloque]
 
 def ultimo_ratio(resultado, columna):
     """Extrae el último dato no nulo de un dataframe o diccionario de ratios."""
@@ -1650,10 +1439,9 @@ def obtener_ultimas_noticias(limit: int = 6) -> list[dict[str, str]]:
     logger = logging.getLogger("valuequant.news")
 
     try:
-        try:
-            from modulos.fmp_api import API_KEY as clave_api
-        except ImportError:
-            from modulos.fmp_api import FMP_API_KEY as clave_api
+        clave_api = CONFIG.fmp_api_key
+        if not clave_api:
+            raise RuntimeError("FMP_API_KEY no configurada")
 
         url = "https://financialmodelingprep.com/api/v3/stock_news"
         params = {"tickers": "AAPL,MSFT,NVDA,SPY,QQQ", "limit": limit, "apikey": clave_api}
@@ -1998,12 +1786,50 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-bloques_internos = list(BLOQUES_HERRAMIENTAS)
+modos_navegacion = obtener_modos_navegacion()
+modo_labels = [modo["label"] for modo in modos_navegacion]
+modo_keys = [modo["key"] for modo in modos_navegacion]
+modo_default_idx = modo_keys.index("mvp") if "mvp" in modo_keys else 0
+
+with st.sidebar:
+    st.markdown("### Modo de producto")
+    modo_label = st.radio(
+        "Modo de navegación",
+        modo_labels,
+        index=modo_default_idx,
+        key="vq_navigation_mode",
+        label_visibility="collapsed",
+        help="MVP muestra solo el producto principal. Consolidado agrupa herramientas por arquitectura objetivo. Completo muestra todo.",
+    )
+
+modo_navegacion = modo_keys[modo_labels.index(modo_label)] if modo_label in modo_labels else "mvp"
+modo_meta = next((modo for modo in modos_navegacion if modo["key"] == modo_navegacion), modos_navegacion[0])
+
+bloques_internos = list(obtener_bloques_por_modo(modo_navegacion))
+if not bloques_internos:
+    bloques_internos = list(BLOQUES_HERRAMIENTAS)
+
 menu_interno = ["__home__"] + bloques_internos
 menu_labels = ["Home"] + [BLOQUE_UI.get(b, (strip_visual_prefix(b), "grid"))[0] for b in bloques_internos]
 menu_icons = ["house"] + [BLOQUE_UI.get(b, (strip_visual_prefix(b), "grid"))[1] for b in bloques_internos]
-seleccion_menu = render_option_menu_safe(menu_labels, menu_icons, key="vq_main_nav")
+seleccion_menu = render_option_menu_safe(menu_labels, menu_icons, key=f"vq_main_nav_{modo_navegacion}")
 st.markdown("</div>", unsafe_allow_html=True)
+
+st.markdown(
+    f"""
+    <div class="vq-control-panel" style="padding:.75rem 1rem; margin-bottom:.85rem;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
+            <div>
+                <div class="vq-context-eyebrow">Modo de navegación</div>
+                <div style="color:#FFFFFF; font-weight:800;">{html.escape(str(modo_meta.get('label', 'MVP')))}</div>
+                <div style="color:var(--vq-muted); font-size:.86rem; margin-top:.15rem;">{html.escape(str(modo_meta.get('caption', '')))}</div>
+            </div>
+            <span class="vq-badge vq-badge-success"><i class="bi bi-layers"></i> {html.escape(str(modo_meta.get('badge', 'Producto')))}</span>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 seleccion_idx = menu_labels.index(seleccion_menu) if seleccion_menu in menu_labels else 0
 if menu_interno[seleccion_idx] == "__home__":
@@ -2011,7 +1837,7 @@ if menu_interno[seleccion_idx] == "__home__":
     st.stop()
 
 bloque_actual = menu_interno[seleccion_idx]
-herramientas_bloque = obtener_herramientas_por_bloque(bloque_actual)
+herramientas_bloque = obtener_herramientas_por_bloque_y_modo(bloque_actual, modo_navegacion)
 etiquetas_bloque = [h["label"] for h in herramientas_bloque]
 tool_labels = [strip_visual_prefix(label) for label in etiquetas_bloque]
 tool_icons = [TOOL_UI_ICONS.get(label, "circle") for label in etiquetas_bloque]
@@ -2118,49 +1944,8 @@ herramientas_independientes = [
 
 # CASOS INDEPENDIENTES (No necesitan darle al botón del sidebar)
 if seccion_actual in herramientas_independientes:
-    # ---------------------------------------------------------
-    # RUTA A: HERRAMIENTAS QUE NO NECESITAN BOTÓN DE "ANALIZAR"
-    # ---------------------------------------------------------
     st.markdown("<br>", unsafe_allow_html=True)
-
-    if seccion_actual == "🕰️ Reloj Económico (Regímenes)":
-        ejecutar_reloj_macro()
-
-    elif seccion_actual == "📋 Mi Watchlist (Cartera)":
-        ejecutar_watchlist()
-
-    elif seccion_actual == "⚖️ Optimizador de Cartera":
-        render_portfolio_manager()
-
-    elif seccion_actual == "🎲 Monte Carlo Cartera":
-        render_montecarlo()
-        
-    elif seccion_actual == "🤖 Robo-Advisor & Test Perfil":
-        ejecutar_roboadvisor()
-
-    elif seccion_actual == "📲 Automatización Telegram":
-        ejecutar_panel_automatizacion()
-
-    elif seccion_actual == "🌐 Escáner Global (Screener)":
-        ejecutar_escaner_global()
-
-    elif seccion_actual == "🌐 Screener Avanzado (Multi-Factor)":
-        render_screener_avanzado()
-
-    elif seccion_actual == "🩻 Radiografía de ETFs (X-Ray)":
-        ejecutar_radiografia_etf(etf_input)
-
-    elif seccion_actual == "🚰 Monitor de Liquidez (FED)":
-        ejecutar_monitor_liquidez()
-
-    elif seccion_actual == "🤖 Chatbot Inversor":
-        render_chatbot()
-
-    elif seccion_actual == "💡 Consejos y Mentoría":
-        ejecutar_apartado_consejos()
-
-    elif seccion_actual == "⛏️ Minero de Small Caps":
-        ejecutar_visor_smallcaps()
+    render_independent_tool(seccion_actual, etf_input=etf_input)
 
 # CASOS DE EMPRESA (Requieren pulsar el botón del sidebar la primera vez)
 else:
@@ -2270,81 +2055,23 @@ else:
             status="positive" if ticker_competidor else "warning"
         )
     
-    # Invocamos la herramienta correspondiente
-    if seccion_actual == "📊 Resumen Ejecutivo":
-        ejecutar_resumen_ejecutivo(
-            ticker_input,
-            is_df,
-            bs_df,
-            cf_df,
-            res_is,
-            res_bs,
-            res_cf,
-            res_val,
-            nota_buffett,
-            valuequant_score
-        )
-        
-    elif seccion_actual == "🔎 Análisis Fundamental":
-        ejecutar_analisis_fundamental(
-            ticker_input,
-            is_df,
-            bs_df,
-            cf_df,
-            res_is,
-            res_bs,
-            res_cf,
-            res_val,
-            nota_buffett,
-            ticker_competidor,
-            valuequant_score
-        )
-    
-    elif seccion_actual == "📈 Técnico y Opciones":
-        ejecutar_tecnico_y_opciones(ticker_input)
-
-    elif seccion_actual == "🧮 Opciones Avanzadas (BSM)":
-        render_derivados(ticker_input)
-
-    elif seccion_actual == "🌍 Radar Macro y Sectores":
-        df_sectores = analizar_rotacion_sectores()
-        ejecutar_radar_macro(ticker_input, ticker_competidor, df_sectores)
-        
-    elif seccion_actual == "🧠 Auditoría Forense":
-        ejecutar_auditoria_forense(ticker_input, is_df, bs_df, cf_df, res_val, res_bs)
-
-    elif seccion_actual == "🔭 Predictor de Techos/Suelos":
-        ejecutar_predictor_techos_suelos(ticker_input)
-
-    elif seccion_actual == "🔮 Proyección IA y Catalizadores":
-        ejecutar_proyeccion(ticker_input)
-
-    elif seccion_actual == "⏳ Máquina del Tiempo (Backtest)":
-        ejecutar_maquina_del_tiempo(ticker_input)
-
-    elif seccion_actual == "🧪 Backtesting Estrategias":
-        render_backtesting_engine(ticker_input)
-
-    elif seccion_actual == "🧠 Earnings Call NLP":
-        render_nlp_dashboard(ticker_input)
-        
-    elif seccion_actual == "🚀 Radar Multibaggers (Small/Mid Caps)":
-        ejecutar_radar_multibagger(ticker_input)
-        
-    elif seccion_actual == "🕵️‍♂️ Rastreador de Insiders (SEC)":
-        ejecutar_rastreador_insiders(ticker_input)
-
-    elif seccion_actual == "🕵️ Alt Data & Congreso":
-        render_alt_data(ticker_input)
-
-    elif seccion_actual == "🦢 Test Cisnes Negros (Crisis)":
-        ejecutar_simulador_crisis(ticker_input)
-
-    elif seccion_actual == "🛡️ Radar de Coberturas (Hedging)":
-        ejecutar_radar_coberturas(ticker_input)
-
-    elif seccion_actual == "🎓 Visor de Gurús (Estrategias)":
-        ejecutar_visor_gurus(ticker_input, res_is, res_bs, res_cf, res_val)
-                           
+    # Invocamos la herramienta correspondiente desde el router central
+    tool_context = CompanyToolContext(
+        ticker=ticker_input,
+        competitor=ticker_competidor,
+        years=años_hist,
+        is_df=is_df,
+        bs_df=bs_df,
+        cf_df=cf_df,
+        metrics_df=metrics_df,
+        res_is=res_is,
+        res_bs=res_bs,
+        res_cf=res_cf,
+        res_val=res_val,
+        nota_buffett=nota_buffett,
+        valuequant_score=valuequant_score,
+        sector_rotation_fn=analizar_rotacion_sectores,
+    )
+    render_company_tool(seccion_actual, tool_context)
 
 # Chat lateral legacy retirado: la nueva arquitectura usa navegación superior sin sidebar.
