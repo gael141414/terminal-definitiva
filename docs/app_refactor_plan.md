@@ -80,15 +80,32 @@ streamlit run app.py
 
 ### Sprint 2D - Tema visual y CSS
 
-Extraer:
+Extraer de `app.py`:
 
-- `inject_terminal_theme`
-- CSS largo del terminal
-- helpers relacionados con layout visual
+- `inject_terminal_theme()`
+- bloque CSS largo del terminal
 
-Destino sugerido:
+Destino:
 
 - `modulos/app_theme.py`
+
+La migración usa AST para localizar la función y moverla completa, evitando copiar manualmente cientos de líneas de CSS.
+
+Aplicar con:
+
+```bash
+python scripts/apply_sprint_2d_extract_theme.py
+```
+
+Validación específica:
+
+```bash
+python scripts/apply_sprint_2d_extract_theme.py
+python -m py_compile app.py modulos/app_theme.py scripts/apply_sprint_2d_extract_theme.py
+python scripts/run_healthcheck.py
+python scripts/run_smoke_tests.py --strict
+streamlit run app.py
+```
 
 ### Sprint 2E - Navegación superior
 
