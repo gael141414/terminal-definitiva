@@ -259,7 +259,32 @@ python scripts/run_smoke_tests.py --strict
 streamlit run app.py
 ```
 
-### Sprint 2J - Compatibilidad legacy
+### Sprint 2J - Limpieza de imports legacy
+
+Limpieza conservadora de `app.py`:
+
+- detectar imports no usados mediante AST,
+- quitar solo imports residuales inequívocos,
+- eliminar `render_module_showcase` del import de `modulos.app_home` si ya no se usa directamente en `app.py`,
+- mantener intactas las funciones financieras legacy hasta tener un inventario específico.
+
+Aplicar con:
+
+```bash
+python scripts/apply_sprint_2j_legacy_import_cleanup.py
+```
+
+Validación específica:
+
+```bash
+python scripts/apply_sprint_2j_legacy_import_cleanup.py
+python -m py_compile app.py scripts/apply_sprint_2j_legacy_import_cleanup.py
+python scripts/run_healthcheck.py
+python scripts/run_smoke_tests.py --strict
+streamlit run app.py
+```
+
+### Sprint 2K - Inventario legacy funcional
 
 Revisar funciones antiguas que ya delegan en módulos nuevos y decidir si:
 
