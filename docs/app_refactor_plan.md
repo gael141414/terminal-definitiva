@@ -235,7 +235,31 @@ python scripts/run_smoke_tests.py --strict
 streamlit run app.py
 ```
 
-### Sprint 2I - Compatibilidad legacy
+### Sprint 2I - Limpieza runtime de Home
+
+Limpieza segura después de mover Home:
+
+- quitar de `app.py` imports de mercado que ya solo usa `modulos/app_home.py`,
+- añadir `render_market_treemap()` en `modulos/app_home.py` para que el mapa de calor quede autocontenido,
+- mantener sin tocar todavía funciones legacy financieras grandes.
+
+Aplicar con:
+
+```bash
+python scripts/apply_sprint_2i_home_runtime_cleanup.py
+```
+
+Validación específica:
+
+```bash
+python scripts/apply_sprint_2i_home_runtime_cleanup.py
+python -m py_compile app.py modulos/app_home.py scripts/apply_sprint_2i_home_runtime_cleanup.py
+python scripts/run_healthcheck.py
+python scripts/run_smoke_tests.py --strict
+streamlit run app.py
+```
+
+### Sprint 2J - Compatibilidad legacy
 
 Revisar funciones antiguas que ya delegan en módulos nuevos y decidir si:
 
