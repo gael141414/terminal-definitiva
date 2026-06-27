@@ -62,9 +62,10 @@ from modulos.tradingview_widgets import render_tradingview_widget, renderizar_gr
 from modulos.company_data_helpers import obtener_datos_directiva, obtener_tickers_filtrados, obtener_transacciones_insiders, obtener_valoracion_sectorial
 from modulos.app_company_ui import render_company_empty_state
 from modulos.app_integrations import inyectar_atajo_teclado, load_lottieurl, obtener_modelo_gemini, obtener_secreto_streamlit
+from modulos.app_analysis_helpers import analizar_sentimiento_noticias, escanear_vulnerabilidades, ultimo_ratio
 from modulos.app_runtime import build_runtime_paths
 from modulos.module_loader import safe_call
-from modulos.utils import cargar_datos, calcular_score_buffett, analizar_sentimiento_noticias as analizar_sentimiento_noticias_utils
+from modulos.utils import cargar_datos, calcular_score_buffett
 from modulos.scoring_engine import calcular_valuequant_score
 from modulos.fmp_api import diagnosticar_conexion_fmp
 from modulos.ui_components import render_kpi_card
@@ -90,43 +91,6 @@ from modulos.tool_router import CompanyToolContext, render_company_tool, render_
 # ==========================================
 # WIDGET RADICAL 2: MOTOR TRADINGVIEW EN VIVO
 # ==========================================
-
-def escanear_vulnerabilidades(res_is, res_bs, res_cf):
-    """Escanea los estados financieros en busca de Red Flags críticas."""
-    alertas = []
-    
-    # Función auxiliar rápida
-    def get_last(df, col):
-        if df is not None and col in df.columns:
-            s = df[col].dropna()
-            return s.iloc[-1] if not s.empty else None
-        return None
-
-    # 1. Riesgo de Quiebra (Deuda)
-    deuda_cap = get_last(res_bs["ratios"], "Deuda / Capital")
-    if deuda_cap and deuda_cap > 1.2:
-        alertas.append(f"🚨 **Apalancamiento Peligroso:** Deuda altísima ({deuda_cap:.2f}x el capital). Muy vulnerable a subidas de tipos de interés.")
-
-    # 2. Hemorragia de Efectivo
-    fcf = get_last(res_cf["ratios"], "Free Cash Flow (B USD)")
-    if fcf and fcf < 0:
-        alertas.append(f"🔥 **Quema de Caja:** El Free Cash Flow es negativo (${fcf:.2f}B). La empresa está perdiendo dinero real y podría necesitar emitir acciones o más deuda.")
-
-    # 3. Rentabilidad Basura (Márgenes)
-    margen_neto = get_last(res_is["ratios"], "Margen Neto %")
-    if margen_neto and margen_neto < 5:
-        alertas.append(f"⚠️ **Márgenes Críticos:** El margen neto es solo del {margen_neto:.1f}%. La empresa no tiene poder de fijación de precios (Moat débil).")
-
-    # 4. Destrucción de Valor (ROIC)
-    roic = get_last(res_bs["ratios"], "ROIC %")
-    if roic and roic < 7:
-        alertas.append(f"📉 **Destrucción de Capital:** El ROIC ({roic:.1f}%) es menor que el coste de capital promedio. Crecer destruye valor para el accionista.")
-
-    return alertas
-
-def analizar_sentimiento_noticias(ticker):
-    """Compatibilidad: delega en el motor NLP robusto de modulos.utils."""
-    return analizar_sentimiento_noticias_utils(ticker)
 
 def generar_reporte_pdf(ticker, precio, res_val, nota, fcf_yield, buyback_yield):
     """Genera un informe institucional en PDF de 1 página (Tear Sheet)"""
@@ -228,17 +192,6 @@ def generar_reporte_pdf(ticker, precio, res_val, nota, fcf_yield, buyback_yield)
         # Para versiones modernas de fpdf2 que retornan bytearray
         pdf_bytes = bytes(pdf.output())
     return pdf_bytes
-
-def ultimo_ratio(resultado, columna):
-    """Extrae el último dato no nulo de un dataframe o diccionario de ratios."""
-    try:
-        df = resultado.get("ratios") if isinstance(resultado, dict) else resultado
-        if df is not None and columna in df.columns:
-            serie = df[columna].dropna()
-            return serie.iloc[-1] if not serie.empty else None
-    except Exception:
-        return None
-    return None
 
 # ---------------- TERMINAL UI 2026: ASSETS, CSS, HOME Y NAVEGACIÓN ---------------- #
 RUNTIME_PATHS = build_runtime_paths(__file__)
