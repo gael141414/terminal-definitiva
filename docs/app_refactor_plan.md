@@ -166,26 +166,50 @@ python scripts/run_smoke_tests.py --strict
 streamlit run app.py
 ```
 
-### Sprint 2G - Datos externos genéricos
+### Sprint 2G - Datos externos y widgets de mercado
 
-Extraer:
+Extraer de `app.py`:
 
-- Yahoo search ETF
-- ticker tape
-- rotación sectorial
-- TradingView helpers
+- `buscar_etf_yahoo()`
+- `obtener_datos_ticker_tape()`
+- `render_ticker_tape()`
+- `analizar_rotacion_sectores()`
+- `obtener_market_snapshot()`
+- `_normalizar_url_imagen_noticia()`
+- `obtener_market_treemap_data()`
+- `obtener_ultimas_noticias()`
 
-Destino sugerido:
+Destino:
 
 - `modulos/market_widgets.py`
 
-### Sprint 2H - Compatibilidad legacy
+No se mueve todavía `render_home_page()` completo. Tras extraer estos widgets/datos, `render_home_page()` queda como una capa de composición que podremos mover en el siguiente sprint con menor riesgo.
+
+Aplicar con:
+
+```bash
+python scripts/apply_sprint_2g_extract_market_widgets.py
+```
+
+Validación específica:
+
+```bash
+python scripts/apply_sprint_2g_extract_market_widgets.py
+python -m py_compile app.py modulos/market_widgets.py scripts/apply_sprint_2g_extract_market_widgets.py
+python scripts/run_healthcheck.py
+python scripts/run_smoke_tests.py --strict
+streamlit run app.py
+```
+
+### Sprint 2H - Home completo y compatibilidad legacy
 
 Revisar funciones antiguas que ya delegan en módulos nuevos y decidir si:
 
 - se eliminan,
 - se convierten en wrappers explícitos,
 - o se mantienen temporalmente por compatibilidad.
+
+También queda pendiente mover `render_home_page()` completo cuando sus dependencias estén ya desacopladas.
 
 ## Criterio de aceptación por sprint
 
