@@ -60,6 +60,7 @@ from modulos.market_widgets import (
 )
 from modulos.tradingview_widgets import render_tradingview_widget, renderizar_grafico_tradingview
 from modulos.company_data_helpers import obtener_datos_directiva, obtener_tickers_filtrados, obtener_transacciones_insiders, obtener_valoracion_sectorial
+from modulos.app_company_ui import render_company_empty_state
 from modulos.app_runtime import build_runtime_paths
 from modulos.module_loader import safe_call
 from modulos.utils import cargar_datos, calcular_score_buffett, analizar_sentimiento_noticias as analizar_sentimiento_noticias_utils
@@ -323,35 +324,6 @@ APP_DIR = RUNTIME_PATHS.app_dir
 LOGO_PATH = RUNTIME_PATHS.logo_path
 HOME_BG_PATH = RUNTIME_PATHS.home_bg_path
 FMP_API_KEY = CONFIG.fmp_api_key
-
-def render_company_empty_state(ticker: str, herramienta: dict) -> None:
-    """Estado vacío premium para módulos que requieren ejecutar análisis."""
-    nombre_herramienta = strip_visual_prefix(herramienta.get("label", "Módulo"))
-
-    # Blindamos el HTML concatenando en una sola línea lógica para evitar bugs de Markdown
-    html_state = (
-        f"<section class='vq-empty-state' style='padding:1.15rem 1.25rem; margin-top:.85rem;'>"
-        f"<div style='display:flex; align-items:flex-start; justify-content:space-between; gap:1rem;'>"
-        f"<div>"
-        f"<div class='vq-context-eyebrow'>Pendiente de ejecución</div>"
-        f"<h3 style='margin:.2rem 0 .45rem; font-size:1.35rem;'>"
-        f"Genera el análisis para activar {html.escape(nombre_herramienta)}"
-        f"</h3>"
-        f"<p style='color:var(--vq-muted); margin:0; line-height:1.6; max-width:900px;'>"
-        f"Selecciona la compañía, define el histórico y ejecuta el análisis para cargar ratios, valoración, señales de riesgo y visualizaciones del módulo."
-        f"</p>"
-        f"</div>"
-        f"<span class='vq-badge vq-badge-primary'><i class='bi bi-play-circle'></i> Esperando análisis</span>"
-        f"</div>"
-        f"<div style='display:flex; gap:.5rem; flex-wrap:wrap; margin-top:1.2rem;'>"
-        f"<span class='vq-badge'><i class='bi bi-building'></i> Ticker actual: {html.escape(ticker)}</span>"
-        f"<span class='vq-badge'><i class='bi bi-database'></i> Datos financieros</span>"
-        f"<span class='vq-badge'><i class='bi bi-graph-up'></i> Visualización institucional</span>"
-        f"</div>"
-        f"</section>"
-    )
-
-    st.markdown(html_state, unsafe_allow_html=True)
 
 inject_terminal_theme()
 
