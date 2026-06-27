@@ -201,15 +201,47 @@ python scripts/run_smoke_tests.py --strict
 streamlit run app.py
 ```
 
-### Sprint 2H - Home completo y compatibilidad legacy
+### Sprint 2H - Home completo
+
+Extraer de `app.py`:
+
+- `render_home_page()`
+
+Destino:
+
+- `modulos/app_home.py`
+
+La función se adapta para recibir las rutas visuales como parámetros:
+
+```python
+render_home_page(LOGO_PATH, HOME_BG_PATH)
+```
+
+Así evitamos que `modulos/app_home.py` dependa de variables globales definidas en `app.py`.
+
+Aplicar con:
+
+```bash
+python scripts/apply_sprint_2h_extract_home_page.py
+```
+
+Validación específica:
+
+```bash
+python scripts/apply_sprint_2h_extract_home_page.py
+python -m py_compile app.py modulos/app_home.py scripts/apply_sprint_2h_extract_home_page.py
+python scripts/run_healthcheck.py
+python scripts/run_smoke_tests.py --strict
+streamlit run app.py
+```
+
+### Sprint 2I - Compatibilidad legacy
 
 Revisar funciones antiguas que ya delegan en módulos nuevos y decidir si:
 
 - se eliminan,
 - se convierten en wrappers explícitos,
 - o se mantienen temporalmente por compatibilidad.
-
-También queda pendiente mover `render_home_page()` completo cuando sus dependencias estén ya desacopladas.
 
 ## Criterio de aceptación por sprint
 
