@@ -4,6 +4,7 @@ import html
 from datetime import datetime, time, timedelta, timezone
 
 import streamlit as st
+import pandas as pd
 import plotly.graph_objects as go
 
 from modulos.app_assets import asset_to_data_uri, strip_visual_prefix
@@ -52,6 +53,62 @@ def render_module_showcase(limit: int = 9) -> None:
         unsafe_allow_html=True,
     )
 
+
+
+def render_market_treemap(df: pd.DataFrame) -> go.Figure:
+    """Construye el mapa de calor de mercado de la Home con una figura Plotly autocontenida."""
+    required_columns = {"Ticker", "Sector", "MarketCap", "Rendimiento_Diario"}
+    if df is None or df.empty or not required_columns.issubset(df.columns):
+        return go.Figure()
+
+    plot_df = df[["Ticker", "Sector", "MarketCap", "Rendimiento_Diario"]].copy()
+    plot_df["MarketCap"] = pd.to_numeric(plot_df["MarketCap"], errors="coerce").fillna(0)
+    plot_df["Rendimiento_Diario"] = pd.to_numeric(plot_df["Rendimiento_Diario"], errors="coerce").fillna(0)
+    plot_df = plot_df[plot_df["MarketCap"] > 0]
+
+    if plot_df.empty:
+        return go.Figure()
+
+    sector_df = (
+        plot_df.groupby("Sector", as_index=False)
+        .agg(MarketCap=("MarketCap", "sum"), Rendimiento_Diario=("Rendimiento_Diario", "mean"))
+        .sort_values("MarketCap", ascending=False)
+    )
+
+    labels = ["Mercado"] + sector_df["Sector"].astype(str).tolist() + plot_df["Ticker"].astype(str).tolist()
+    parents = [""] + ["Mercado"] * len(sector_df) + plot_df["Sector"].astype(str).tolist()
+    values = [float(plot_df["MarketCap"].sum())] + sector_df["MarketCap"].astype(float).tolist() + plot_df["MarketCap"].astype(float).tolist()
+    colors = [0.0] + sector_df["Rendimiento_Diario"].astype(float).tolist() + plot_df["Rendimiento_Diario"].astype(float).tolist()
+
+    fig = go.Figure(
+        go.Treemap(
+            labels=labels,
+            parents=parents,
+            values=values,
+            branchvalues="total",
+            marker=dict(
+                colors=colors,
+                colorscale=[
+                    [0.0, "#ef5b6b"],
+                    [0.5, "#202938"],
+                    [1.0, "#36c486"],
+                ],
+                cmin=-5,
+                cmax=5,
+                line=dict(width=1, color="rgba(15,23,42,0.75)"),
+            ),
+            textinfo="label+value",
+            hovertemplate="<b>%{label}</b><br>Capitalización relativa: %{value:,.0f}<br>Rendimiento: %{color:.2f}%<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Inter", color="#CBD5E1", size=12),
+        margin=dict(l=0, r=0, t=0, b=0),
+        height=440,
+    )
+    return fig
 
 def render_home_page(logo_path, home_bg_path) -> None:
     """Pantalla inicial institucional con identidad visual, mercado, estado de bolsas y termómetro sectorial."""
