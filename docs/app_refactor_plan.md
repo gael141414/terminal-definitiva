@@ -342,14 +342,45 @@ python scripts/run_smoke_tests.py --strict
 streamlit run app.py
 ```
 
-### Sprint 2M - Siguiente extracción legacy por grupo
+### Sprint 2M - Extraer helpers de datos de empresa
+
+Extraer helpers de datos no financieros críticos:
+
+- `obtener_transacciones_insiders()`
+- `obtener_tickers_filtrados()`
+- `obtener_valoracion_sectorial()`
+- `obtener_datos_directiva()`
+
+Destino:
+
+- `modulos/company_data_helpers.py`
+
+Motivo: son helpers yfinance/SEC autocontenidos. No se cambia scoring, valoración, PDF ni lógica de análisis.
+
+Aplicar con:
+
+```bash
+python scripts/apply_sprint_2m_extract_company_data_helpers.py
+```
+
+Validación específica:
+
+```bash
+python scripts/apply_sprint_2m_extract_company_data_helpers.py
+python -m py_compile app.py modulos/company_data_helpers.py scripts/apply_sprint_2m_extract_company_data_helpers.py
+python scripts/run_healthcheck.py
+python scripts/run_smoke_tests.py --strict
+streamlit run app.py
+```
+
+### Sprint 2N - Siguiente extracción legacy por grupo
 
 Usar el inventario para decidir entre:
 
-- helpers de datos SEC/yfinance,
 - exportación PDF,
 - wrappers de compatibilidad,
-- funciones sin llamadas detectadas.
+- funciones sin llamadas detectadas,
+- helper visual `render_company_empty_state()`.
 
 ## Criterio de aceptación por sprint
 
