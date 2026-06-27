@@ -7,32 +7,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-import pandas as pd
-import yfinance as yf
-import requests
-import streamlit.components.v1 as components
 import html
-
-try:
-    import google.generativeai as genai
-except Exception:
-    genai = None
-
-try:
-    from streamlit_option_menu import option_menu
-except Exception:
-    option_menu = None
-
-try:
-    from textblob import TextBlob
-except Exception:
-    TextBlob = None
-
-try:
-    from streamlit_lottie import st_lottie
-except Exception:
-    def st_lottie(*args, **kwargs):
-        return None
 
 from income_analyzer import analizar_cuenta_resultados
 from balance_analyzer import analizar_balance
