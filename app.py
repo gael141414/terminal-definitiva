@@ -65,9 +65,6 @@ from modulos.app_home import render_home_page, render_module_showcase
 from modulos.market_widgets import (
     analizar_rotacion_sectores,
     buscar_etf_yahoo,
-    obtener_market_snapshot,
-    obtener_market_treemap_data,
-    obtener_ultimas_noticias,
     render_ticker_tape,
 )
 from modulos.app_runtime import build_runtime_paths
