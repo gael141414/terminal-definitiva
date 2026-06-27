@@ -313,11 +313,39 @@ python scripts/run_smoke_tests.py --strict
 streamlit run app.py
 ```
 
-### Sprint 2L - Extracción legacy por grupos
+### Sprint 2L - Extraer widgets TradingView
 
-Usar el inventario generado para decidir la siguiente extracción:
+Primera extracción legacy por grupo:
 
-- widgets TradingView,
+- `render_tradingview_widget()`
+- `renderizar_grafico_tradingview()`
+
+Destino:
+
+- `modulos/tradingview_widgets.py`
+
+Motivo: son widgets UI autocontenidos, de bajo riesgo y sin lógica financiera. Se mantienen importados desde `app.py` para preservar compatibilidad con llamadas existentes.
+
+Aplicar con:
+
+```bash
+python scripts/apply_sprint_2l_extract_tradingview_widgets.py
+```
+
+Validación específica:
+
+```bash
+python scripts/apply_sprint_2l_extract_tradingview_widgets.py
+python -m py_compile app.py modulos/tradingview_widgets.py scripts/apply_sprint_2l_extract_tradingview_widgets.py
+python scripts/run_healthcheck.py
+python scripts/run_smoke_tests.py --strict
+streamlit run app.py
+```
+
+### Sprint 2M - Siguiente extracción legacy por grupo
+
+Usar el inventario para decidir entre:
+
 - helpers de datos SEC/yfinance,
 - exportación PDF,
 - wrappers de compatibilidad,
