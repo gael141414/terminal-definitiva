@@ -61,6 +61,7 @@ from modulos.market_widgets import (
 from modulos.tradingview_widgets import render_tradingview_widget, renderizar_grafico_tradingview
 from modulos.company_data_helpers import obtener_datos_directiva, obtener_tickers_filtrados, obtener_transacciones_insiders, obtener_valoracion_sectorial
 from modulos.app_company_ui import render_company_empty_state
+from modulos.app_integrations import inyectar_atajo_teclado, load_lottieurl, obtener_modelo_gemini, obtener_secreto_streamlit
 from modulos.app_runtime import build_runtime_paths
 from modulos.module_loader import safe_call
 from modulos.utils import cargar_datos, calcular_score_buffett, analizar_sentimiento_noticias as analizar_sentimiento_noticias_utils
@@ -77,87 +78,8 @@ from modulos.tool_catalog import (
 )
 from modulos.tool_router import CompanyToolContext, render_company_tool, render_independent_tool
 
-
-def inyectar_atajo_teclado():
-    """Inyecta un listener global de JavaScript para el atajo Ctrl+K / Cmd+K"""
-    js_code = """
-    <script>
-    const doc = window.parent.document;
-    
-    // Evitamos duplicar listeners si Streamlit recarga la página
-    if (!doc.getElementById('vq-keyboard-listener')) {
-        const scriptTag = doc.createElement('div');
-        scriptTag.id = 'vq-keyboard-listener';
-        scriptTag.style.display = 'none';
-        doc.body.appendChild(scriptTag);
-
-        doc.addEventListener('keydown', function(e) {
-            // Detecta Ctrl+K en Windows/Linux o Cmd+K en Mac
-            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-                e.preventDefault(); // Evita que el navegador abra su propio buscador
-                
-                // Busca el input dentro del primer selectbox de Streamlit (El buscador de Empresa)
-                const inputs = doc.querySelectorAll('.stSelectbox input');
-                if (inputs.length > 0) {
-                    inputs[0].focus();
-                    
-                    // Efecto visual: Resalta la barra momentáneamente
-                    const container = inputs[0].closest('div[data-baseweb="select"]');
-                    if (container) {
-                        const originalBoxShadow = container.style.boxShadow;
-                        container.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.6)';
-                        setTimeout(() => {
-                            container.style.boxShadow = originalBoxShadow;
-                        }, 400);
-                    }
-                }
-            }
-        });
-    }
-    </script>
-    """
-    # Inyectamos el HTML sin que ocupe espacio visual en la web
-    components.html(js_code, height=0, width=0)
-
-def load_lottieurl(url: str):
-    try:
-        r = requests.get(url, timeout=5)
-        r.raise_for_status()
-        return r.json()
-    except requests.RequestException:
-        return None
-
 # ---------------- CONFIGURACIÓN ---------------- #
 # 1. CONFIGURACIÓN DE PÁGINA movida al inicio del archivo para cumplir Streamlit.
-
-def obtener_secreto_streamlit(nombre: str):
-    """Lee un secreto sin bloquear la app cuando no existe secrets.toml."""
-    try:
-        return st.secrets.get(nombre)
-    except Exception:
-        return None
-
-@st.cache_resource(show_spinner=False)
-def obtener_modelo_gemini():
-    """Inicializa Gemini una sola vez y evita repetir list_models en cada prompt."""
-    api_key = CONFIG.gemini_api_key or CONFIG.google_api_key
-    if not api_key:
-        return None
-
-    if genai is None:
-        return None
-
-    try:
-        genai.configure(api_key=api_key)
-        modelo_disponible = None
-        for modelo in genai.list_models():
-            if 'generateContent' in modelo.supported_generation_methods:
-                modelo_disponible = modelo.name
-                if "flash" in modelo.name.lower():
-                    break
-        return genai.GenerativeModel(modelo_disponible) if modelo_disponible else None
-    except Exception:
-        return None
 
 # ==========================================
 # MARKET TICKER TAPE FIJO
