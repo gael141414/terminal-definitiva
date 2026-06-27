@@ -9,18 +9,9 @@ st.set_page_config(
 
 import pandas as pd
 import yfinance as yf
-import plotly.graph_objects as go
-import tempfile
 import requests
 import streamlit.components.v1 as components
-import os
-import logging
-import base64
 import html
-import re
-import xml.etree.ElementTree as ET
-from pathlib import Path
-from datetime import datetime, timezone, timedelta, time
 
 try:
     import google.generativeai as genai
@@ -61,7 +52,7 @@ from modulos.app_navigation import (
     render_context_header,
     render_option_menu_safe,
 )
-from modulos.app_home import render_home_page, render_module_showcase
+from modulos.app_home import render_home_page
 from modulos.market_widgets import (
     analizar_rotacion_sectores,
     buscar_etf_yahoo,
@@ -78,7 +69,6 @@ from modulos.tool_catalog import (
     BLOQUES_HERRAMIENTAS,
     HERRAMIENTAS_POR_LABEL,
     obtener_bloques_por_modo,
-    obtener_herramientas_por_bloque,
     obtener_herramientas_por_bloque_y_modo,
     obtener_modos_navegacion,
 )
