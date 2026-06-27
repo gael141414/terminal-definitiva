@@ -286,11 +286,42 @@ streamlit run app.py
 
 ### Sprint 2K - Inventario legacy funcional
 
-Revisar funciones antiguas que ya delegan en módulos nuevos y decidir si:
+Añadir herramienta de auditoría estática:
 
-- se eliminan,
-- se convierten en wrappers explícitos,
-- o se mantienen temporalmente por compatibilidad.
+- listar funciones top-level restantes en `app.py`,
+- contar llamadas internas en `app.py`,
+- contar llamadas detectadas en el repositorio,
+- clasificar cada función como `runtime/helper`, `ui/widget`, `data/helper`, `analysis/helper`, `export/helper` o `legacy/helper`,
+- generar opcionalmente `docs/app_legacy_inventory.md`.
+
+Este sprint no modifica `app.py`; solo añade una herramienta para decidir los siguientes cortes con evidencia.
+
+Ejecutar con:
+
+```bash
+python scripts/print_app_legacy_inventory.py
+python scripts/print_app_legacy_inventory.py --write
+```
+
+Validación específica:
+
+```bash
+python -m py_compile scripts/print_app_legacy_inventory.py
+python scripts/print_app_legacy_inventory.py
+python scripts/run_healthcheck.py
+python scripts/run_smoke_tests.py --strict
+streamlit run app.py
+```
+
+### Sprint 2L - Extracción legacy por grupos
+
+Usar el inventario generado para decidir la siguiente extracción:
+
+- widgets TradingView,
+- helpers de datos SEC/yfinance,
+- exportación PDF,
+- wrappers de compatibilidad,
+- funciones sin llamadas detectadas.
 
 ## Criterio de aceptación por sprint
 
