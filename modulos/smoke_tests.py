@@ -28,6 +28,7 @@ CRITICAL_FILES = [
     "modulos/scoring_engine.py",
     "modulos/tool_catalog.py",
     "modulos/tool_router.py",
+    "scripts/print_product_surface_audit.py",
     "modulos/research_core.py",
     "modulos/investment_thesis.py",
     "modulos/research_report.py",
@@ -173,6 +174,36 @@ def _check_router() -> list[SmokeCheck]:
     return checks
 
 
+
+def _check_product_surface_audit() -> list[SmokeCheck]:
+    """Comprueba que catálogo, router, módulos y callables estén alineados."""
+
+    checks: list[SmokeCheck] = []
+    try:
+        audit = importlib.import_module("scripts.print_product_surface_audit")
+        issues, routes, mode_counts = audit.audit_catalog()
+        failures = [issue for issue in issues if issue.severity == "FAIL"]
+        warnings = [issue for issue in issues if issue.severity == "WARN"]
+
+        checks.append(_ok("product_surface:loaded", f"{len(routes)} routes audited"))
+
+        if failures:
+            sample = "; ".join(f"{issue.code}:{issue.label}" for issue in failures[:5])
+            checks.append(_fail("product_surface:routes", f"{len(failures)} failures; sample={sample}"))
+        else:
+            checks.append(_ok("product_surface:routes", f"{len(routes)} routes OK; warnings={len(warnings)}"))
+
+        for mode in ("mvp", "consolidated", "complete"):
+            count = int(mode_counts.get(mode, 0))
+            checks.append(
+                _ok(f"product_surface_mode:{mode}", f"{count} tools")
+                if count > 0
+                else _fail(f"product_surface_mode:{mode}", "no visible tools")
+            )
+    except Exception as exc:
+        checks.append(_fail("product_surface:loaded", f"{type(exc).__name__}: {exc}"))
+    return checks
+
 def _check_scoring_model() -> list[SmokeCheck]:
     checks: list[SmokeCheck] = []
     try:
@@ -193,6 +224,7 @@ def run_smoke_tests() -> list[SmokeCheck]:
     checks.extend(_check_import(name) for name in CRITICAL_IMPORTS)
     checks.extend(_check_catalog())
     checks.extend(_check_router())
+    checks.extend(_check_product_surface_audit())
     checks.extend(_check_scoring_model())
     return checks
 
