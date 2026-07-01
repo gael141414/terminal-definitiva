@@ -5,6 +5,7 @@ import requests
 import streamlit as st
 
 from modulos.config import CONFIG
+from modulos.data_quality import validate_dataframe
 
 
 FMP_API_KEY = CONFIG.fmp_api_key
@@ -111,7 +112,8 @@ def _endpoint_a_dataframe(
             return None
 
         df = pd.DataFrame(payload)
-        if df.empty or "date" not in df.columns:
+        quality = validate_dataframe(df, ["date"], source="fmp_endpoint", min_rows=1)
+        if quality.blocking:
             return None
 
         df["date"] = pd.to_datetime(df["date"], errors="coerce")
