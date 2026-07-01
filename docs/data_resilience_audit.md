@@ -13,7 +13,7 @@ Auditoría estática ligera de módulos críticos de datos.
 | Archivo | Funciones | Requests | Requests sin timeout | Yahoo Ticker | Except amplios | Except silenciosos | Return None | Guards detectados |
 |---|---:|---:|---:|---:|---:|---:|---:|---|
 | modulos/fmp_api.py | 11 | 2 | 0 | 0 | 5 | 2 | 8 | .empty, .columns, dropna, pd.to_numeric, pd.to_datetime, isinstance, validate_dataframe |
-| modulos/company_data_helpers.py | 4 | 1 | 0 | 3 | 4 | 1 | 2 | .empty, .columns, pd.to_datetime |
+| modulos/company_data_helpers.py | 6 | 1 | 0 | 3 | 5 | 1 | 6 | .empty, .columns, dropna, pd.to_datetime, isinstance, validate_dataframe |
 | modulos/scoring_engine.py | 24 | 0 | 0 | 3 | 4 | 1 | 6 | .empty, .columns, dropna, pd.to_numeric, isinstance, np.isfinite, replace([np.inf, -np.inf] |
 
 ## Incidencias
@@ -22,7 +22,7 @@ Auditoría estática ligera de módulos críticos de datos.
 |---|---|---|---|
 | WARN | silent_broad_except | modulos/fmp_api.py | Except amplio y silencioso cerca de línea 48. |
 | WARN | silent_broad_except | modulos/fmp_api.py | Except amplio y silencioso cerca de línea 136. |
-| WARN | silent_broad_except | modulos/company_data_helpers.py | Except amplio y silencioso cerca de línea 28. |
+| WARN | silent_broad_except | modulos/company_data_helpers.py | Except amplio y silencioso cerca de línea 65. |
 | WARN | silent_broad_except | modulos/scoring_engine.py | Except amplio y silencioso cerca de línea 250. |
 
 ## Recomendaciones Sprint 4B
