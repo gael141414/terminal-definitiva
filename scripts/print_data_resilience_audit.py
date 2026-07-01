@@ -41,6 +41,7 @@ DATA_GUARD_PATTERNS = [
     "isinstance",
     "np.isfinite",
     "replace([np.inf, -np.inf]",
+    "validate_dataframe",
 ]
 
 NETWORK_PATTERNS = [

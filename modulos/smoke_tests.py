@@ -32,6 +32,7 @@ CRITICAL_FILES = [
     "scripts/print_product_surface_audit.py",
     "scripts/test_module_loader_contract.py",
     "scripts/test_data_quality_contract.py",
+    "scripts/test_fmp_data_quality_contract.py",
     "modulos/research_core.py",
     "modulos/investment_thesis.py",
     "modulos/research_report.py",
@@ -133,6 +134,20 @@ def _check_data_quality_contract() -> list[SmokeCheck]:
         checks.append(_ok("data_quality_contract:behavior", "data quality contract OK"))
     except Exception as exc:
         checks.append(_fail("data_quality_contract:behavior", f"{type(exc).__name__}: {exc}"))
+    return checks
+
+
+def _check_fmp_data_quality_contract() -> list[SmokeCheck]:
+    """Ejecuta los checks contractuales de integración FMP + data_quality."""
+
+    checks: list[SmokeCheck] = []
+    try:
+        contract = importlib.import_module("scripts.test_fmp_data_quality_contract")
+        contract_checks = contract.run_contract_checks()
+        checks.append(_ok("fmp_data_quality_contract:loaded", f"{len(contract_checks)} checks"))
+        checks.append(_ok("fmp_data_quality_contract:behavior", "FMP data quality contract OK"))
+    except Exception as exc:
+        checks.append(_fail("fmp_data_quality_contract:behavior", f"{type(exc).__name__}: {exc}"))
     return checks
 
 def _check_catalog() -> list[SmokeCheck]:
@@ -255,6 +270,7 @@ def run_smoke_tests() -> list[SmokeCheck]:
         checks.extend(_check_file(path))
     checks.extend(_check_import(name) for name in CRITICAL_IMPORTS)
     checks.extend(_check_data_quality_contract())
+    checks.extend(_check_fmp_data_quality_contract())
     checks.extend(_check_catalog())
     checks.extend(_check_router())
     checks.extend(_check_product_surface_audit())
