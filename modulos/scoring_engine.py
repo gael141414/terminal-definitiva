@@ -681,6 +681,45 @@ def _apply_model_calibration(components: list[ScoreComponent]) -> None:
         macro_component.score = min(macro_component.score, 85)
 
 
+
+def _apply_quality_gates(
+    final_score: float,
+    data_coverage: float,
+    confidence: float,
+    components: list[ScoreComponent],
+    red_flags: list[str],
+    negatives: list[str],
+) -> tuple[float, str | None]:
+    """Aplica límites defensivos para evitar falsa precisión con baja cobertura."""
+
+    gate_reason: str | None = None
+
+    critical_components = [
+        component
+        for component in components
+        if component.name in {"Calidad fundamental", "Valoración", "Riesgo y forense"}
+    ]
+    low_critical_coverage = any(component.confidence < 0.45 for component in critical_components)
+
+    if data_coverage < 0.35:
+        capped = min(final_score, 49.0)
+        gate_reason = "Datos insuficientes para emitir una conclusión fuerte."
+        red_flags.append("Cobertura de datos crítica: el score queda bloqueado como máximo en zona neutral-débil.")
+    elif data_coverage < 0.55:
+        capped = min(final_score, 59.0)
+        gate_reason = "Cobertura parcial: la conclusión queda limitada por calidad de datos."
+        negatives.append("Cobertura de datos parcial: la lectura del score requiere cautela.")
+    elif confidence < 0.60 or low_critical_coverage:
+        capped = min(final_score, 69.0)
+        gate_reason = "Confianza operativa limitada en bloques críticos."
+        negatives.append("Confianza operativa limitada en uno o varios bloques críticos del score.")
+    else:
+        capped = final_score
+
+    return capped, gate_reason
+
+
+
 def calcular_valuequant_score(
     ticker: str,
     is_df: pd.DataFrame | None,
@@ -737,6 +776,16 @@ def calcular_valuequant_score(
     positives = [item for component in components for item in component.positives]
     negatives = [item for component in components for item in component.negatives]
 
+    gated_score, gate_reason = _apply_quality_gates(
+        final_score=final_score,
+        data_coverage=data_coverage,
+        confidence=confidence,
+        components=components,
+        red_flags=red_flags,
+        negatives=negatives,
+    )
+    final_score = _clamp(gated_score)
+
     if final_score >= 80:
         verdict = "Excelente"
     elif final_score >= 65:
@@ -747,6 +796,9 @@ def calcular_valuequant_score(
         verdict = "Débil"
     else:
         verdict = "Alto riesgo"
+
+    if gate_reason:
+        verdict = f"{verdict} · calidad de datos limitada"
 
     return ValueQuantScore(
         final_score=round(final_score, 1),

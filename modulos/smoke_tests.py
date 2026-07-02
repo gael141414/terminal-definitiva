@@ -34,6 +34,7 @@ CRITICAL_FILES = [
     "scripts/test_data_quality_contract.py",
     "scripts/test_fmp_data_quality_contract.py",
     "scripts/test_company_data_quality_contract.py",
+    "scripts/test_scoring_quality_gates.py",
     "modulos/research_core.py",
     "modulos/investment_thesis.py",
     "modulos/research_report.py",
@@ -266,6 +267,20 @@ def _check_module_loader_contract() -> list[SmokeCheck]:
         checks.append(_fail("module_loader_contract:behavior", f"{type(exc).__name__}: {exc}"))
     return checks
 
+
+def _check_scoring_quality_gates_contract() -> list[SmokeCheck]:
+    """Ejecuta los checks contractuales de quality gates del scoring."""
+
+    checks: list[SmokeCheck] = []
+    try:
+        contract = importlib.import_module("scripts.test_scoring_quality_gates")
+        contract_checks = contract.run_contract_checks()
+        checks.append(_ok("scoring_quality_gates_contract:loaded", f"{len(contract_checks)} checks"))
+        checks.append(_ok("scoring_quality_gates_contract:behavior", "scoring quality gates contract OK"))
+    except Exception as exc:
+        checks.append(_fail("scoring_quality_gates_contract:behavior", f"{type(exc).__name__}: {exc}"))
+    return checks
+
 def _check_scoring_model() -> list[SmokeCheck]:
     checks: list[SmokeCheck] = []
     try:
@@ -291,6 +306,7 @@ def run_smoke_tests() -> list[SmokeCheck]:
     checks.extend(_check_router())
     checks.extend(_check_product_surface_audit())
     checks.extend(_check_module_loader_contract())
+    checks.extend(_check_scoring_quality_gates_contract())
     checks.extend(_check_scoring_model())
     return checks
 
