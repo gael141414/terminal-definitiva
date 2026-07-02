@@ -54,6 +54,8 @@ class ValueQuantScore:
     model_version: str = MODEL_VERSION
     data_coverage: float = 0.0
     predictive_confidence: float | None = None
+    confidence_label: str = "No clasificada"
+    confidence_notes: list[str] = field(default_factory=list)
 
     def component(self, name: str) -> ScoreComponent | None:
         for component in self.components:
@@ -682,6 +684,54 @@ def _apply_model_calibration(components: list[ScoreComponent]) -> None:
 
 
 
+
+def _confidence_diagnostics(
+    data_coverage: float,
+    confidence: float,
+    components: list[ScoreComponent],
+) -> tuple[str, list[str]]:
+    """Clasifica y explica la confianza operativa del score."""
+
+    if data_coverage >= 0.75 and confidence >= 0.75:
+        label = "Alta"
+    elif data_coverage >= 0.55 and confidence >= 0.55:
+        label = "Media"
+    else:
+        label = "Baja"
+
+    notes: list[str] = []
+
+    if label == "Alta":
+        notes.append("Cobertura suficiente para leer el score como señal operativa razonable.")
+    elif label == "Media":
+        notes.append("Cobertura aceptable, pero la lectura requiere revisar los bloques con menor confianza.")
+    else:
+        notes.append("Cobertura limitada: el score debe tratarse como orientación preliminar, no como conclusión fuerte.")
+
+    weak_components = sorted(
+        [component for component in components if component.confidence < 0.55],
+        key=lambda component: component.confidence,
+    )
+    if weak_components:
+        sample = ", ".join(f"{component.name} ({component.confidence * 100:.0f}%)" for component in weak_components[:4])
+        notes.append(f"Bloques con confianza limitada: {sample}.")
+
+    critical_components = [
+        component
+        for component in components
+        if component.name in {"Calidad fundamental", "Valoración", "Riesgo y forense"}
+    ]
+    weak_critical = [component for component in critical_components if component.confidence < 0.55]
+    if weak_critical:
+        sample = ", ".join(component.name for component in weak_critical)
+        notes.append(f"Atención: hay bloques críticos con baja confianza: {sample}.")
+
+    notes.append("La confianza operativa mide cobertura/calidad de datos; no equivale a confianza predictiva validada por backtesting.")
+
+    return label, notes
+
+
+
 def _apply_quality_gates(
     final_score: float,
     data_coverage: float,
@@ -800,11 +850,19 @@ def calcular_valuequant_score(
     if gate_reason:
         verdict = f"{verdict} · calidad de datos limitada"
 
+    confidence_label, confidence_notes = _confidence_diagnostics(
+        data_coverage=data_coverage,
+        confidence=confidence,
+        components=components,
+    )
+
     return ValueQuantScore(
         final_score=round(final_score, 1),
         confidence=round(confidence, 2),
         data_coverage=round(data_coverage, 2),
         predictive_confidence=None,
+        confidence_label=confidence_label,
+        confidence_notes=confidence_notes,
         components=components,
         red_flags=red_flags,
         positives=positives[:8],
@@ -848,6 +906,7 @@ def render_valuequant_score_card(score: ValueQuantScore) -> None:
             <div style="margin-top:.45rem;color:#F4F7FB;font-weight:750;">{score.verdict}</div>
             <div style="margin-top:.25rem;color:#8C9AAF;font-size:.86rem;line-height:1.45;">
                 Cobertura de datos: {score.data_coverage * 100:.0f}% · Confianza operativa: {score.confidence * 100:.0f}%<br>
+                Nivel de confianza: {score.confidence_label}<br>
                 Confianza predictiva: {predictive_text}. Basado en fundamentales, valoración, riesgo, momentum y proxies macro.
             </div>
         </div>
@@ -857,6 +916,11 @@ def render_valuequant_score_card(score: ValueQuantScore) -> None:
 
     with st.expander("Desglose del ValueQuant Score", expanded=False):
         st.dataframe(score.to_dataframe(), use_container_width=True, hide_index=True)
+
+        if score.confidence_notes:
+            st.markdown("**Lectura de confianza**")
+            for item in score.confidence_notes[:5]:
+                st.markdown(f"- {item}")
 
         col_a, col_b = st.columns(2)
         with col_a:
