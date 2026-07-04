@@ -69,6 +69,43 @@ def _score_attr(valuequant_score: Any, attr: str, default: Any = None) -> Any:
     return getattr(valuequant_score, attr, default)
 
 
+def _score_summary_payload(valuequant_score: Any, ticker: str) -> dict[str, Any]:
+    """Obtiene el payload estructurado del score con fallback defensivo."""
+
+    if valuequant_score is None:
+        return {}
+
+    builder = getattr(valuequant_score, "to_summary_payload", None)
+    if callable(builder):
+        try:
+            payload = builder(ticker)
+            if isinstance(payload, dict):
+                return payload
+        except Exception:
+            pass
+
+    return {
+        "ticker": ticker,
+        "model_version": _score_attr(valuequant_score, "model_version"),
+        "final_score": _as_float(_score_attr(valuequant_score, "final_score")),
+        "raw_score": _as_float(_score_attr(valuequant_score, "raw_score")),
+        "verdict": _score_attr(valuequant_score, "verdict"),
+        "confidence": _as_float(_score_attr(valuequant_score, "confidence")),
+        "data_coverage": _as_float(_score_attr(valuequant_score, "data_coverage")),
+        "confidence_label": _score_attr(valuequant_score, "confidence_label"),
+        "predictive_confidence": _as_float(_score_attr(valuequant_score, "predictive_confidence")),
+        "quality_adjusted": bool(_score_attr(valuequant_score, "quality_adjusted", False)),
+        "quality_gate_reason": _score_attr(valuequant_score, "quality_gate_reason"),
+        "decision_action": _score_attr(valuequant_score, "decision_action"),
+        "decision_notes": list(_score_attr(valuequant_score, "decision_notes", []) or []),
+        "top_components": [],
+        "weakest_components": [],
+        "red_flags": list(_score_attr(valuequant_score, "red_flags", []) or []),
+        "positives": list(_score_attr(valuequant_score, "positives", []) or []),
+        "negatives": list(_score_attr(valuequant_score, "negatives", []) or []),
+    }
+
+
 def _component_score(valuequant_score: Any, keyword: str) -> float | None:
     components = _score_attr(valuequant_score, "components", []) or []
     target = keyword.lower()
@@ -129,6 +166,7 @@ def build_research_snapshot(
     ticker = str(ticker or "").upper().strip()
     competitor = str(competitor or "").upper().strip()
     thesis = build_investment_thesis(ticker, valuequant_score, res_val, nota_buffett)
+    score_payload = _score_summary_payload(valuequant_score, ticker)
 
     snapshot = {
         "ticker": ticker,
@@ -137,16 +175,26 @@ def build_research_snapshot(
         "source": source,
         "action": thesis.action,
         "action_detail": thesis.action_detail,
-        "valuequant_score": _as_float(thesis.final_score),
+        "score_payload": score_payload,
+        "score_decision_action": score_payload.get("decision_action") or getattr(thesis, "score_decision_action", None),
+        "score_decision_notes": list(score_payload.get("decision_notes") or [])[:5],
+        "score_raw_score": _as_float(score_payload.get("raw_score")),
+        "score_quality_adjusted": bool(score_payload.get("quality_adjusted", False)),
+        "score_quality_gate_reason": score_payload.get("quality_gate_reason"),
+        "score_confidence_label": score_payload.get("confidence_label"),
+        "score_top_components": list(score_payload.get("top_components") or [])[:3],
+        "score_weakest_components": list(score_payload.get("weakest_components") or [])[:3],
+        "score_red_flags_count": len(score_payload.get("red_flags") or []),
+        "valuequant_score": _as_float(score_payload.get("final_score")) if score_payload else _as_float(thesis.final_score),
         "buffett_score": _as_float(thesis.buffett_score),
         "quality_score": _as_float(thesis.quality_score),
         "valuation_score": _as_float(thesis.valuation_score),
         "risk_score": _as_float(thesis.risk_score),
         "growth_score": _as_float(thesis.growth_score),
-        "data_coverage": _as_float(_score_attr(valuequant_score, "data_coverage")),
-        "confidence": _as_float(_score_attr(valuequant_score, "confidence")),
-        "predictive_confidence": _as_float(_score_attr(valuequant_score, "predictive_confidence")),
-        "model_version": _score_attr(valuequant_score, "model_version", "N/D"),
+        "data_coverage": _as_float(score_payload.get("data_coverage")) if score_payload else _as_float(_score_attr(valuequant_score, "data_coverage")),
+        "confidence": _as_float(score_payload.get("confidence")) if score_payload else _as_float(_score_attr(valuequant_score, "confidence")),
+        "predictive_confidence": _as_float(score_payload.get("predictive_confidence")) if score_payload else _as_float(_score_attr(valuequant_score, "predictive_confidence")),
+        "model_version": score_payload.get("model_version") or _score_attr(valuequant_score, "model_version", "N/D"),
         "current_price": _as_float(thesis.current_price),
         "intrinsic_value": _as_float(thesis.intrinsic_value),
         "margin_of_safety": _as_float(thesis.margin_of_safety),
@@ -205,8 +253,19 @@ def save_analysis_snapshot(snapshot: dict[str, Any]) -> None:
             "last_saved_at": snapshot.get("saved_at"),
             "last_analysis": {
                 "action": snapshot.get("action"),
+                "score_decision_action": snapshot.get("score_decision_action"),
+                "score_decision_notes": snapshot.get("score_decision_notes"),
+                "score_raw_score": snapshot.get("score_raw_score"),
+                "score_quality_adjusted": snapshot.get("score_quality_adjusted"),
+                "score_quality_gate_reason": snapshot.get("score_quality_gate_reason"),
+                "score_confidence_label": snapshot.get("score_confidence_label"),
+                "score_top_components": snapshot.get("score_top_components"),
+                "score_weakest_components": snapshot.get("score_weakest_components"),
+                "score_red_flags_count": snapshot.get("score_red_flags_count"),
                 "valuequant_score": snapshot.get("valuequant_score"),
                 "buffett_score": snapshot.get("buffett_score"),
+                "data_coverage": snapshot.get("data_coverage"),
+                "confidence": snapshot.get("confidence"),
                 "margin_of_safety": snapshot.get("margin_of_safety"),
                 "valuation_regime": snapshot.get("valuation_regime"),
                 "competitor": snapshot.get("competitor"),

@@ -78,6 +78,203 @@ def _extraer_last_analysis(item: dict[str, Any]) -> dict[str, Any]:
     return analysis if isinstance(analysis, dict) else {}
 
 
+def _as_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "sí", "si", "yes", "y"}
+    return bool(value)
+
+
+def _analysis_red_flags_count(analysis: dict[str, Any]) -> int:
+    explicit = analysis.get("score_red_flags_count")
+    try:
+        if explicit is not None:
+            return max(0, int(explicit))
+    except Exception:
+        pass
+
+    red_flags = analysis.get("red_flags")
+    if isinstance(red_flags, list):
+        return len(red_flags)
+    return 0
+
+
+def _score_decision_bucket(
+    *,
+    score_action: str,
+    quality_adjusted: bool,
+    red_flags_count: int,
+    confidence_label: str,
+    final_score: Any,
+) -> str:
+    """Clasifica el activo para lectura rápida en watchlist."""
+
+    action = str(score_action or "").lower()
+    confidence = str(confidence_label or "").lower()
+    score = _as_float(final_score, 0.0)
+
+    if red_flags_count > 0:
+        return "🔴 Riesgo crítico"
+    if quality_adjusted:
+        return "🟠 Revisión manual"
+    if "prioritario" in action:
+        return "🟢 Prioritario"
+    if "matices" in action:
+        return "🟡 Candidato con matices"
+    if "esperar" in action or confidence == "baja":
+        return "⚪ Esperar datos"
+    if "baja prioridad" in action or score < 50:
+        return "⚫ Baja prioridad"
+    if score >= 65:
+        return "🟡 Candidato"
+    return "⚪ Observación"
+
+
+def _watchlist_priority_score(record: dict[str, Any]) -> float:
+    """Ranking 0-100 para ordenar la watchlist por prioridad de análisis."""
+
+    score = _as_float(record.get("ValueQuant"), 0.0)
+    raw_score = _as_float(record.get("Score bruto"), score)
+    confidence = _as_float(record.get("Confianza"), 0.0)
+    margin = _as_float(record.get("Margen Seguridad"), 0.0)
+    red_flags = _as_float(record.get("Red Flags"), 0.0)
+    action = str(record.get("Acción Score", "") or "").lower()
+    quality_adjusted = _as_bool(record.get("Ajuste Calidad"))
+
+    priority = score * 0.62 + raw_score * 0.18 + (confidence * 100.0) * 0.12
+
+    if margin > 0:
+        priority += min(10.0, margin * 35.0)
+    elif margin < -0.10:
+        priority -= min(10.0, abs(margin) * 25.0)
+
+    if "prioritario" in action:
+        priority += 8.0
+    elif "matices" in action:
+        priority += 3.0
+    elif "revisión manual" in action or "riesgos críticos" in action:
+        priority -= 10.0
+    elif "esperar" in action:
+        priority -= 8.0
+    elif "baja prioridad" in action:
+        priority -= 15.0
+
+    if quality_adjusted:
+        priority -= 7.0
+    if red_flags > 0:
+        priority -= min(14.0, red_flags * 7.0)
+
+    return round(max(0.0, min(100.0, priority)), 1)
+
+
+def _build_watchlist_row(
+    *,
+    ticker: str,
+    item: dict[str, Any],
+    analysis: dict[str, Any],
+    precio_actual: float,
+    cambio_pct: float,
+    target: float,
+    distancia_alerta: str,
+) -> dict[str, Any]:
+    """Construye una fila enriquecida de watchlist con score payload."""
+
+    score_action = analysis.get("score_decision_action") or analysis.get("decision_action") or "-"
+    quality_adjusted = _as_bool(analysis.get("score_quality_adjusted", False))
+    red_flags_count = _analysis_red_flags_count(analysis)
+    confidence_label = analysis.get("score_confidence_label") or analysis.get("confidence_label") or "-"
+
+    record = {
+        "Ticker": ticker,
+        "Precio Actual": precio_actual,
+        "Var Diaria (%)": cambio_pct,
+        "Precio Objetivo": target if target > 0 else "-",
+        "Distancia al Target": distancia_alerta,
+        "Acción Research": analysis.get("action", "-"),
+        "Acción Score": score_action,
+        "Bucket Score": _score_decision_bucket(
+            score_action=score_action,
+            quality_adjusted=quality_adjusted,
+            red_flags_count=red_flags_count,
+            confidence_label=str(confidence_label),
+            final_score=analysis.get("valuequant_score"),
+        ),
+        "ValueQuant": analysis.get("valuequant_score"),
+        "Score bruto": analysis.get("score_raw_score"),
+        "Buffett": analysis.get("buffett_score"),
+        "Confianza": analysis.get("confidence"),
+        "Nivel confianza": confidence_label,
+        "Ajuste Calidad": quality_adjusted,
+        "Quality Gate": analysis.get("score_quality_gate_reason") or "-",
+        "Red Flags": red_flags_count,
+        "Margen Seguridad": analysis.get("margin_of_safety"),
+        "Régimen Valoración": analysis.get("valuation_regime", "-"),
+        "Comparador": analysis.get("competitor", "-"),
+        "Fuente": item.get("source", "Manual"),
+        "Último análisis": item.get("last_saved_at", "-"),
+    }
+    record["Prioridad Score"] = _watchlist_priority_score(record)
+    return record
+
+
+def _render_score_ranking_panel(df_watch: pd.DataFrame) -> None:
+    """Panel de ranking operativo basado en score payload."""
+
+    st.markdown("### Ranking operativo por score")
+    st.caption(
+        "Ordena la watchlist por score final, score bruto, confianza, quality gates, red flags y acción institucional del score."
+    )
+
+    if df_watch.empty:
+        st.info("No hay datos suficientes para ranking.")
+        return
+
+    buckets = list(dict.fromkeys(str(item) for item in df_watch.get("Bucket Score", pd.Series(dtype=str)).dropna().tolist()))
+    selected_buckets = st.multiselect(
+        "Filtrar por bucket de score",
+        options=buckets,
+        default=buckets,
+        key="watchlist_score_bucket_filter",
+    )
+
+    filtered = df_watch[df_watch["Bucket Score"].isin(selected_buckets)] if selected_buckets else df_watch
+    if filtered.empty:
+        st.info("No hay activos con el filtro seleccionado.")
+        return
+
+    display_cols = [
+        "Prioridad Score",
+        "Ticker",
+        "Bucket Score",
+        "Acción Score",
+        "ValueQuant",
+        "Score bruto",
+        "Confianza",
+        "Nivel confianza",
+        "Ajuste Calidad",
+        "Red Flags",
+        "Margen Seguridad",
+        "Quality Gate",
+        "Último análisis",
+    ]
+    display_cols = [col for col in display_cols if col in filtered.columns]
+
+    st.dataframe(
+        filtered[display_cols].style.format(
+            {
+                "Prioridad Score": "{:.1f}",
+                "ValueQuant": lambda x: f"{x:.1f}" if isinstance(x, (int, float)) else "-",
+                "Score bruto": lambda x: f"{x:.1f}" if isinstance(x, (int, float)) else "-",
+                "Confianza": lambda x: f"{x:.0%}" if isinstance(x, (int, float)) else "-",
+                "Margen Seguridad": lambda x: f"{x:+.1%}" if isinstance(x, (int, float)) else "-",
+            }
+        ),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+
 def _render_alerts_panel(df_alerts: pd.DataFrame) -> None:
     """Panel visual de alertas priorizadas."""
 
@@ -205,44 +402,32 @@ def ejecutar_watchlist():
                 else:
                     alerta = "Sin Target"
 
-                resultados.append(
-                    {
-                        "Ticker": ticker,
-                        "Precio Actual": precio_actual,
-                        "Var Diaria (%)": cambio_pct,
-                        "Precio Objetivo": target if target > 0 else "-",
-                        "Distancia al Target": alerta,
-                        "Acción Research": analysis.get("action", "-"),
-                        "ValueQuant": analysis.get("valuequant_score"),
-                        "Buffett": analysis.get("buffett_score"),
-                        "Margen Seguridad": analysis.get("margin_of_safety"),
-                        "Régimen Valoración": analysis.get("valuation_regime", "-"),
-                        "Comparador": analysis.get("competitor", "-"),
-                        "Fuente": item.get("source", "Manual"),
-                        "Último análisis": item.get("last_saved_at", "-"),
-                    }
+                record = _build_watchlist_row(
+                    ticker=ticker,
+                    item=item,
+                    analysis=analysis,
+                    precio_actual=precio_actual,
+                    cambio_pct=cambio_pct,
+                    target=target,
+                    distancia_alerta=alerta,
                 )
+                resultados.append(record)
 
             except Exception:
-                resultados.append(
-                    {
-                        "Ticker": ticker,
-                        "Precio Actual": 0.0,
-                        "Var Diaria (%)": 0.0,
-                        "Precio Objetivo": item.get("target", 0),
-                        "Distancia al Target": "⚠️ Error de datos",
-                        "Acción Research": analysis.get("action", "-"),
-                        "ValueQuant": analysis.get("valuequant_score"),
-                        "Buffett": analysis.get("buffett_score"),
-                        "Margen Seguridad": analysis.get("margin_of_safety"),
-                        "Régimen Valoración": analysis.get("valuation_regime", "-"),
-                        "Comparador": analysis.get("competitor", "-"),
-                        "Fuente": item.get("source", "Manual"),
-                        "Último análisis": item.get("last_saved_at", "-"),
-                    }
+                record = _build_watchlist_row(
+                    ticker=ticker,
+                    item=item,
+                    analysis=analysis,
+                    precio_actual=0.0,
+                    cambio_pct=0.0,
+                    target=_as_float(item.get("target"), 0.0),
+                    distancia_alerta="⚠️ Error de datos",
                 )
+                resultados.append(record)
 
         df_watch = pd.DataFrame(resultados)
+        if not df_watch.empty and "Prioridad Score" in df_watch.columns:
+            df_watch = df_watch.sort_values(["Prioridad Score", "ValueQuant"], ascending=[False, False]).reset_index(drop=True)
         df_alerts = build_watchlist_alerts(df_watch)
 
     # -------------------------------------------------------------
@@ -263,6 +448,9 @@ def ejecutar_watchlist():
             st.metric("Activos en Seguimiento", len(df_watch))
 
         st.markdown("<br>", unsafe_allow_html=True)
+        _render_score_ranking_panel(df_watch)
+
+        st.markdown("---")
         _render_alerts_panel(df_alerts)
 
         st.markdown("---")
