@@ -38,6 +38,7 @@ CRITICAL_FILES = [
     "scripts/test_scoring_confidence_diagnostics.py",
     "scripts/test_scoring_audit_trail.py",
     "scripts/test_scoring_decision_guidance.py",
+    "scripts/test_scoring_summary_payload.py",
     "modulos/research_core.py",
     "modulos/investment_thesis.py",
     "modulos/research_report.py",
@@ -326,6 +327,20 @@ def _check_scoring_decision_guidance_contract() -> list[SmokeCheck]:
         checks.append(_fail("scoring_decision_guidance_contract:behavior", f"{type(exc).__name__}: {exc}"))
     return checks
 
+
+def _check_scoring_summary_payload_contract() -> list[SmokeCheck]:
+    """Ejecuta los checks contractuales del payload resumen del scoring."""
+
+    checks: list[SmokeCheck] = []
+    try:
+        contract = importlib.import_module("scripts.test_scoring_summary_payload")
+        contract_checks = contract.run_contract_checks()
+        checks.append(_ok("scoring_summary_payload_contract:loaded", f"{len(contract_checks)} checks"))
+        checks.append(_ok("scoring_summary_payload_contract:behavior", "scoring summary payload contract OK"))
+    except Exception as exc:
+        checks.append(_fail("scoring_summary_payload_contract:behavior", f"{type(exc).__name__}: {exc}"))
+    return checks
+
 def _check_scoring_model() -> list[SmokeCheck]:
     checks: list[SmokeCheck] = []
     try:
@@ -355,6 +370,7 @@ def run_smoke_tests() -> list[SmokeCheck]:
     checks.extend(_check_scoring_confidence_diagnostics_contract())
     checks.extend(_check_scoring_audit_trail_contract())
     checks.extend(_check_scoring_decision_guidance_contract())
+    checks.extend(_check_scoring_summary_payload_contract())
     checks.extend(_check_scoring_model())
     return checks
 
