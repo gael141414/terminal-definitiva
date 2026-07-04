@@ -81,6 +81,70 @@ def _component_rows(valuequant_score: Any) -> list[dict[str, Any]]:
     return rows
 
 
+def _report_score_payload(valuequant_score: Any, ticker: str) -> dict[str, Any]:
+    """Obtiene el payload estructurado del score para informes."""
+
+    if valuequant_score is None:
+        return {}
+
+    builder = getattr(valuequant_score, "to_summary_payload", None)
+    if callable(builder):
+        try:
+            payload = builder(ticker)
+            if isinstance(payload, dict):
+                return payload
+        except Exception:
+            pass
+
+    return {
+        "ticker": ticker,
+        "model_version": _score_attr(valuequant_score, "model_version"),
+        "final_score": _score_attr(valuequant_score, "final_score"),
+        "raw_score": _score_attr(valuequant_score, "raw_score"),
+        "verdict": _score_attr(valuequant_score, "verdict"),
+        "confidence": _score_attr(valuequant_score, "confidence"),
+        "data_coverage": _score_attr(valuequant_score, "data_coverage"),
+        "confidence_label": _score_attr(valuequant_score, "confidence_label"),
+        "predictive_confidence": _score_attr(valuequant_score, "predictive_confidence"),
+        "quality_adjusted": bool(_score_attr(valuequant_score, "quality_adjusted", False)),
+        "quality_gate_reason": _score_attr(valuequant_score, "quality_gate_reason"),
+        "decision_action": _score_attr(valuequant_score, "decision_action"),
+        "decision_notes": list(_score_attr(valuequant_score, "decision_notes", []) or []),
+        "top_components": [],
+        "weakest_components": [],
+        "red_flags": list(_score_attr(valuequant_score, "red_flags", []) or []),
+        "positives": list(_score_attr(valuequant_score, "positives", []) or []),
+        "negatives": list(_score_attr(valuequant_score, "negatives", []) or []),
+    }
+
+
+def _payload_component_rows(items: list[dict[str, Any]], mode: str) -> list[dict[str, Any]]:
+    """Normaliza top/weak components del score para tablas Markdown."""
+
+    rows: list[dict[str, Any]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+
+        row: dict[str, Any] = {
+            "Bloque": item.get("name", "N/D"),
+            "Score": _fmt_score(item.get("score")),
+            "Confianza": _fmt_pct(item.get("confidence")),
+        }
+
+        if mode == "top":
+            row["Contribución"] = item.get("contribution", "N/D")
+        else:
+            row["Penalización"] = item.get("penalty", "N/D")
+            negatives = item.get("negatives") or []
+            red_flags = item.get("red_flags") or []
+            row["Lectura"] = "; ".join([*red_flags[:2], *negatives[:2]]) or "N/D"
+
+        rows.append(row)
+
+    return rows
+
+
 def _safe_dataframe(value: Any) -> pd.DataFrame | None:
     if isinstance(value, pd.DataFrame) and not value.empty:
         return value
@@ -199,13 +263,20 @@ def build_research_report_markdown(
     """Construye un informe completo en Markdown."""
 
     thesis = build_investment_thesis(ticker, valuequant_score, res_val, nota_buffett)
+    score_payload = _report_score_payload(valuequant_score, ticker)
     component_rows = _component_rows(valuequant_score)
+    top_component_rows = _payload_component_rows(list(score_payload.get("top_components") or []), mode="top")
+    weak_component_rows = _payload_component_rows(list(score_payload.get("weakest_components") or []), mode="weak")
     financial_rows = _financial_snapshot(res_is, res_bs, res_cf)
     scenario_rows = _valuation_scenario_rows(thesis)
     sensitivity = build_valuation_sensitivity(thesis)
     sensitivity_rows = sensitivity_markdown_rows(sensitivity)
     relative_rows = relative_comparison_markdown_rows(ticker, ticker_competidor, valuequant_score, res_val, nota_buffett)
-    predictive_confidence = _score_attr(valuequant_score, "predictive_confidence")
+    predictive_confidence = score_payload.get("predictive_confidence")
+    score_decision_action = score_payload.get("decision_action") or getattr(thesis, "score_decision_action", None) or "N/D"
+    score_quality_adjusted = bool(score_payload.get("quality_adjusted", False))
+    score_quality_adjusted_text = "Sí" if score_quality_adjusted else "No"
+    score_quality_gate_reason = score_payload.get("quality_gate_reason") or "N/D"
 
     lines: list[str] = [
         f"# Informe Research Core — {ticker}",
@@ -214,13 +285,18 @@ def build_research_report_markdown(
         "",
         "## 1. Resumen ejecutivo",
         f"- **Acción operativa:** {thesis.action}",
+        f"- **Acción del score:** {score_decision_action}",
         f"- **Detalle:** {thesis.action_detail}",
         f"- **Comparador:** {ticker_competidor or 'N/D'}",
-        f"- **Modelo:** {_score_attr(valuequant_score, 'model_version', 'N/D')}",
-        f"- **ValueQuant Score:** {_fmt_score(thesis.final_score)}",
+        f"- **Modelo:** {score_payload.get('model_version') or _score_attr(valuequant_score, 'model_version', 'N/D')}",
+        f"- **ValueQuant Score:** {_fmt_score(score_payload.get('final_score') if score_payload else thesis.final_score)}",
+        f"- **Score bruto antes de gates:** {_fmt_score(score_payload.get('raw_score'))}",
+        f"- **Ajuste por calidad:** {score_quality_adjusted_text}",
+        f"- **Motivo quality gate:** {score_quality_gate_reason}",
         f"- **Buffett Quality:** {_fmt_score(thesis.buffett_score)}",
-        f"- **Cobertura de datos:** {_fmt_pct(_score_attr(valuequant_score, 'data_coverage'))}",
-        f"- **Confianza operativa:** {_fmt_pct(_score_attr(valuequant_score, 'confidence'))}",
+        f"- **Cobertura de datos:** {_fmt_pct(score_payload.get('data_coverage') if score_payload else _score_attr(valuequant_score, 'data_coverage'))}",
+        f"- **Confianza operativa:** {_fmt_pct(score_payload.get('confidence') if score_payload else _score_attr(valuequant_score, 'confidence'))}",
+        f"- **Nivel de confianza:** {score_payload.get('confidence_label') or 'N/D'}",
         f"- **Confianza predictiva:** {_fmt_pct(predictive_confidence) if predictive_confidence is not None else 'Pendiente de backtesting'}",
         "",
         "## 2. Comparativa relativa",
@@ -246,13 +322,27 @@ def build_research_report_markdown(
         "### Sensibilidad crecimiento vs tasa de descuento",
         *(_markdown_table(sensitivity_rows) if sensitivity_rows else ["No hay datos suficientes para construir sensibilidad de valoración."]),
         "",
-        "## 4. Desglose ValueQuant Score",
+        "## 4. Resumen institucional del score",
+        f"- **Acción del score:** {score_decision_action}",
+        f"- **Veredicto:** {score_payload.get('verdict') or _score_attr(valuequant_score, 'verdict', 'N/D')}",
+        f"- **Score final:** {_fmt_score(score_payload.get('final_score'))}",
+        f"- **Score bruto:** {_fmt_score(score_payload.get('raw_score'))}",
+        f"- **Ajuste por calidad:** {score_quality_adjusted_text}",
+        f"- **Motivo quality gate:** {score_quality_gate_reason}",
+        "",
+        "### Top componentes",
+        *(_markdown_table(top_component_rows) if top_component_rows else ["No hay top components disponibles en el payload."]),
+        "",
+        "### Componentes más débiles",
+        *(_markdown_table(weak_component_rows) if weak_component_rows else ["No hay weakest components disponibles en el payload."]),
+        "",
+        "## 5. Desglose ValueQuant Score",
         *_markdown_table(component_rows),
         "",
-        "## 5. Snapshot financiero",
+        "## 6. Snapshot financiero",
         *_markdown_table(financial_rows),
         "",
-        "## 6. Tesis de inversión",
+        "## 7. Tesis de inversión",
     ]
 
     for section in thesis.sections:
@@ -262,14 +352,14 @@ def build_research_report_markdown(
         lines.append("")
 
     if thesis.red_flags:
-        lines.extend(["## 7. Banderas rojas", ""])
+        lines.extend(["## 8. Banderas rojas", ""])
         for flag in thesis.red_flags:
             lines.append(f"- {flag}")
         lines.append("")
 
     lines.extend(
         [
-            "## 8. Checklist antes de decidir",
+            "## 9. Checklist antes de decidir",
             "- Validar manualmente los datos financieros descargados.",
             "- Revisar supuestos de DCF: crecimiento, márgenes, reinversión y WACC.",
             "- Revisar la matriz de sensibilidad y confirmar que la tesis no depende solo del escenario optimista.",
@@ -278,7 +368,7 @@ def build_research_report_markdown(
             "- Revisar deuda, recompras, dilución y vencimientos relevantes.",
             "- Confirmar que no hay eventos corporativos o noticias recientes no incorporadas.",
             "",
-            "## 9. Limitaciones",
+            "## 10. Limitaciones",
             "- El score todavía requiere validación histórica formal.",
             "- La confianza predictiva debe interpretarse como pendiente si no hay backtesting suficiente.",
             "- La valoración depende de supuestos sensibles: crecimiento, WACC, márgenes, reinversión y múltiplos terminales.",
