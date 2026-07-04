@@ -57,6 +57,8 @@ class ValueQuantScore:
     raw_score: float | None = None
     quality_adjusted: bool = False
     quality_gate_reason: str | None = None
+    decision_action: str = "No clasificada"
+    decision_notes: list[str] = field(default_factory=list)
     confidence_label: str = "No clasificada"
     confidence_notes: list[str] = field(default_factory=list)
 
@@ -735,6 +737,46 @@ def _confidence_diagnostics(
 
 
 
+
+def _decision_guidance(
+    final_score: float,
+    confidence_label: str,
+    quality_adjusted: bool,
+    red_flags: list[str],
+    quality_gate_reason: str | None,
+) -> tuple[str, list[str]]:
+    """Genera una guía de workflow basada en score, confianza y riesgos."""
+
+    notes: list[str] = []
+
+    if red_flags:
+        action = "Revisar riesgos críticos antes de avanzar"
+        notes.append("Existen red flags: la prioridad es validar riesgo, no optimizar valoración.")
+    elif quality_adjusted:
+        action = "Revisión manual obligatoria"
+        notes.append("El score fue ajustado por quality gates; no debe usarse como ranking directo.")
+    elif confidence_label == "Baja":
+        action = "Esperar más datos"
+        notes.append("La confianza operativa es baja; conviene ampliar datos antes de comparar con otros activos.")
+    elif final_score >= 80 and confidence_label == "Alta":
+        action = "Candidato prioritario para análisis"
+        notes.append("Score alto con confianza alta; puede pasar a tesis, valoración y escenarios.")
+    elif final_score >= 65:
+        action = "Candidato con matices"
+        notes.append("Score atractivo, pero requiere revisar drivers, valoración y riesgos.")
+    elif final_score >= 50:
+        action = "Mantener en observación"
+        notes.append("Score neutral; priorizar seguimiento y comparación relativa.")
+    else:
+        action = "Baja prioridad"
+        notes.append("Score débil; no priorizar salvo catalizador externo claro.")
+
+    if quality_gate_reason:
+        notes.append(f"Motivo del ajuste de calidad: {quality_gate_reason}")
+
+    notes.append("La acción es una guía de workflow interno, no una recomendación de compra o venta.")
+    return action, notes
+
 def _apply_quality_gates(
     final_score: float,
     data_coverage: float,
@@ -860,6 +902,13 @@ def calcular_valuequant_score(
         confidence=confidence,
         components=components,
     )
+    decision_action, decision_notes = _decision_guidance(
+        final_score=final_score,
+        confidence_label=confidence_label,
+        quality_adjusted=bool(gate_reason),
+        red_flags=red_flags,
+        quality_gate_reason=gate_reason,
+    )
 
     return ValueQuantScore(
         final_score=round(final_score, 1),
@@ -869,6 +918,8 @@ def calcular_valuequant_score(
         raw_score=round(raw_score, 1),
         quality_adjusted=bool(gate_reason),
         quality_gate_reason=gate_reason,
+        decision_action=decision_action,
+        decision_notes=decision_notes,
         confidence_label=confidence_label,
         confidence_notes=confidence_notes,
         components=components,
@@ -917,6 +968,9 @@ def render_valuequant_score_card(score: ValueQuantScore) -> None:
                 <div style="font-size:1rem;color:#CBD5E1;margin-bottom:.35rem;">/100</div>
             </div>
             <div style="margin-top:.45rem;color:#F4F7FB;font-weight:750;">{score.verdict}</div>
+            <div style="margin-top:.2rem;color:#CBD5E1;font-size:.92rem;font-weight:650;">
+                Acción de análisis: {score.decision_action}
+            </div>
             <div style="margin-top:.25rem;color:#8C9AAF;font-size:.86rem;line-height:1.45;">
                 Cobertura de datos: {score.data_coverage * 100:.0f}% · Confianza operativa: {score.confidence * 100:.0f}%<br>
                 Nivel de confianza: {score.confidence_label}<br>
@@ -930,6 +984,13 @@ def render_valuequant_score_card(score: ValueQuantScore) -> None:
 
     with st.expander("Desglose del ValueQuant Score", expanded=False):
         st.dataframe(score.to_dataframe(), use_container_width=True, hide_index=True)
+
+        if score.decision_action or score.decision_notes:
+            st.markdown("**Guía de decisión**")
+            if score.decision_action:
+                st.markdown(f"- Acción: {score.decision_action}")
+            for item in score.decision_notes[:4]:
+                st.markdown(f"- {item}")
 
         if score.quality_gate_reason:
             st.markdown("**Ajuste por calidad de datos**")
