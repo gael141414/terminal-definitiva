@@ -83,6 +83,68 @@ class ValueQuantScore:
             )
         return pd.DataFrame(rows)
 
+    def top_components(self, limit: int = 3) -> list[dict[str, Any]]:
+        """Devuelve los bloques que más aportan al score final."""
+
+        safe_limit = max(0, int(limit))
+        ranked = sorted(self.components, key=lambda component: component.contribution, reverse=True)
+        return [
+            {
+                "name": component.name,
+                "score": round(component.score, 1),
+                "confidence": round(component.confidence, 2),
+                "weight": round(component.weight, 4),
+                "effective_weight": round(component.effective_weight, 4),
+                "contribution": round(component.contribution, 2),
+            }
+            for component in ranked[:safe_limit]
+        ]
+
+    def weakest_components(self, limit: int = 3) -> list[dict[str, Any]]:
+        """Devuelve los bloques más débiles por score y confianza."""
+
+        safe_limit = max(0, int(limit))
+        ranked = sorted(self.components, key=lambda component: (component.score, component.confidence))
+        return [
+            {
+                "name": component.name,
+                "score": round(component.score, 1),
+                "confidence": round(component.confidence, 2),
+                "penalty": round(component.penalty, 1),
+                "negatives": component.negatives[:3],
+                "red_flags": component.red_flags[:3],
+            }
+            for component in ranked[:safe_limit]
+        ]
+
+    def to_summary_payload(self, ticker: str | None = None) -> dict[str, Any]:
+        """Payload compacto para reports, watchlist, briefing y automatizaciones."""
+
+        return {
+            "ticker": ticker,
+            "model_version": self.model_version,
+            "final_score": round(self.final_score, 1),
+            "raw_score": round(self.raw_score, 1) if self.raw_score is not None else None,
+            "verdict": self.verdict,
+            "confidence": round(self.confidence, 2),
+            "data_coverage": round(self.data_coverage, 2),
+            "confidence_label": self.confidence_label,
+            "predictive_confidence": (
+                round(self.predictive_confidence, 2)
+                if self.predictive_confidence is not None
+                else None
+            ),
+            "quality_adjusted": bool(self.quality_adjusted),
+            "quality_gate_reason": self.quality_gate_reason,
+            "decision_action": self.decision_action,
+            "decision_notes": self.decision_notes[:5],
+            "top_components": self.top_components(limit=3),
+            "weakest_components": self.weakest_components(limit=3),
+            "red_flags": self.red_flags[:6],
+            "positives": self.positives[:6],
+            "negatives": self.negatives[:6],
+        }
+
 
 # =============================================================================
 # Helpers numéricos
