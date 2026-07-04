@@ -46,6 +46,14 @@ def _as_float(value: Any) -> float | None:
         return None
 
 
+def _as_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "sí", "si", "yes", "y"}
+    return bool(value)
+
+
 def _parse_datetime(value: Any) -> datetime | None:
     if not value or not isinstance(value, str):
         return None
@@ -101,6 +109,13 @@ def evaluate_watchlist_row(row: dict[str, Any]) -> list[WatchlistAlert]:
     action_research = str(row.get("Acción Research", "") or "").strip()
     valuation_regime = str(row.get("Régimen Valoración", "") or "").lower()
     source = str(row.get("Fuente", "") or "")
+    score_action = str(row.get("Acción Score", "") or "").strip()
+    score_action_lower = score_action.lower()
+    confidence = _as_float(row.get("Confianza"))
+    confidence_label = str(row.get("Nivel confianza", "") or "").strip().lower()
+    quality_adjusted = _as_bool(row.get("Ajuste Calidad"))
+    quality_gate = str(row.get("Quality Gate", "") or "").strip()
+    red_flags_count = int(_as_float(row.get("Red Flags")) or 0)
     last_analysis = row.get("Último análisis")
     days_old = _days_since(last_analysis)
 
@@ -119,6 +134,58 @@ def evaluate_watchlist_row(row: dict[str, Any]) -> list[WatchlistAlert]:
             )
         )
         return alerts
+
+    if red_flags_count > 0:
+        alerts.append(
+            _alert(
+                ticker=ticker,
+                priority="Alta",
+                category="Score",
+                title="Red flags en score",
+                detail=f"El último score guardado contiene {red_flags_count} red flag(s).",
+                action="Revisar riesgos antes de priorizar",
+                score=90,
+            )
+        )
+
+    if quality_adjusted:
+        alerts.append(
+            _alert(
+                ticker=ticker,
+                priority="Alta" if red_flags_count > 0 else "Media",
+                category="Score",
+                title="Score ajustado por quality gates",
+                detail=quality_gate if quality_gate and quality_gate != "-" else "El score fue limitado por calidad/cobertura/confianza de datos.",
+                action="Validar datos antes de comparar",
+                score=84,
+            )
+        )
+
+    if "prioritario" in score_action_lower and not quality_adjusted and red_flags_count == 0:
+        alerts.append(
+            _alert(
+                ticker=ticker,
+                priority="Alta",
+                category="Score",
+                title="Candidato prioritario por score",
+                detail=f"Acción institucional guardada: {score_action}.",
+                action="Pasar a tesis y valoración",
+                score=88,
+            )
+        )
+
+    if "esperar" in score_action_lower or confidence_label == "baja" or (confidence is not None and confidence < 0.55):
+        alerts.append(
+            _alert(
+                ticker=ticker,
+                priority="Baja",
+                category="Score",
+                title="Confianza limitada",
+                detail=f"Confianza operativa: {confidence:.0%}." if confidence is not None else "El score indica esperar más datos.",
+                action="Actualizar datos antes de decidir",
+                score=44,
+            )
+        )
 
     if target is not None and target > 0:
         distance_to_target = (current_price - target) / target
