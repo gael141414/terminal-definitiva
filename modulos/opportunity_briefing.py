@@ -48,13 +48,22 @@ _EXPORT_COLUMNS = [
     "Prioridad",
     "Ticker",
     "Score Oportunidad",
+    "Prioridad Score",
+    "Bucket Score",
     "Razón",
     "Acción sugerida",
+    "Acción Score",
     "Alerta principal",
     "Precio Actual",
     "Target",
     "Distancia",
     "ValueQuant",
+    "Score bruto",
+    "Confianza",
+    "Nivel confianza",
+    "Ajuste Calidad",
+    "Red Flags",
+    "Quality Gate",
     "Margen Seguridad",
     "Último análisis",
 ]
@@ -95,6 +104,92 @@ def _normalizar_item(item: Any) -> dict[str, Any]:
 def _extraer_last_analysis(item: dict[str, Any]) -> dict[str, Any]:
     analysis = item.get("last_analysis", {})
     return analysis if isinstance(analysis, dict) else {}
+
+
+def _as_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "sí", "si", "yes", "y"}
+    return bool(value)
+
+
+def _analysis_red_flags_count(analysis: dict[str, Any]) -> int:
+    explicit = analysis.get("score_red_flags_count")
+    try:
+        if explicit is not None:
+            return max(0, int(explicit))
+    except Exception:
+        pass
+
+    red_flags = analysis.get("red_flags")
+    if isinstance(red_flags, list):
+        return len(red_flags)
+    return 0
+
+
+def _score_decision_bucket(
+    *,
+    score_action: str,
+    quality_adjusted: bool,
+    red_flags_count: int,
+    confidence_label: str,
+    final_score: Any,
+) -> str:
+    action = str(score_action or "").lower()
+    confidence = str(confidence_label or "").lower()
+    score = _as_float(final_score, 0.0) or 0.0
+
+    if red_flags_count > 0:
+        return "🔴 Riesgo crítico"
+    if quality_adjusted:
+        return "🟠 Revisión manual"
+    if "prioritario" in action:
+        return "🟢 Prioritario"
+    if "matices" in action:
+        return "🟡 Candidato con matices"
+    if "esperar" in action or confidence == "baja":
+        return "⚪ Esperar datos"
+    if "baja prioridad" in action or score < 50:
+        return "⚫ Baja prioridad"
+    if score >= 65:
+        return "🟡 Candidato"
+    return "⚪ Observación"
+
+
+def _score_priority_score(row: dict[str, Any]) -> float:
+    final_score = _as_float(row.get("ValueQuant"), 0.0) or 0.0
+    raw_score = _as_float(row.get("Score bruto"), final_score) or final_score
+    confidence = _as_float(row.get("Confianza"), 0.0) or 0.0
+    margin = _as_float(row.get("Margen Seguridad"), 0.0) or 0.0
+    red_flags = _as_float(row.get("Red Flags"), 0.0) or 0.0
+    action = str(row.get("Acción Score", "") or "").lower()
+    quality_adjusted = _as_bool(row.get("Ajuste Calidad"))
+
+    score = final_score * 0.60 + raw_score * 0.18 + (confidence * 100.0) * 0.12
+
+    if margin > 0:
+        score += min(10.0, margin * 35.0)
+    elif margin < -0.10:
+        score -= min(10.0, abs(margin) * 25.0)
+
+    if "prioritario" in action:
+        score += 8.0
+    elif "matices" in action:
+        score += 3.0
+    elif "revisión manual" in action or "riesgos críticos" in action:
+        score -= 10.0
+    elif "esperar" in action:
+        score -= 8.0
+    elif "baja prioridad" in action:
+        score -= 15.0
+
+    if quality_adjusted:
+        score -= 7.0
+    if red_flags > 0:
+        score -= min(14.0, red_flags * 7.0)
+
+    return round(max(0.0, min(100.0, score)), 1)
 
 
 @st.cache_data(ttl=900, show_spinner=False)
@@ -143,24 +238,43 @@ def build_watchlist_dataframe() -> pd.DataFrame:
             distance = None
             distance_label = "Sin target"
 
-        rows.append(
-            {
-                "Ticker": ticker,
-                "Precio Actual": current_price,
-                "Var Diaria (%)": _as_float(price_data.get("change_pct"), 0.0) or 0.0,
-                "Precio Objetivo": target if target > 0 else "-",
-                "Distancia Num": distance,
-                "Distancia al Target": distance_label,
-                "Acción Research": analysis.get("action", "-"),
-                "ValueQuant": analysis.get("valuequant_score"),
-                "Buffett": analysis.get("buffett_score"),
-                "Margen Seguridad": analysis.get("margin_of_safety"),
-                "Régimen Valoración": analysis.get("valuation_regime", "-"),
-                "Comparador": analysis.get("competitor", "-"),
-                "Fuente": item.get("source", "Manual"),
-                "Último análisis": item.get("last_saved_at", "-"),
-            }
-        )
+        score_action = analysis.get("score_decision_action") or analysis.get("decision_action") or "-"
+        quality_adjusted = _as_bool(analysis.get("score_quality_adjusted", False))
+        red_flags_count = _analysis_red_flags_count(analysis)
+        confidence_label = analysis.get("score_confidence_label") or analysis.get("confidence_label") or "-"
+
+        record = {
+            "Ticker": ticker,
+            "Precio Actual": current_price,
+            "Var Diaria (%)": _as_float(price_data.get("change_pct"), 0.0) or 0.0,
+            "Precio Objetivo": target if target > 0 else "-",
+            "Distancia Num": distance,
+            "Distancia al Target": distance_label,
+            "Acción Research": analysis.get("action", "-"),
+            "Acción Score": score_action,
+            "Bucket Score": _score_decision_bucket(
+                score_action=score_action,
+                quality_adjusted=quality_adjusted,
+                red_flags_count=red_flags_count,
+                confidence_label=str(confidence_label),
+                final_score=analysis.get("valuequant_score"),
+            ),
+            "ValueQuant": analysis.get("valuequant_score"),
+            "Score bruto": analysis.get("score_raw_score"),
+            "Buffett": analysis.get("buffett_score"),
+            "Confianza": analysis.get("confidence"),
+            "Nivel confianza": confidence_label,
+            "Ajuste Calidad": quality_adjusted,
+            "Quality Gate": analysis.get("score_quality_gate_reason") or "-",
+            "Red Flags": red_flags_count,
+            "Margen Seguridad": analysis.get("margin_of_safety"),
+            "Régimen Valoración": analysis.get("valuation_regime", "-"),
+            "Comparador": analysis.get("competitor", "-"),
+            "Fuente": item.get("source", "Manual"),
+            "Último análisis": item.get("last_saved_at", "-"),
+        }
+        record["Prioridad Score"] = _score_priority_score(record)
+        rows.append(record)
 
     return pd.DataFrame(rows)
 
@@ -195,9 +309,32 @@ def _classify_opportunity(row: dict[str, Any], alerts: pd.DataFrame) -> tuple[st
     margin = _as_float(row.get("Margen Seguridad"), None)
     action = str(row.get("Acción Research", "") or "").lower()
     regime = str(row.get("Régimen Valoración", "") or "").lower()
+    score_action = str(row.get("Acción Score", "") or "").lower()
+    confidence = _as_float(row.get("Confianza"), None)
+    confidence_label = str(row.get("Nivel confianza", "") or "").lower()
+    quality_adjusted = _as_bool(row.get("Ajuste Calidad"))
+    quality_gate = str(row.get("Quality Gate", "") or "").strip()
+    red_flags = int(_as_float(row.get("Red Flags"), 0.0) or 0)
+    priority_score = _as_float(row.get("Prioridad Score"), None)
 
     if current_price <= 0:
         return "Recalcular análisis", "No hay precio actual fiable; revisar datos antes de decidir."
+
+    if red_flags > 0:
+        return "Recalcular análisis", f"El score guardado contiene {red_flags} red flag(s); revisar riesgos antes de priorizar."
+
+    if "riesgos críticos" in score_action or "revisión manual" in score_action:
+        return "Recalcular análisis", "La acción institucional del score exige revisión manual antes de decidir."
+
+    if quality_adjusted:
+        detail = quality_gate if quality_gate and quality_gate != "-" else "El score fue ajustado por quality gates."
+        return "Recalcular análisis", detail
+
+    if "baja prioridad" in score_action:
+        return "Descartar por ahora", "La acción institucional del score marca baja prioridad operativa."
+
+    if "esperar" in score_action or confidence_label == "baja" or (confidence is not None and confidence < 0.55):
+        return "Recalcular análisis", "La confianza del score es limitada; actualizar datos antes de priorizar."
 
     if "evitar" in action or (vq is not None and vq < 45):
         return "Descartar por ahora", "La tesis guardada o el score no justifican priorizar esta oportunidad."
@@ -209,6 +346,15 @@ def _classify_opportunity(row: dict[str, Any], alerts: pd.DataFrame) -> tuple[st
         vq is not None and vq >= 65 and margin is not None and margin >= 0
     ):
         return "Comprar / revisar hoy", "Score y margen de seguridad justifican revisar la entrada con prioridad."
+
+    if "prioritario" in score_action and margin is not None and margin >= 0:
+        return "Comprar / revisar hoy", "Score institucional prioritario, sin gates activos y con margen de seguridad no negativo."
+
+    if "matices" in score_action and margin is not None and margin >= 0.05:
+        return "Comprar / revisar hoy", "Score atractivo con matices y margen de seguridad suficiente para revisión prioritaria."
+
+    if priority_score is not None and priority_score >= 75 and margin is not None and margin >= 0:
+        return "Comprar / revisar hoy", "Ranking score-powered alto con margen de seguridad positivo."
 
     if target is not None and target > 0 and current_price > 0:
         distance = (current_price - target) / target
@@ -235,12 +381,25 @@ def _opportunity_score(row: dict[str, Any], alerts: pd.DataFrame) -> int:
         priority_bonus = max(_PRIORITY_SCORE.get(str(p), 0) for p in alerts["Prioridad"].unique())
 
     vq = _as_float(row.get("ValueQuant"), None)
+    raw_score = _as_float(row.get("Score bruto"), None)
+    score_priority = _as_float(row.get("Prioridad Score"), None)
+    confidence = _as_float(row.get("Confianza"), None)
     margin = _as_float(row.get("Margen Seguridad"), None)
     distance = _as_float(row.get("Distancia Num"), None)
+    red_flags = int(_as_float(row.get("Red Flags"), 0.0) or 0)
+    quality_adjusted = _as_bool(row.get("Ajuste Calidad"))
+    score_action = str(row.get("Acción Score", "") or "").lower()
 
     score = alert_score + priority_bonus
+
     if vq is not None:
         score += max(-15, min(25, int((vq - 50) * 0.5)))
+    if raw_score is not None and vq is not None and raw_score > vq:
+        score += min(6, int((raw_score - vq) * 0.15))
+    if score_priority is not None:
+        score += max(-10, min(15, int((score_priority - 50) * 0.25)))
+    if confidence is not None:
+        score += max(-8, min(8, int((confidence - 0.60) * 25)))
     if margin is not None:
         score += max(-25, min(25, int(margin * 100)))
     if distance is not None:
@@ -252,6 +411,20 @@ def _opportunity_score(row: dict[str, Any], alerts: pd.DataFrame) -> int:
             score += 6
         elif distance > 0.25:
             score -= 10
+
+    if "prioritario" in score_action:
+        score += 8
+    elif "matices" in score_action:
+        score += 3
+    elif "esperar" in score_action:
+        score -= 8
+    elif "baja prioridad" in score_action:
+        score -= 12
+
+    if quality_adjusted:
+        score -= 12
+    if red_flags > 0:
+        score -= min(20, red_flags * 10)
 
     return int(max(0, min(100, score)))
 
@@ -281,11 +454,20 @@ def build_opportunity_briefing() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFra
                 "Score Oportunidad": score,
                 "Razón": reason,
                 "Acción sugerida": top_alert.get("Acción sugerida", "Mantener seguimiento"),
+                "Acción Score": row_dict.get("Acción Score"),
+                "Bucket Score": row_dict.get("Bucket Score"),
                 "Alerta principal": top_alert.get("Alerta", "Sin alerta relevante"),
                 "Precio Actual": row_dict.get("Precio Actual"),
                 "Target": row_dict.get("Precio Objetivo"),
                 "Distancia": row_dict.get("Distancia al Target"),
                 "ValueQuant": row_dict.get("ValueQuant"),
+                "Score bruto": row_dict.get("Score bruto"),
+                "Prioridad Score": row_dict.get("Prioridad Score"),
+                "Confianza": row_dict.get("Confianza"),
+                "Nivel confianza": row_dict.get("Nivel confianza"),
+                "Ajuste Calidad": row_dict.get("Ajuste Calidad"),
+                "Red Flags": row_dict.get("Red Flags"),
+                "Quality Gate": row_dict.get("Quality Gate"),
                 "Margen Seguridad": row_dict.get("Margen Seguridad"),
                 "Acción Research": row_dict.get("Acción Research"),
                 "Régimen": row_dict.get("Régimen Valoración"),
@@ -321,10 +503,12 @@ def _fmt_pct(value: Any) -> str:
 def _format_export_value(column: str, value: Any) -> str:
     if column in {"Precio Actual", "Target"}:
         return _fmt_money(value)
-    if column in {"ValueQuant", "Score Oportunidad"}:
+    if column in {"ValueQuant", "Score Oportunidad", "Score bruto", "Prioridad Score"}:
         return _fmt_score(value)
-    if column == "Margen Seguridad":
+    if column in {"Margen Seguridad", "Confianza"}:
         return _fmt_pct(value)
+    if column == "Ajuste Calidad":
+        return "Sí" if _as_bool(value) else "No"
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return "-"
     return str(value)
@@ -356,6 +540,10 @@ def _section_rows(df: pd.DataFrame, bucket: str) -> list[list[str]]:
                 _format_export_value("Target", row_dict.get("Target")),
                 _format_export_value("Distancia", row_dict.get("Distancia")),
                 _format_export_value("ValueQuant", row_dict.get("ValueQuant")),
+                _format_export_value("Prioridad Score", row_dict.get("Prioridad Score")),
+                _format_export_value("Acción Score", row_dict.get("Acción Score")),
+                _format_export_value("Confianza", row_dict.get("Confianza")),
+                _format_export_value("Red Flags", row_dict.get("Red Flags")),
                 _format_export_value("Margen Seguridad", row_dict.get("Margen Seguridad")),
                 _format_export_value("Razón", row_dict.get("Razón")),
             ]
@@ -393,6 +581,8 @@ def build_opportunity_briefing_markdown(
                 ["Vigilar caída", int((df_briefing["Prioridad"] == "Vigilar caída").sum()) if not df_briefing.empty else 0],
                 ["Recalcular análisis", int((df_briefing["Prioridad"] == "Recalcular análisis").sum()) if not df_briefing.empty else 0],
                 ["Alertas altas", summary_alerts.get("Alta", 0)],
+                ["Activos con quality gate", int((df_briefing["Ajuste Calidad"] == True).sum()) if not df_briefing.empty and "Ajuste Calidad" in df_briefing else 0],
+                ["Activos con red flags", int((df_briefing["Red Flags"].fillna(0).astype(float) > 0).sum()) if not df_briefing.empty and "Red Flags" in df_briefing else 0],
             ],
         ),
     ]
@@ -404,12 +594,15 @@ def build_opportunity_briefing_markdown(
                 "",
                 f"**{top.get('Ticker', '-')}** — {top.get('Prioridad', '-')}  ",
                 f"Score oportunidad: **{top.get('Score Oportunidad', '-')}**  ",
+                f"Prioridad score: **{top.get('Prioridad Score', '-')}**  ",
+                f"Acción Score: {top.get('Acción Score', '-')}  ",
+                f"Confianza: {_format_export_value('Confianza', top.get('Confianza'))} · Red flags: {top.get('Red Flags', 0)}  ",
                 f"Razón: {top.get('Razón', '-')}",
                 "",
             ]
         )
 
-    section_headers = ["Ticker", "Score", "Precio", "Target", "Distancia", "VQ", "Margen", "Razón"]
+    section_headers = ["Ticker", "Score", "Precio", "Target", "Distancia", "VQ", "P.Score", "Acción Score", "Conf.", "RF", "Margen", "Razón"]
     for bucket in _BUCKET_ORDER:
         if bucket == "Mantener seguimiento":
             title = "Mantener seguimiento"
@@ -714,6 +907,9 @@ def _render_bucket(df: pd.DataFrame, bucket: str, empty_message: str) -> None:
                 "Precio Actual": lambda x: f"${x:,.2f}" if isinstance(x, (int, float)) and x > 0 else "-",
                 "Target": lambda x: f"${x:,.2f}" if isinstance(x, (int, float)) and x > 0 else "-",
                 "ValueQuant": lambda x: f"{x:.1f}" if isinstance(x, (int, float)) else "-",
+                "Score bruto": lambda x: f"{x:.1f}" if isinstance(x, (int, float)) else "-",
+                "Prioridad Score": lambda x: f"{x:.1f}" if isinstance(x, (int, float)) else "-",
+                "Confianza": lambda x: f"{x:.0%}" if isinstance(x, (int, float)) else "-",
                 "Margen Seguridad": lambda x: f"{x:+.1%}" if isinstance(x, (int, float)) else "-",
             }
         ),
@@ -792,6 +988,9 @@ def render_opportunity_briefing() -> None:
                     "Precio Actual": lambda x: f"${x:,.2f}" if isinstance(x, (int, float)) and x > 0 else "-",
                     "Target": lambda x: f"${x:,.2f}" if isinstance(x, (int, float)) and x > 0 else "-",
                     "ValueQuant": lambda x: f"{x:.1f}" if isinstance(x, (int, float)) else "-",
+                    "Score bruto": lambda x: f"{x:.1f}" if isinstance(x, (int, float)) else "-",
+                    "Prioridad Score": lambda x: f"{x:.1f}" if isinstance(x, (int, float)) else "-",
+                    "Confianza": lambda x: f"{x:.0%}" if isinstance(x, (int, float)) else "-",
                     "Margen Seguridad": lambda x: f"{x:+.1%}" if isinstance(x, (int, float)) else "-",
                 }
             ),

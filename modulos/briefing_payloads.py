@@ -98,6 +98,9 @@ def build_compact_briefing_text(
                 "",
                 f"Prioridad: {top.get('Ticker', '-')} — {top.get('Prioridad', '-')}",
                 f"Score oportunidad: {top.get('Score Oportunidad', '-')}",
+                f"Prioridad score: {_fmt_score(top.get('Prioridad Score'))}",
+                f"Acción score: {_safe_text(top.get('Acción Score'))}",
+                f"Confianza: {_fmt_pct(top.get('Confianza'))} | Red flags: {_safe_text(top.get('Red Flags'), '0')}",
                 f"Razón: {_safe_text(top.get('Razón'))}",
             ]
         )
@@ -116,7 +119,9 @@ def build_compact_briefing_text(
                 f"score {_fmt_score(r.get('Score Oportunidad'))}, "
                 f"precio {_fmt_money(r.get('Precio Actual'))}, "
                 f"target {_fmt_money(r.get('Target'))}, "
-                f"VQ {_fmt_score(r.get('ValueQuant'))}."
+                f"VQ {_fmt_score(r.get('ValueQuant'))}, "
+                f"P.Score {_fmt_score(r.get('Prioridad Score'))}, "
+                f"acción score {_safe_text(r.get('Acción Score'))}."
             )
 
     add_section("✅ Revisar hoy", "Comprar / revisar hoy")
@@ -154,7 +159,7 @@ def build_email_text(
 def _email_rows(df_briefing: pd.DataFrame, bucket_name: str, limit: int = 10) -> str:
     subset = _bucket(df_briefing, bucket_name, limit)
     if subset.empty:
-        return "<tr><td colspan='7'>Sin elementos.</td></tr>"
+        return "<tr><td colspan='10'>Sin elementos.</td></tr>"
     rows: list[str] = []
     for _, row in subset.iterrows():
         r = row.to_dict()
@@ -195,7 +200,7 @@ def build_email_html(
             f"<p>{escape(_safe_text(top.get('Razón')))}</p>"
         )
 
-    table_header = "<thead><tr><th>Ticker</th><th>Score</th><th>Precio</th><th>Target</th><th>VQ</th><th>Margen</th><th>Razón</th></tr></thead>"
+    table_header = "<thead><tr><th>Ticker</th><th>Score</th><th>Precio</th><th>Target</th><th>VQ</th><th>P.Score</th><th>Acción Score</th><th>Conf.</th><th>RF</th><th>Margen</th><th>Razón</th></tr></thead>"
 
     return f"""<!doctype html>
 <html lang="es">
