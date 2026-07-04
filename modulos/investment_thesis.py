@@ -65,6 +65,14 @@ class InvestmentThesis:
     negatives: list[str] = field(default_factory=list)
     red_flags: list[str] = field(default_factory=list)
     sections: list[ThesisSection] = field(default_factory=list)
+    score_payload: dict[str, Any] = field(default_factory=dict)
+    score_decision_action: str | None = None
+    score_decision_notes: list[str] = field(default_factory=list)
+    score_quality_adjusted: bool = False
+    score_quality_gate_reason: str | None = None
+    score_confidence_label: str | None = None
+    score_top_components: list[dict[str, Any]] = field(default_factory=list)
+    score_weakest_components: list[dict[str, Any]] = field(default_factory=list)
 
 
 def _as_float(value: Any) -> float | None:
@@ -83,6 +91,42 @@ def _score_attr(valuequant_score: Any, attr: str, default: Any = None) -> Any:
     if valuequant_score is None:
         return default
     return getattr(valuequant_score, attr, default)
+
+
+def _score_summary_payload(valuequant_score: Any, ticker: str) -> dict[str, Any]:
+    """Obtiene el payload estructurado del score con fallback defensivo."""
+
+    if valuequant_score is None:
+        return {}
+
+    builder = getattr(valuequant_score, "to_summary_payload", None)
+    if callable(builder):
+        try:
+            payload = builder(ticker)
+            if isinstance(payload, dict):
+                return payload
+        except Exception:
+            pass
+
+    return {
+        "ticker": ticker,
+        "model_version": _score_attr(valuequant_score, "model_version"),
+        "final_score": _as_float(_score_attr(valuequant_score, "final_score")),
+        "raw_score": _as_float(_score_attr(valuequant_score, "raw_score")),
+        "verdict": _score_attr(valuequant_score, "verdict"),
+        "confidence": _as_float(_score_attr(valuequant_score, "confidence")),
+        "data_coverage": _as_float(_score_attr(valuequant_score, "data_coverage")),
+        "confidence_label": _score_attr(valuequant_score, "confidence_label"),
+        "quality_adjusted": bool(_score_attr(valuequant_score, "quality_adjusted", False)),
+        "quality_gate_reason": _score_attr(valuequant_score, "quality_gate_reason"),
+        "decision_action": _score_attr(valuequant_score, "decision_action"),
+        "decision_notes": list(_score_attr(valuequant_score, "decision_notes", []) or []),
+        "top_components": [],
+        "weakest_components": [],
+        "red_flags": list(_score_attr(valuequant_score, "red_flags", []) or []),
+        "positives": list(_score_attr(valuequant_score, "positives", []) or []),
+        "negatives": list(_score_attr(valuequant_score, "negatives", []) or []),
+    }
 
 
 def _component_score(valuequant_score: Any, component_name: str) -> float | None:
@@ -342,16 +386,29 @@ def build_investment_thesis(
 ) -> InvestmentThesis:
     """Construye una tesis estructurada desde los outputs del análisis."""
 
-    final_score = _as_float(_score_attr(valuequant_score, "final_score"))
+    score_payload = _score_summary_payload(valuequant_score, ticker)
+
+    final_score = _as_float(score_payload.get("final_score"))
+    if final_score is None:
+        final_score = _as_float(_score_attr(valuequant_score, "final_score"))
+
     quality_score = _component_score(valuequant_score, "calidad")
     valuation_score = _component_score(valuequant_score, "valoración")
     risk_score = _component_score(valuequant_score, "riesgo")
     growth_score = _component_score(valuequant_score, "crecimiento")
     buffett_score = _as_float(nota_buffett)
 
-    positives = list(_score_attr(valuequant_score, "positives", []) or [])[:6]
-    negatives = list(_score_attr(valuequant_score, "negatives", []) or [])[:6]
-    red_flags = list(_score_attr(valuequant_score, "red_flags", []) or [])[:6]
+    positives = list(score_payload.get("positives") or _score_attr(valuequant_score, "positives", []) or [])[:6]
+    negatives = list(score_payload.get("negatives") or _score_attr(valuequant_score, "negatives", []) or [])[:6]
+    red_flags = list(score_payload.get("red_flags") or _score_attr(valuequant_score, "red_flags", []) or [])[:6]
+
+    score_decision_action = str(score_payload.get("decision_action") or "").strip() or None
+    score_decision_notes = list(score_payload.get("decision_notes") or [])[:5]
+    score_quality_adjusted = bool(score_payload.get("quality_adjusted", False))
+    score_quality_gate_reason = score_payload.get("quality_gate_reason")
+    score_confidence_label = score_payload.get("confidence_label")
+    score_top_components = list(score_payload.get("top_components") or [])[:3]
+    score_weakest_components = list(score_payload.get("weakest_components") or [])[:3]
 
     valuation_inputs = _extract_valuation_inputs(res_val)
     current_price = valuation_inputs["current_price"]
@@ -386,6 +443,24 @@ def build_investment_thesis(
     valuation_notes: list[str] = []
     entry_conditions: list[str] = []
     exit_conditions: list[str] = []
+    score_notes: list[str] = []
+
+    if score_decision_action:
+        score_notes.append(f"Acción del score: {score_decision_action}.")
+    if score_confidence_label:
+        score_notes.append(f"Nivel de confianza del score: {score_confidence_label}.")
+    if score_quality_adjusted:
+        score_notes.append("El score fue ajustado por quality gates; requiere lectura manual antes de usarlo como ranking.")
+    if score_quality_gate_reason:
+        score_notes.append(f"Motivo del quality gate: {score_quality_gate_reason}")
+    if score_top_components:
+        top_names = ", ".join(str(item.get("name", "N/D")) for item in score_top_components)
+        score_notes.append(f"Bloques que más sostienen el score: {top_names}.")
+    if score_weakest_components:
+        weak_names = ", ".join(str(item.get("name", "N/D")) for item in score_weakest_components)
+        score_notes.append(f"Bloques más débiles a revisar: {weak_names}.")
+    if score_decision_notes:
+        score_notes.extend(score_decision_notes[:2])
 
     if quality_score is not None:
         bull_case.append("Calidad fundamental elevada." if quality_score >= 75 else "Calidad fundamental mejorable; requiere validación manual.")
@@ -446,6 +521,10 @@ def build_investment_thesis(
     )
 
     sections = [
+        ThesisSection(
+            "Lectura del score institucional",
+            score_notes or ["No hay payload estructurado suficiente del score para generar lectura institucional."],
+        ),
         ThesisSection("Tesis alcista", bull_case or ["No hay suficientes argumentos alcistas automáticos."]),
         ThesisSection("Tesis bajista / riesgos", bear_case or ["No se han detectado riesgos destacados en el resumen automático."]),
         ThesisSection("Lectura de valoración", valuation_notes),
@@ -481,6 +560,14 @@ def build_investment_thesis(
         negatives=negatives,
         red_flags=red_flags,
         sections=sections,
+        score_payload=score_payload,
+        score_decision_action=score_decision_action,
+        score_decision_notes=score_decision_notes,
+        score_quality_adjusted=score_quality_adjusted,
+        score_quality_gate_reason=score_quality_gate_reason,
+        score_confidence_label=score_confidence_label,
+        score_top_components=score_top_components,
+        score_weakest_components=score_weakest_components,
     )
 
 
@@ -495,6 +582,12 @@ def thesis_to_markdown(thesis: InvestmentThesis, competitor: str | None = None) 
         f"**Acción operativa:** {thesis.action}",
         f"**Detalle:** {thesis.action_detail}",
     ]
+    if thesis.score_decision_action:
+        lines.append(f"**Acción del score:** {thesis.score_decision_action}")
+    if thesis.score_quality_adjusted:
+        lines.append("**Ajuste por calidad:** Sí")
+    if thesis.score_quality_gate_reason:
+        lines.append(f"**Motivo quality gate:** {thesis.score_quality_gate_reason}")
     if competitor:
         lines.append(f"**Comparador:** {competitor}")
     lines.extend(
