@@ -291,6 +291,176 @@ def latest_snapshots() -> list[dict[str, Any]]:
     return latest
 
 
+def _first_not_none(*values: Any) -> Any:
+    for value in values:
+        if value is not None:
+            return value
+    return None
+
+
+def _parse_saved_at(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed
+    except Exception:
+        return None
+
+
+def _score_payload_from_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
+    payload = snapshot.get("score_payload", {})
+    return payload if isinstance(payload, dict) else {}
+
+
+def _snapshot_red_flags_count(snapshot: dict[str, Any]) -> int:
+    explicit = snapshot.get("score_red_flags_count")
+    try:
+        if explicit is not None:
+            return max(0, int(explicit))
+    except Exception:
+        pass
+
+    payload = _score_payload_from_snapshot(snapshot)
+    payload_flags = payload.get("red_flags")
+    if isinstance(payload_flags, list):
+        return len(payload_flags)
+
+    thesis_flags = snapshot.get("red_flags")
+    if isinstance(thesis_flags, list):
+        return len(thesis_flags)
+
+    return 0
+
+
+def score_history_for_ticker(ticker: str, *, limit: int | None = None) -> pd.DataFrame:
+    """Devuelve histórico normalizado de score para un ticker.
+
+    La salida está ordenada cronológicamente de antiguo a reciente para facilitar
+    gráficos de evolución temporal.
+    """
+
+    ticker = str(ticker or "").upper().strip()
+    if not ticker:
+        return pd.DataFrame()
+
+    history = load_saved_analyses().get(ticker, [])
+    if not isinstance(history, list):
+        return pd.DataFrame()
+
+    rows: list[dict[str, Any]] = []
+    for snapshot in history:
+        if not isinstance(snapshot, dict):
+            continue
+
+        payload = _score_payload_from_snapshot(snapshot)
+        saved_at = snapshot.get("saved_at")
+        parsed_at = _parse_saved_at(saved_at)
+
+        row = {
+            "Ticker": str(snapshot.get("ticker") or ticker).upper(),
+            "Fecha": parsed_at or saved_at,
+            "Guardado": saved_at,
+            "VQ Score": _as_float(_first_not_none(snapshot.get("valuequant_score"), payload.get("final_score"))),
+            "Score bruto": _as_float(_first_not_none(snapshot.get("score_raw_score"), payload.get("raw_score"))),
+            "Buffett": _as_float(snapshot.get("buffett_score")),
+            "Calidad": _as_float(snapshot.get("quality_score")),
+            "Valoración": _as_float(snapshot.get("valuation_score")),
+            "Riesgo": _as_float(snapshot.get("risk_score")),
+            "Crecimiento": _as_float(snapshot.get("growth_score")),
+            "Margen Seguridad": _as_float(snapshot.get("margin_of_safety")),
+            "Confianza": _as_float(_first_not_none(snapshot.get("confidence"), payload.get("confidence"))),
+            "Cobertura": _as_float(_first_not_none(snapshot.get("data_coverage"), payload.get("data_coverage"))),
+            "Confianza Predictiva": _as_float(
+                _first_not_none(snapshot.get("predictive_confidence"), payload.get("predictive_confidence"))
+            ),
+            "Nivel confianza": _first_not_none(snapshot.get("score_confidence_label"), payload.get("confidence_label"), "-"),
+            "Acción Score": _first_not_none(snapshot.get("score_decision_action"), payload.get("decision_action"), "-"),
+            "Acción Research": snapshot.get("action", "-"),
+            "Ajuste Calidad": bool(_first_not_none(snapshot.get("score_quality_adjusted"), payload.get("quality_adjusted"), False)),
+            "Quality Gate": _first_not_none(snapshot.get("score_quality_gate_reason"), payload.get("quality_gate_reason"), "-"),
+            "Red Flags": _snapshot_red_flags_count(snapshot),
+            "Régimen": snapshot.get("valuation_regime", "-"),
+            "Target": _as_float(snapshot.get("target")),
+            "_sort_ts": parsed_at.timestamp() if parsed_at else 0.0,
+        }
+        rows.append(row)
+
+    if not rows:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(rows).sort_values("_sort_ts", ascending=True).drop(columns=["_sort_ts"]).reset_index(drop=True)
+    if limit is not None and limit > 0:
+        df = df.tail(limit).reset_index(drop=True)
+    return df
+
+
+def score_evolution_summary(ticker: str) -> dict[str, Any]:
+    """Resumen de evolución temporal del score para un ticker."""
+
+    df = score_history_for_ticker(ticker)
+    ticker = str(ticker or "").upper().strip()
+
+    if df.empty:
+        return {
+            "ticker": ticker,
+            "observations": 0,
+            "trend_label": "Sin histórico",
+            "trend_detail": "No hay análisis guardados para calcular evolución temporal.",
+        }
+
+    latest = df.iloc[-1].to_dict()
+    previous = df.iloc[-2].to_dict() if len(df) >= 2 else {}
+
+    latest_score = _as_float(latest.get("VQ Score"))
+    previous_score = _as_float(previous.get("VQ Score")) if previous else None
+    latest_margin = _as_float(latest.get("Margen Seguridad"))
+    previous_margin = _as_float(previous.get("Margen Seguridad")) if previous else None
+
+    delta_score = (
+        round(latest_score - previous_score, 2)
+        if latest_score is not None and previous_score is not None
+        else None
+    )
+    delta_margin = (
+        round(latest_margin - previous_margin, 4)
+        if latest_margin is not None and previous_margin is not None
+        else None
+    )
+
+    if delta_score is None:
+        trend_label = "Sin histórico suficiente"
+        trend_detail = "Solo hay un análisis guardado; aún no puede calcularse tendencia."
+    elif delta_score >= 2:
+        trend_label = "Mejora"
+        trend_detail = f"El score ha subido {delta_score:+.1f} puntos frente al análisis anterior."
+    elif delta_score <= -2:
+        trend_label = "Deterioro"
+        trend_detail = f"El score ha caído {delta_score:+.1f} puntos frente al análisis anterior."
+    else:
+        trend_label = "Estable"
+        trend_detail = f"El score se mantiene estable ({delta_score:+.1f} puntos)."
+
+    return {
+        "ticker": ticker,
+        "observations": int(len(df)),
+        "latest_score": latest_score,
+        "previous_score": previous_score,
+        "delta_score": delta_score,
+        "latest_margin": latest_margin,
+        "delta_margin": delta_margin,
+        "latest_confidence": _as_float(latest.get("Confianza")),
+        "latest_action_score": latest.get("Acción Score"),
+        "latest_quality_gate": latest.get("Quality Gate"),
+        "latest_red_flags": int(_as_float(latest.get("Red Flags")) or 0),
+        "latest_saved_at": latest.get("Guardado"),
+        "trend_label": trend_label,
+        "trend_detail": trend_detail,
+    }
+
+
 def render_save_to_watchlist_panel(
     *,
     ticker: str,
@@ -375,7 +545,89 @@ def render_saved_research_dashboard() -> None:
 
     tickers = [str(row.get("ticker")) for row in rows if row.get("ticker")]
     selected = st.selectbox("Detalle histórico por ticker", tickers)
-    history = load_saved_analyses().get(selected, [])
-    if history:
-        st.markdown(f"#### Histórico — {selected}")
-        st.dataframe(pd.DataFrame(history), use_container_width=True, hide_index=True)
+    history_df = score_history_for_ticker(selected)
+    summary = score_evolution_summary(selected)
+
+    if history_df.empty:
+        st.info("No hay histórico normalizado disponible para este ticker.")
+        return
+
+    st.markdown(f"#### Evolución temporal — {selected}")
+
+    e1, e2, e3, e4, e5 = st.columns(5)
+    e1.metric("Observaciones", summary.get("observations", 0))
+    e2.metric(
+        "Último VQ",
+        _fmt_score(summary.get("latest_score")),
+        f"{summary.get('delta_score'):+.1f}" if isinstance(summary.get("delta_score"), (int, float)) else None,
+    )
+    e3.metric(
+        "Margen",
+        _fmt_pct(summary.get("latest_margin")),
+        f"{summary.get('delta_margin'):+.1%}" if isinstance(summary.get("delta_margin"), (int, float)) else None,
+    )
+    e4.metric("Confianza", _fmt_pct(summary.get("latest_confidence")))
+    e5.metric("Red Flags", summary.get("latest_red_flags", 0))
+
+    st.info(f"**Tendencia:** {summary.get('trend_label')} — {summary.get('trend_detail')}")
+
+    quality_gate = summary.get("latest_quality_gate")
+    if quality_gate and quality_gate != "-":
+        st.warning(f"Quality gate activo en último análisis: {quality_gate}")
+
+    chart_df = history_df.copy()
+    chart_cols: list[str] = []
+    for col in ("VQ Score", "Score bruto", "Buffett"):
+        if col in chart_df.columns:
+            chart_df[col] = pd.to_numeric(chart_df[col], errors="coerce")
+            if chart_df[col].notna().any():
+                chart_cols.append(col)
+
+    if "Confianza" in chart_df.columns:
+        chart_df["Confianza (%)"] = pd.to_numeric(chart_df["Confianza"], errors="coerce") * 100
+        if chart_df["Confianza (%)"].notna().any():
+            chart_cols.append("Confianza (%)")
+
+    if len(chart_df) >= 2 and chart_cols:
+        chart_df["Fecha"] = pd.to_datetime(chart_df["Guardado"], errors="coerce")
+        chart_ready = chart_df.dropna(subset=["Fecha"]).set_index("Fecha")[chart_cols]
+        if not chart_ready.empty:
+            st.line_chart(chart_ready)
+
+    display_cols = [
+        "Guardado",
+        "VQ Score",
+        "Score bruto",
+        "Buffett",
+        "Margen Seguridad",
+        "Confianza",
+        "Cobertura",
+        "Nivel confianza",
+        "Acción Score",
+        "Ajuste Calidad",
+        "Quality Gate",
+        "Red Flags",
+        "Régimen",
+        "Target",
+    ]
+    display_cols = [col for col in display_cols if col in history_df.columns]
+
+    st.dataframe(
+        history_df[display_cols].style.format(
+            {
+                "VQ Score": lambda x: f"{x:.1f}" if isinstance(x, (int, float)) else "N/D",
+                "Score bruto": lambda x: f"{x:.1f}" if isinstance(x, (int, float)) else "N/D",
+                "Buffett": lambda x: f"{x:.1f}" if isinstance(x, (int, float)) else "N/D",
+                "Margen Seguridad": lambda x: f"{x:+.1%}" if isinstance(x, (int, float)) else "N/D",
+                "Confianza": lambda x: f"{x:.0%}" if isinstance(x, (int, float)) else "N/D",
+                "Cobertura": lambda x: f"{x:.0%}" if isinstance(x, (int, float)) else "N/D",
+                "Target": lambda x: f"${x:,.2f}" if isinstance(x, (int, float)) and x > 0 else "N/D",
+            }
+        ),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    with st.expander("Ver snapshots brutos guardados", expanded=False):
+        raw_history = load_saved_analyses().get(selected, [])
+        st.dataframe(pd.DataFrame(raw_history), use_container_width=True, hide_index=True)
