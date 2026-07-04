@@ -54,6 +54,9 @@ class ValueQuantScore:
     model_version: str = MODEL_VERSION
     data_coverage: float = 0.0
     predictive_confidence: float | None = None
+    raw_score: float | None = None
+    quality_adjusted: bool = False
+    quality_gate_reason: str | None = None
     confidence_label: str = "No clasificada"
     confidence_notes: list[str] = field(default_factory=list)
 
@@ -818,6 +821,8 @@ def calcular_valuequant_score(
     total_penalty = sum(component.penalty for component in components)
     final_score = _clamp(gross_score - total_penalty)
 
+    raw_score = final_score
+
     total_weight = sum(component.weight for component in components) or 1.0
     data_coverage = float(_clamp((denominator / total_weight) * 100, 0, 100) / 100)
     confidence = min(data_coverage, CONFIDENCE_CAP)
@@ -861,6 +866,9 @@ def calcular_valuequant_score(
         confidence=round(confidence, 2),
         data_coverage=round(data_coverage, 2),
         predictive_confidence=None,
+        raw_score=round(raw_score, 1),
+        quality_adjusted=bool(gate_reason),
+        quality_gate_reason=gate_reason,
         confidence_label=confidence_label,
         confidence_notes=confidence_notes,
         components=components,
@@ -883,6 +891,11 @@ def render_valuequant_score_card(score: ValueQuantScore) -> None:
         "Pendiente de validar con backtesting histórico"
         if score.predictive_confidence is None
         else f"{score.predictive_confidence * 100:.0f}%"
+    )
+    audit_text = (
+        f"Score bruto antes de gates: {score.raw_score:.1f} · Ajuste calidad: {'sí' if score.quality_adjusted else 'no'}"
+        if score.raw_score is not None
+        else "Score bruto antes de gates: no disponible"
     )
 
     st.markdown(
@@ -907,6 +920,7 @@ def render_valuequant_score_card(score: ValueQuantScore) -> None:
             <div style="margin-top:.25rem;color:#8C9AAF;font-size:.86rem;line-height:1.45;">
                 Cobertura de datos: {score.data_coverage * 100:.0f}% · Confianza operativa: {score.confidence * 100:.0f}%<br>
                 Nivel de confianza: {score.confidence_label}<br>
+                {audit_text}<br>
                 Confianza predictiva: {predictive_text}. Basado en fundamentales, valoración, riesgo, momentum y proxies macro.
             </div>
         </div>
@@ -916,6 +930,10 @@ def render_valuequant_score_card(score: ValueQuantScore) -> None:
 
     with st.expander("Desglose del ValueQuant Score", expanded=False):
         st.dataframe(score.to_dataframe(), use_container_width=True, hide_index=True)
+
+        if score.quality_gate_reason:
+            st.markdown("**Ajuste por calidad de datos**")
+            st.markdown(f"- {score.quality_gate_reason}")
 
         if score.confidence_notes:
             st.markdown("**Lectura de confianza**")
