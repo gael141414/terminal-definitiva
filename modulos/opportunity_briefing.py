@@ -25,6 +25,7 @@ import yfinance as yf
 from modulos.watchlist_alerts import alert_summary, build_watchlist_alerts
 from modulos.briefing_payloads import build_briefing_payloads
 from modulos.manual_delivery import render_manual_telegram_panel
+from modulos.analysis_store import score_evolution_summary
 
 DATA_FOLDER = Path("data")
 WATCHLIST_FILE = DATA_FOLDER / "watchlist.json"
@@ -50,6 +51,10 @@ _EXPORT_COLUMNS = [
     "Score Oportunidad",
     "Prioridad Score",
     "Bucket Score",
+    "Tendencia Score",
+    "Delta Score",
+    "Ajuste Tendencia",
+    "Histórico Score",
     "Razón",
     "Acción sugerida",
     "Acción Score",
@@ -192,6 +197,17 @@ def _score_priority_score(row: dict[str, Any]) -> float:
     return round(max(0.0, min(100.0, score)), 1)
 
 
+def _trend_priority_adjustment(summary: dict[str, Any]) -> float:
+    delta = _as_float(summary.get("delta_score"), 0.0) or 0.0
+    trend = str(summary.get("trend_label", "") or "").lower()
+
+    if "mejora" in trend:
+        return round(min(8.0, max(2.0, delta * 0.9)), 1)
+    if "deterioro" in trend:
+        return round(max(-10.0, min(-2.0, delta * 1.1)), 1)
+    return 0.0
+
+
 @st.cache_data(ttl=900, show_spinner=False)
 def _price_snapshot(ticker: str) -> dict[str, float]:
     """Obtiene precio reciente con caché corta para no saturar yfinance."""
@@ -273,7 +289,22 @@ def build_watchlist_dataframe() -> pd.DataFrame:
             "Fuente": item.get("source", "Manual"),
             "Último análisis": item.get("last_saved_at", "-"),
         }
-        record["Prioridad Score"] = _score_priority_score(record)
+
+        evolution = score_evolution_summary(ticker)
+        trend_adjustment = _trend_priority_adjustment(evolution)
+        record.update(
+            {
+                "Histórico Score": evolution.get("observations", 0),
+                "Tendencia Score": evolution.get("trend_label", "Sin histórico"),
+                "Detalle Tendencia": evolution.get("trend_detail", "-"),
+                "Delta Score": evolution.get("delta_score"),
+                "Ajuste Tendencia": trend_adjustment,
+                "Último histórico": evolution.get("latest_saved_at"),
+            }
+        )
+
+        base_priority = _score_priority_score(record)
+        record["Prioridad Score"] = round(max(0.0, min(100.0, base_priority + trend_adjustment)), 1)
         rows.append(record)
 
     return pd.DataFrame(rows)
@@ -316,6 +347,8 @@ def _classify_opportunity(row: dict[str, Any], alerts: pd.DataFrame) -> tuple[st
     quality_gate = str(row.get("Quality Gate", "") or "").strip()
     red_flags = int(_as_float(row.get("Red Flags"), 0.0) or 0)
     priority_score = _as_float(row.get("Prioridad Score"), None)
+    trend_label = str(row.get("Tendencia Score", "") or "").lower()
+    delta_score = _as_float(row.get("Delta Score"), None)
 
     if current_price <= 0:
         return "Recalcular análisis", "No hay precio actual fiable; revisar datos antes de decidir."
@@ -333,6 +366,9 @@ def _classify_opportunity(row: dict[str, Any], alerts: pd.DataFrame) -> tuple[st
     if "baja prioridad" in score_action:
         return "Descartar por ahora", "La acción institucional del score marca baja prioridad operativa."
 
+    if "deterioro" in trend_label and delta_score is not None and delta_score <= -6:
+        return "Recalcular análisis", "Deterioro fuerte del score frente al análisis anterior; revisar tesis antes de priorizar."
+
     if "esperar" in score_action or confidence_label == "baja" or (confidence is not None and confidence < 0.55):
         return "Recalcular análisis", "La confianza del score es limitada; actualizar datos antes de priorizar."
 
@@ -342,13 +378,21 @@ def _classify_opportunity(row: dict[str, Any], alerts: pd.DataFrame) -> tuple[st
     if _has_alert(alerts, priority="Alta", contains="Precio en zona objetivo"):
         return "Comprar / revisar hoy", f"{ticker} está en zona objetivo o por debajo del target operativo."
 
-    if _has_alert(alerts, priority="Alta", contains="Score sólido") or (
-        vq is not None and vq >= 65 and margin is not None and margin >= 0
-    ):
+    if _has_alert(alerts, priority="Alta", contains="Score sólido"):
+        return "Comprar / revisar hoy", "Score sólido detectado en alertas; revisar entrada con prioridad."
+
+    if vq is not None and vq >= 65 and margin is not None and margin >= 0:
+        if "mejora" in trend_label and delta_score is not None and delta_score >= 5:
+            return "Comprar / revisar hoy", "Mejora clara del score histórico con score y margen de seguridad suficientes."
+        if "prioritario" in score_action:
+            return "Comprar / revisar hoy", "Score institucional prioritario con score y margen de seguridad suficientes."
         return "Comprar / revisar hoy", "Score y margen de seguridad justifican revisar la entrada con prioridad."
 
     if "prioritario" in score_action and margin is not None and margin >= 0:
         return "Comprar / revisar hoy", "Score institucional prioritario, sin gates activos y con margen de seguridad no negativo."
+
+    if "mejora" in trend_label and delta_score is not None and delta_score >= 5 and margin is not None and margin >= 0:
+        return "Comprar / revisar hoy", "Mejora clara del score histórico con margen de seguridad no negativo."
 
     if "matices" in score_action and margin is not None and margin >= 0.05:
         return "Comprar / revisar hoy", "Score atractivo con matices y margen de seguridad suficiente para revisión prioritaria."
@@ -389,6 +433,7 @@ def _opportunity_score(row: dict[str, Any], alerts: pd.DataFrame) -> int:
     red_flags = int(_as_float(row.get("Red Flags"), 0.0) or 0)
     quality_adjusted = _as_bool(row.get("Ajuste Calidad"))
     score_action = str(row.get("Acción Score", "") or "").lower()
+    trend_delta = _as_float(row.get("Delta Score"), None)
 
     score = alert_score + priority_bonus
 
@@ -400,6 +445,8 @@ def _opportunity_score(row: dict[str, Any], alerts: pd.DataFrame) -> int:
         score += max(-10, min(15, int((score_priority - 50) * 0.25)))
     if confidence is not None:
         score += max(-8, min(8, int((confidence - 0.60) * 25)))
+    if trend_delta is not None:
+        score += max(-10, min(8, int(trend_delta * 1.1)))
     if margin is not None:
         score += max(-25, min(25, int(margin * 100)))
     if distance is not None:
@@ -463,6 +510,11 @@ def build_opportunity_briefing() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFra
                 "ValueQuant": row_dict.get("ValueQuant"),
                 "Score bruto": row_dict.get("Score bruto"),
                 "Prioridad Score": row_dict.get("Prioridad Score"),
+                "Tendencia Score": row_dict.get("Tendencia Score"),
+                "Delta Score": row_dict.get("Delta Score"),
+                "Ajuste Tendencia": row_dict.get("Ajuste Tendencia"),
+                "Detalle Tendencia": row_dict.get("Detalle Tendencia"),
+                "Histórico Score": row_dict.get("Histórico Score"),
                 "Confianza": row_dict.get("Confianza"),
                 "Nivel confianza": row_dict.get("Nivel confianza"),
                 "Ajuste Calidad": row_dict.get("Ajuste Calidad"),
@@ -503,7 +555,7 @@ def _fmt_pct(value: Any) -> str:
 def _format_export_value(column: str, value: Any) -> str:
     if column in {"Precio Actual", "Target"}:
         return _fmt_money(value)
-    if column in {"ValueQuant", "Score Oportunidad", "Score bruto", "Prioridad Score"}:
+    if column in {"ValueQuant", "Score Oportunidad", "Score bruto", "Prioridad Score", "Delta Score", "Ajuste Tendencia"}:
         return _fmt_score(value)
     if column in {"Margen Seguridad", "Confianza"}:
         return _fmt_pct(value)
@@ -542,6 +594,8 @@ def _section_rows(df: pd.DataFrame, bucket: str) -> list[list[str]]:
                 _format_export_value("ValueQuant", row_dict.get("ValueQuant")),
                 _format_export_value("Prioridad Score", row_dict.get("Prioridad Score")),
                 _format_export_value("Acción Score", row_dict.get("Acción Score")),
+                _format_export_value("Tendencia Score", row_dict.get("Tendencia Score")),
+                _format_export_value("Delta Score", row_dict.get("Delta Score")),
                 _format_export_value("Confianza", row_dict.get("Confianza")),
                 _format_export_value("Red Flags", row_dict.get("Red Flags")),
                 _format_export_value("Margen Seguridad", row_dict.get("Margen Seguridad")),
@@ -583,6 +637,8 @@ def build_opportunity_briefing_markdown(
                 ["Alertas altas", summary_alerts.get("Alta", 0)],
                 ["Activos con quality gate", int((df_briefing["Ajuste Calidad"] == True).sum()) if not df_briefing.empty and "Ajuste Calidad" in df_briefing else 0],
                 ["Activos con red flags", int((df_briefing["Red Flags"].fillna(0).astype(float) > 0).sum()) if not df_briefing.empty and "Red Flags" in df_briefing else 0],
+                ["Activos en mejora", int(df_briefing["Tendencia Score"].astype(str).str.contains("Mejora", case=False, na=False).sum()) if not df_briefing.empty and "Tendencia Score" in df_briefing else 0],
+                ["Activos en deterioro", int(df_briefing["Tendencia Score"].astype(str).str.contains("Deterioro", case=False, na=False).sum()) if not df_briefing.empty and "Tendencia Score" in df_briefing else 0],
             ],
         ),
     ]
@@ -596,13 +652,14 @@ def build_opportunity_briefing_markdown(
                 f"Score oportunidad: **{top.get('Score Oportunidad', '-')}**  ",
                 f"Prioridad score: **{top.get('Prioridad Score', '-')}**  ",
                 f"Acción Score: {top.get('Acción Score', '-')}  ",
+                f"Tendencia: {top.get('Tendencia Score', '-')} ({_format_export_value('Delta Score', top.get('Delta Score'))})  ",
                 f"Confianza: {_format_export_value('Confianza', top.get('Confianza'))} · Red flags: {top.get('Red Flags', 0)}  ",
                 f"Razón: {top.get('Razón', '-')}",
                 "",
             ]
         )
 
-    section_headers = ["Ticker", "Score", "Precio", "Target", "Distancia", "VQ", "P.Score", "Acción Score", "Conf.", "RF", "Margen", "Razón"]
+    section_headers = ["Ticker", "Score", "Precio", "Target", "Distancia", "VQ", "P.Score", "Acción Score", "Trend", "Δ", "Conf.", "RF", "Margen", "Razón"]
     for bucket in _BUCKET_ORDER:
         if bucket == "Mantener seguimiento":
             title = "Mantener seguimiento"
@@ -910,6 +967,8 @@ def _render_bucket(df: pd.DataFrame, bucket: str, empty_message: str) -> None:
                 "Score bruto": lambda x: f"{x:.1f}" if isinstance(x, (int, float)) else "-",
                 "Prioridad Score": lambda x: f"{x:.1f}" if isinstance(x, (int, float)) else "-",
                 "Confianza": lambda x: f"{x:.0%}" if isinstance(x, (int, float)) else "-",
+                "Delta Score": lambda x: f"{x:+.1f}" if isinstance(x, (int, float)) else "-",
+                "Ajuste Tendencia": lambda x: f"{x:+.1f}" if isinstance(x, (int, float)) else "-",
                 "Margen Seguridad": lambda x: f"{x:+.1%}" if isinstance(x, (int, float)) else "-",
             }
         ),
