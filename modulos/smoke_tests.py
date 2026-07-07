@@ -44,12 +44,14 @@ CRITICAL_FILES = [
     "scripts/test_opportunity_briefing_score_payload.py",
     "scripts/test_analysis_score_history.py",
     "scripts/test_score_evolution_surfaces.py",
+    "scripts/test_basic_signal_backtesting.py",
     "modulos/research_core.py",
     "modulos/investment_thesis.py",
     "modulos/research_report.py",
     "modulos/watchlist.py",
     "modulos/watchlist_alerts.py",
     "modulos/opportunity_briefing.py",
+    "modulos/signal_backtesting.py",
     "modulos/automation_center.py",
     "modulos/automation_logs.py",
     "modulos/automation_schedule.py",
@@ -71,6 +73,7 @@ CRITICAL_IMPORTS = [
     "modulos.relative_comparison",
     "modulos.relative_decision",
     "modulos.analysis_store",
+    "modulos.signal_backtesting",
     "modulos.watchlist_alerts",
     "modulos.opportunity_briefing",
     "modulos.briefing_payloads",
@@ -416,6 +419,20 @@ def _check_score_evolution_surfaces_contract() -> list[SmokeCheck]:
         checks.append(_fail("score_evolution_surfaces_contract:behavior", f"{type(exc).__name__}: {exc}"))
     return checks
 
+
+def _check_basic_signal_backtesting_contract() -> list[SmokeCheck]:
+    """Ejecuta los checks contractuales de backtesting básico de señales."""
+
+    checks: list[SmokeCheck] = []
+    try:
+        contract = importlib.import_module("scripts.test_basic_signal_backtesting")
+        contract_checks = contract.run_contract_checks()
+        checks.append(_ok("basic_signal_backtesting_contract:loaded", f"{len(contract_checks)} checks"))
+        checks.append(_ok("basic_signal_backtesting_contract:behavior", "basic signal backtesting contract OK"))
+    except Exception as exc:
+        checks.append(_fail("basic_signal_backtesting_contract:behavior", f"{type(exc).__name__}: {exc}"))
+    return checks
+
 def _check_scoring_model() -> list[SmokeCheck]:
     checks: list[SmokeCheck] = []
     try:
@@ -451,6 +468,7 @@ def run_smoke_tests() -> list[SmokeCheck]:
     checks.extend(_check_opportunity_briefing_score_payload_contract())
     checks.extend(_check_analysis_score_history_contract())
     checks.extend(_check_score_evolution_surfaces_contract())
+    checks.extend(_check_basic_signal_backtesting_contract())
     checks.extend(_check_scoring_model())
     return checks
 
