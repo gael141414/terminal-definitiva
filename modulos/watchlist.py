@@ -7,6 +7,7 @@ import streamlit as st
 import yfinance as yf
 
 from modulos.watchlist_alerts import alert_summary, build_watchlist_alerts
+from modulos.analysis_store import score_evolution_summary, score_history_for_ticker
 
 # Definimos la ruta de la base de datos
 DB_FOLDER = "data"
@@ -168,6 +169,19 @@ def _watchlist_priority_score(record: dict[str, Any]) -> float:
     return round(max(0.0, min(100.0, priority)), 1)
 
 
+def _trend_priority_adjustment(summary: dict[str, Any]) -> float:
+    """Ajuste pequeño de prioridad por evolución temporal del score."""
+
+    delta = _as_float(summary.get("delta_score"), 0.0)
+    trend = str(summary.get("trend_label", "") or "").lower()
+
+    if "mejora" in trend:
+        return round(min(8.0, max(2.0, delta * 0.9)), 1)
+    if "deterioro" in trend:
+        return round(max(-10.0, min(-2.0, delta * 1.1)), 1)
+    return 0.0
+
+
 def _build_watchlist_row(
     *,
     ticker: str,
@@ -184,6 +198,9 @@ def _build_watchlist_row(
     quality_adjusted = _as_bool(analysis.get("score_quality_adjusted", False))
     red_flags_count = _analysis_red_flags_count(analysis)
     confidence_label = analysis.get("score_confidence_label") or analysis.get("confidence_label") or "-"
+
+    evolution = score_evolution_summary(ticker)
+    trend_adjustment = _trend_priority_adjustment(evolution)
 
     record = {
         "Ticker": ticker,
@@ -213,8 +230,16 @@ def _build_watchlist_row(
         "Comparador": analysis.get("competitor", "-"),
         "Fuente": item.get("source", "Manual"),
         "Último análisis": item.get("last_saved_at", "-"),
+        "Histórico Score": evolution.get("observations", 0),
+        "Tendencia Score": evolution.get("trend_label", "Sin histórico"),
+        "Detalle Tendencia": evolution.get("trend_detail", "-"),
+        "Delta Score": evolution.get("delta_score"),
+        "Ajuste Tendencia": trend_adjustment,
+        "Último histórico": evolution.get("latest_saved_at"),
     }
-    record["Prioridad Score"] = _watchlist_priority_score(record)
+
+    base_priority = _watchlist_priority_score(record)
+    record["Prioridad Score"] = round(max(0.0, min(100.0, base_priority + trend_adjustment)), 1)
     return record
 
 
@@ -255,6 +280,10 @@ def _render_score_ranking_panel(df_watch: pd.DataFrame) -> None:
         "Ajuste Calidad",
         "Red Flags",
         "Margen Seguridad",
+        "Tendencia Score",
+        "Delta Score",
+        "Ajuste Tendencia",
+        "Histórico Score",
         "Quality Gate",
         "Último análisis",
     ]
@@ -268,6 +297,105 @@ def _render_score_ranking_panel(df_watch: pd.DataFrame) -> None:
                 "Score bruto": lambda x: f"{x:.1f}" if isinstance(x, (int, float)) else "-",
                 "Confianza": lambda x: f"{x:.0%}" if isinstance(x, (int, float)) else "-",
                 "Margen Seguridad": lambda x: f"{x:+.1%}" if isinstance(x, (int, float)) else "-",
+                "Delta Score": lambda x: f"{x:+.1f}" if isinstance(x, (int, float)) else "-",
+                "Ajuste Tendencia": lambda x: f"{x:+.1f}" if isinstance(x, (int, float)) else "-",
+            }
+        ),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+
+def _render_score_evolution_panel(df_watch: pd.DataFrame) -> None:
+    """Panel visual de evolución temporal del score para la watchlist."""
+
+    st.markdown("### Evolución temporal del score")
+    st.caption(
+        "Muestra si el score mejora, se deteriora o se mantiene estable usando los snapshots guardados en Research Core."
+    )
+
+    if df_watch.empty or "Ticker" not in df_watch.columns:
+        st.info("No hay activos para mostrar evolución.")
+        return
+
+    tickers = [str(t).upper() for t in df_watch["Ticker"].dropna().unique().tolist()]
+    if not tickers:
+        st.info("No hay tickers válidos.")
+        return
+
+    selected = st.selectbox(
+        "Ticker para evolución temporal",
+        options=tickers,
+        key="watchlist_score_evolution_ticker",
+    )
+
+    summary = score_evolution_summary(selected)
+    history = score_history_for_ticker(selected)
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Observaciones", summary.get("observations", 0))
+    c2.metric(
+        "Último VQ",
+        _fmt_score(summary.get("latest_score")),
+        f"{summary.get('delta_score'):+.1f}" if isinstance(summary.get("delta_score"), (int, float)) else None,
+    )
+    c3.metric(
+        "Margen",
+        _fmt_pct(summary.get("latest_margin")),
+        f"{summary.get('delta_margin'):+.1%}" if isinstance(summary.get("delta_margin"), (int, float)) else None,
+    )
+    c4.metric("Tendencia", str(summary.get("trend_label", "Sin histórico")))
+
+    st.info(summary.get("trend_detail", "No hay detalle de tendencia."))
+
+    if history.empty or len(history) < 2:
+        st.caption("Guarda al menos dos análisis del mismo ticker para ver gráfico temporal.")
+        return
+
+    chart_df = history.copy()
+    chart_df["Fecha"] = pd.to_datetime(chart_df["Guardado"], errors="coerce")
+    chart_cols: list[str] = []
+    for col in ("VQ Score", "Score bruto", "Buffett"):
+        if col in chart_df.columns:
+            chart_df[col] = pd.to_numeric(chart_df[col], errors="coerce")
+            if chart_df[col].notna().any():
+                chart_cols.append(col)
+
+    if "Confianza" in chart_df.columns:
+        chart_df["Confianza (%)"] = pd.to_numeric(chart_df["Confianza"], errors="coerce") * 100
+        if chart_df["Confianza (%)"].notna().any():
+            chart_cols.append("Confianza (%)")
+
+    chart_ready = chart_df.dropna(subset=["Fecha"]).set_index("Fecha")[chart_cols] if chart_cols else pd.DataFrame()
+    if chart_ready.empty:
+        st.caption("No hay columnas numéricas suficientes para graficar.")
+    else:
+        st.line_chart(chart_ready)
+
+    display_cols = [
+        "Guardado",
+        "VQ Score",
+        "Score bruto",
+        "Buffett",
+        "Margen Seguridad",
+        "Confianza",
+        "Nivel confianza",
+        "Acción Score",
+        "Ajuste Calidad",
+        "Quality Gate",
+        "Red Flags",
+        "Régimen",
+    ]
+    display_cols = [col for col in display_cols if col in history.columns]
+
+    st.dataframe(
+        history[display_cols].style.format(
+            {
+                "VQ Score": lambda x: f"{x:.1f}" if isinstance(x, (int, float)) else "N/D",
+                "Score bruto": lambda x: f"{x:.1f}" if isinstance(x, (int, float)) else "N/D",
+                "Buffett": lambda x: f"{x:.1f}" if isinstance(x, (int, float)) else "N/D",
+                "Margen Seguridad": lambda x: f"{x:+.1%}" if isinstance(x, (int, float)) else "N/D",
+                "Confianza": lambda x: f"{x:.0%}" if isinstance(x, (int, float)) else "N/D",
             }
         ),
         use_container_width=True,
@@ -449,6 +577,9 @@ def ejecutar_watchlist():
 
         st.markdown("<br>", unsafe_allow_html=True)
         _render_score_ranking_panel(df_watch)
+
+        st.markdown("---")
+        _render_score_evolution_panel(df_watch)
 
         st.markdown("---")
         _render_alerts_panel(df_alerts)
