@@ -631,3 +631,11 @@ def render_saved_research_dashboard() -> None:
     with st.expander("Ver snapshots brutos guardados", expanded=False):
         raw_history = load_saved_analyses().get(selected, [])
         st.dataframe(pd.DataFrame(raw_history), use_container_width=True, hide_index=True)
+
+    st.markdown("---")
+    try:
+        from modulos.signal_backtesting import render_signal_backtest_panel
+
+        render_signal_backtest_panel(default_ticker=selected)
+    except Exception as exc:
+        st.warning(f"No se pudo cargar el backtesting básico de señales: {exc}")
