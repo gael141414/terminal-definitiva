@@ -45,6 +45,7 @@ CRITICAL_FILES = [
     "scripts/test_analysis_score_history.py",
     "scripts/test_score_evolution_surfaces.py",
     "scripts/test_basic_signal_backtesting.py",
+    "scripts/test_predictive_confidence_calibration.py",
     "modulos/research_core.py",
     "modulos/investment_thesis.py",
     "modulos/research_report.py",
@@ -433,6 +434,20 @@ def _check_basic_signal_backtesting_contract() -> list[SmokeCheck]:
         checks.append(_fail("basic_signal_backtesting_contract:behavior", f"{type(exc).__name__}: {exc}"))
     return checks
 
+
+def _check_predictive_confidence_calibration_contract() -> list[SmokeCheck]:
+    """Ejecuta los checks contractuales de calibración de confianza predictiva."""
+
+    checks: list[SmokeCheck] = []
+    try:
+        contract = importlib.import_module("scripts.test_predictive_confidence_calibration")
+        contract_checks = contract.run_contract_checks()
+        checks.append(_ok("predictive_confidence_calibration_contract:loaded", f"{len(contract_checks)} checks"))
+        checks.append(_ok("predictive_confidence_calibration_contract:behavior", "predictive confidence calibration contract OK"))
+    except Exception as exc:
+        checks.append(_fail("predictive_confidence_calibration_contract:behavior", f"{type(exc).__name__}: {exc}"))
+    return checks
+
 def _check_scoring_model() -> list[SmokeCheck]:
     checks: list[SmokeCheck] = []
     try:
@@ -469,6 +484,7 @@ def run_smoke_tests() -> list[SmokeCheck]:
     checks.extend(_check_analysis_score_history_contract())
     checks.extend(_check_score_evolution_surfaces_contract())
     checks.extend(_check_basic_signal_backtesting_contract())
+    checks.extend(_check_predictive_confidence_calibration_contract())
     checks.extend(_check_scoring_model())
     return checks
 
