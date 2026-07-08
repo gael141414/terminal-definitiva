@@ -3,7 +3,9 @@ from __future__ import annotations
 import html
 import logging
 import xml.etree.ElementTree as ET
+from typing import Any
 
+import numpy as np
 import pandas as pd
 import requests
 import streamlit as st
@@ -11,31 +13,86 @@ import yfinance as yf
 
 from modulos.config import CONFIG
 
+YAHOO_LOGGER = logging.getLogger("valuequant.yahoo")
+
+
+def _is_yahoo_rate_limit_error(exc: Exception) -> bool:
+    """Detecta errores temporales de rate limit de Yahoo/yfinance."""
+
+    text = f"{type(exc).__name__}: {exc}".lower()
+    return "429" in text or "too many requests" in text or "rate limit" in text
+
+
+def _safe_yahoo_history(
+    ticker: str,
+    *,
+    period: str,
+    interval: str = "1d",
+    auto_adjust: bool | None = None,
+) -> pd.DataFrame:
+    """Descarga histórico Yahoo sin propagar ruido por rate limits temporales."""
+
+    kwargs: dict[str, Any] = {"period": period, "interval": interval}
+    if auto_adjust is not None:
+        kwargs["auto_adjust"] = auto_adjust
+
+    try:
+        data = yf.Ticker(str(ticker).strip()).history(**kwargs)
+        if isinstance(data, pd.DataFrame):
+            return data
+    except Exception as exc:
+        if _is_yahoo_rate_limit_error(exc):
+            YAHOO_LOGGER.warning("Yahoo rate limit para %s; se omite lectura temporal.", ticker)
+        else:
+            YAHOO_LOGGER.debug("Yahoo history omitido para %s: %s: %s", ticker, type(exc).__name__, exc)
+    return pd.DataFrame()
+
+
+def _safe_fast_market_cap(yf_ticker: Any) -> float | None:
+    """Obtiene market cap desde fast_info sin caer a quoteSummary/info."""
+
+    try:
+        fast_info = getattr(yf_ticker, "fast_info", {}) or {}
+        value = fast_info.get("market_cap") if hasattr(fast_info, "get") else None
+        if value is None:
+            return None
+        numeric = float(value)
+        return numeric if np.isfinite(numeric) and numeric > 0 else None
+    except Exception as exc:
+        if _is_yahoo_rate_limit_error(exc):
+            YAHOO_LOGGER.warning("Yahoo rate limit leyendo fast_info; se omite market cap temporal.")
+        else:
+            YAHOO_LOGGER.debug("Yahoo fast_info omitido: %s: %s", type(exc).__name__, exc)
+        return None
+
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_etf_yahoo(query):
     """Consulta la API oculta de Yahoo Finance para autocompletar nombres de fondos."""
     if not query or len(query) < 2:
         return []
-    
-    # Endpoint interno de búsqueda de Yahoo
+
     url = f"https://query2.finance.yahoo.com/v1/finance/search?q={query}&quotesCount=15&newsCount=0"
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-    
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+
     try:
         res = requests.get(url, headers=headers, timeout=5)
+        if res.status_code == 429:
+            YAHOO_LOGGER.warning("Yahoo search rate limit para query=%s", query)
+            return []
         datos = res.json()
         resultados = []
-        
-        for quote in datos.get('quotes', []):
-            # Filtramos estrictamente para que solo salgan ETFs y Fondos
-            if quote.get('quoteType') in ['ETF', 'MUTUALFUND']:
-                simbolo = quote.get('symbol')
-                nombre = quote.get('shortname', quote.get('longname', 'Desconocido'))
+
+        for quote in datos.get("quotes", []):
+            if quote.get("quoteType") in ["ETF", "MUTUALFUND"]:
+                simbolo = quote.get("symbol")
+                nombre = quote.get("shortname", quote.get("longname", "Desconocido"))
                 resultados.append(f"{simbolo} ➔ {nombre}")
-                
+
         return resultados
-    except Exception:
+    except Exception as exc:
+        if _is_yahoo_rate_limit_error(exc):
+            YAHOO_LOGGER.warning("Yahoo search rate limit para query=%s", query)
         return []
 
 
@@ -57,31 +114,28 @@ def obtener_datos_ticker_tape() -> str:
     items: list[str] = []
 
     for nombre, ticker in activos.items():
-        try:
-            data = yf.Ticker(ticker).history(period="5d", interval="1d", auto_adjust=False)
-            if data is None or data.empty or "Close" not in data.columns:
-                continue
-            cierres = data["Close"].dropna()
-            if len(cierres) < 2:
-                continue
-            precio = float(cierres.iloc[-1])
-            previo = float(cierres.iloc[-2])
-            if previo == 0:
-                continue
-            variacion = ((precio - previo) / previo) * 100
-            clase = "is-up" if variacion >= 0 else "is-down"
-            icono = "bi-caret-up-fill" if variacion >= 0 else "bi-caret-down-fill"
-            
-            items.append(
-                f"<span class='vq-tape-item'>"
-                f"<a href='https://finance.yahoo.com/quote/{ticker}' target='_blank' style='text-decoration:none; color:inherit; display:flex; gap:0.42rem; align-items:center;'>"
-                f"<strong>{html.escape(nombre)}</strong> "
-                f"<span>${precio:,.2f}</span> "
-                f"<span class='{clase}'><i class='bi {icono}'></i> {variacion:+.2f}%</span>"
-                f"</a></span>"
-            )
-        except Exception:
+        data = _safe_yahoo_history(ticker, period="5d", interval="1d", auto_adjust=False)
+        if data is None or data.empty or "Close" not in data.columns:
             continue
+        cierres = data["Close"].dropna()
+        if len(cierres) < 2:
+            continue
+        precio = float(cierres.iloc[-1])
+        previo = float(cierres.iloc[-2])
+        if previo == 0:
+            continue
+        variacion = ((precio - previo) / previo) * 100
+        clase = "is-up" if variacion >= 0 else "is-down"
+        icono = "bi-caret-up-fill" if variacion >= 0 else "bi-caret-down-fill"
+
+        items.append(
+            f"<span class='vq-tape-item'>"
+            f"<a href='https://finance.yahoo.com/quote/{ticker}' target='_blank' style='text-decoration:none; color:inherit; display:flex; gap:0.42rem; align-items:center;'>"
+            f"<strong>{html.escape(nombre)}</strong> "
+            f"<span>${precio:,.2f}</span> "
+            f"<span class='{clase}'><i class='bi {icono}'></i> {variacion:+.2f}%</span>"
+            f"</a></span>"
+        )
 
     if not items:
         items = [
@@ -106,32 +160,28 @@ def render_ticker_tape() -> None:
     )
 
 
-@st.cache_data(ttl=86400) # Se guarda en memoria durante 24 horas
+@st.cache_data(ttl=86400)
 def analizar_rotacion_sectores():
-    """Descarga el rendimiento de los 11 sectores del S&P 500 usando sus ETFs"""
+    """Descarga el rendimiento de los 11 sectores del S&P 500 usando sus ETFs."""
     etfs = {
-        '💻 Tecnología': 'XLK', '💊 Salud': 'XLV', '🏦 Finanzas': 'XLF',
-        '🛍️ Cons. Discrecional': 'XLY', '🍞 Cons. Básico': 'XLP', '🛢️ Energía': 'XLE',
-        '🏭 Industriales': 'XLI', '🧱 Materiales': 'XLB', '🏠 Inmobiliario': 'XLRE',
-        '⚡ Utilities': 'XLU', '📡 Comunicaciones': 'XLC'
+        "💻 Tecnología": "XLK", "💊 Salud": "XLV", "🏦 Finanzas": "XLF",
+        "🛍️ Cons. Discrecional": "XLY", "🍞 Cons. Básico": "XLP", "🛢️ Energía": "XLE",
+        "🏭 Industriales": "XLI", "🧱 Materiales": "XLB", "🏠 Inmobiliario": "XLRE",
+        "⚡ Utilities": "XLU", "📡 Comunicaciones": "XLC",
     }
     datos = []
     for sector, ticker_etf in etfs.items():
-        try:
-            # Descargamos 3 meses de historia de cada ETF
-            hist = yf.Ticker(ticker_etf).history(period="3mo")
-            if len(hist) >= 21: # 21 días laborables = 1 mes
-                p_actual = hist['Close'].iloc[-1]
-                p_1m = hist['Close'].iloc[-21]
-                p_3m = hist['Close'].iloc[0]
-                
-                r_1m = ((p_actual - p_1m) / p_1m) * 100
-                r_3m = ((p_actual - p_3m) / p_3m) * 100
-                
-                datos.append({'Sector': sector, '1 Mes (%)': r_1m, '3 Meses (%)': r_3m})
-        except:
-            continue
-            
+        hist = _safe_yahoo_history(ticker_etf, period="3mo")
+        if len(hist) >= 21 and "Close" in hist.columns:
+            p_actual = hist["Close"].iloc[-1]
+            p_1m = hist["Close"].iloc[-21]
+            p_3m = hist["Close"].iloc[0]
+
+            r_1m = ((p_actual - p_1m) / p_1m) * 100
+            r_3m = ((p_actual - p_3m) / p_3m) * 100
+
+            datos.append({"Sector": sector, "1 Mes (%)": r_1m, "3 Meses (%)": r_3m})
+
     return pd.DataFrame(datos) if datos else None
 
 
@@ -139,39 +189,41 @@ def analizar_rotacion_sectores():
 def obtener_market_snapshot() -> list[dict[str, str]]:
     """Obtiene una lectura breve de mercado para la pantalla Home, incluyendo indicadores macro."""
     activos = {
-        "SPY": "SPY", 
-        "Nasdaq": "QQQ", 
-        "Oro": "GC=F", 
-        "Petróleo": "CL=F", 
-        "NVDA": "NVDA", 
+        "SPY": "SPY",
+        "Nasdaq": "QQQ",
+        "Oro": "GC=F",
+        "Petróleo": "CL=F",
+        "NVDA": "NVDA",
         "AAPL": "AAPL",
         "VIX": "^VIX",
-        "US 10Y": "^TNX"
+        "US 10Y": "^TNX",
     }
     snapshot: list[dict[str, str]] = []
     for nombre, ticker in activos.items():
-        try:
-            hist = yf.Ticker(ticker).history(period="5d")
-            close = hist["Close"].dropna()
-            if len(close) < 2:
-                continue
-            precio = float(close.iloc[-1])
-            cambio = ((precio - float(close.iloc[-2])) / float(close.iloc[-2])) * 100
-            
-            if ticker in ["^VIX", "^TNX"]:
-                precio_str = f"{precio:,.2f}" if ticker == "^VIX" else f"{precio:.2f}%"
-            else:
-                precio_str = f"${precio:,.2f}"
-                
-            snapshot.append({
-                "nombre": nombre, 
-                "precio": precio_str, 
-                "change_val": cambio,
-                "cambio": f"{cambio:+.2f}%", 
-                "clase": "is-up" if cambio >= 0 else "is-down"
-            })
-        except Exception:
+        hist = _safe_yahoo_history(ticker, period="5d")
+        if hist is None or hist.empty or "Close" not in hist.columns:
             continue
+        close = hist["Close"].dropna()
+        if len(close) < 2:
+            continue
+        precio = float(close.iloc[-1])
+        previo = float(close.iloc[-2])
+        if previo == 0:
+            continue
+        cambio = ((precio - previo) / previo) * 100
+
+        if ticker in ["^VIX", "^TNX"]:
+            precio_str = f"{precio:,.2f}" if ticker == "^VIX" else f"{precio:.2f}%"
+        else:
+            precio_str = f"${precio:,.2f}"
+
+        snapshot.append({
+            "nombre": nombre,
+            "precio": precio_str,
+            "change_val": cambio,
+            "cambio": f"{cambio:+.2f}%",
+            "clase": "is-up" if cambio >= 0 else "is-down",
+        })
     return snapshot
 
 
@@ -210,20 +262,23 @@ def obtener_market_treemap_data() -> pd.DataFrame:
     for ticker, sector in universo.items():
         try:
             yf_ticker = yf.Ticker(ticker)
-            hist = yf_ticker.history(period="5d", interval="1d", auto_adjust=False)
+            hist = _safe_yahoo_history(ticker, period="5d", interval="1d", auto_adjust=False)
             close = hist["Close"].dropna() if hist is not None and not hist.empty and "Close" in hist.columns else pd.Series(dtype=float)
             if len(close) < 2:
                 continue
-            info = getattr(yf_ticker, "fast_info", {}) or {}
-            market_cap = info.get("market_cap") if hasattr(info, "get") else None
-            if not market_cap:
-                market_cap = (yf_ticker.info or {}).get("marketCap")
+            market_cap = _safe_fast_market_cap(yf_ticker)
             if not market_cap:
                 continue
-            daily_return = ((float(close.iloc[-1]) - float(close.iloc[-2])) / float(close.iloc[-2])) * 100
+            previous_close = float(close.iloc[-2])
+            if previous_close == 0:
+                continue
+            daily_return = ((float(close.iloc[-1]) - previous_close) / previous_close) * 100
             rows.append({"Ticker": ticker, "Sector": sector, "MarketCap": float(market_cap), "Rendimiento_Diario": daily_return})
         except Exception as exc:
-            print(f"[ValueQuant][Treemap] {ticker} omitido: {type(exc).__name__}: {exc}")
+            if _is_yahoo_rate_limit_error(exc):
+                YAHOO_LOGGER.warning("Yahoo rate limit para treemap %s; se omite temporalmente.", ticker)
+            else:
+                YAHOO_LOGGER.debug("Treemap omitido para %s: %s: %s", ticker, type(exc).__name__, exc)
             continue
     return pd.DataFrame(rows, columns=["Ticker", "Sector", "MarketCap", "Rendimiento_Diario"])
 
@@ -279,6 +334,9 @@ def obtener_ultimas_noticias(limit: int = 6) -> list[dict[str, str]]:
         rss_url = "https://feeds.finance.yahoo.com/rss/2.0/headline?s=SPY,QQQ,AAPL&region=US&lang=en-US"
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
         rss = requests.get(rss_url, headers=headers, timeout=8)
+        if rss.status_code == 429:
+            YAHOO_LOGGER.warning("Yahoo RSS rate limit; se omiten noticias de respaldo.")
+            return noticias[:limit]
         print(f"[ValueQuant][Yahoo RSS] status={rss.status_code} url={rss.url}")
         rss.raise_for_status()
         root = ET.fromstring(rss.content)
@@ -290,8 +348,10 @@ def obtener_ultimas_noticias(limit: int = 6) -> list[dict[str, str]]:
                 "url": item.findtext("link") or "#",
             })
     except Exception as exc:
-        print(f"[ValueQuant][Yahoo RSS] ERROR exacto: {type(exc).__name__}: {exc}")
-        logger.exception("Error descargando noticias Yahoo RSS")
+        if _is_yahoo_rate_limit_error(exc):
+            YAHOO_LOGGER.warning("Yahoo RSS rate limit; se omiten noticias de respaldo.")
+        else:
+            print(f"[ValueQuant][Yahoo RSS] ERROR exacto: {type(exc).__name__}: {exc}")
+            logger.exception("Error descargando noticias Yahoo RSS")
 
     return noticias[:limit]
-
