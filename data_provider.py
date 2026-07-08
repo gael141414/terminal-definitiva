@@ -5,6 +5,7 @@ import numpy as np
 import yfinance as yf
 import aiohttp
 from config import settings
+from modulos.yahoo_resilience import safe_yfinance_download
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,14 @@ class DataOrchestrator:
             try:
                 # Ejecutamos llamadas síncronas de yfinance en un hilo separado
                 df = await asyncio.to_thread(
-                    lambda: yf.download(tickers=symbol, interval=timeframe, period="max", progress=False).tail(limit)
+                    lambda: safe_yfinance_download(
+                        yf,
+                        tickers=symbol,
+                        interval=timeframe,
+                        period="max",
+                        progress=False,
+                        context=f"data_provider:{symbol}:{timeframe}",
+                    ).tail(limit)
                 )
                 return self._clean_dataframe(df)
             except Exception as e:
@@ -52,7 +60,14 @@ class DataOrchestrator:
                 # Se simula el fallback construyendo a partir de yf debido a la ausencia de API Key explícita
                 # En producción real se mapea a httpx.AsyncClient -> api.finnhub.io/api/v1/stock/candle
                 df = await asyncio.to_thread(
-                    lambda: yf.download(tickers=symbol, interval=timeframe, period="5d", progress=False).tail(limit)
+                    lambda: safe_yfinance_download(
+                        yf,
+                        tickers=symbol,
+                        interval=timeframe,
+                        period="5d",
+                        progress=False,
+                        context=f"data_provider:finnhub_fallback:{symbol}:{timeframe}",
+                    ).tail(limit)
                 )
                 return self._clean_dataframe(df)
             except Exception as e:
