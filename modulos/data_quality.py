@@ -185,7 +185,7 @@ def validate_dataframe(
         )
 
     if required and rows > 0:
-        valid_cells = df[required].applymap(is_valid_value)
+        valid_cells = df[required].map(is_valid_value)
         coverage = _clamp_ratio(float(valid_cells.to_numpy().mean()))
     else:
         coverage = 1.0 if rows >= min_rows else 0.0
