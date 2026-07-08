@@ -182,6 +182,13 @@ def build_signal_events(
                     "Acción Research": snapshot.get("action", "-"),
                     "Margen Seguridad": _as_float(snapshot.get("margin_of_safety")),
                     "Confianza": _as_float(_snapshot_value(snapshot, "confidence", "confidence")),
+                    "Confianza Predictiva": _as_float(
+                        _first_not_none(
+                            snapshot.get("predictive_confidence"),
+                            snapshot.get("score_predictive_confidence"),
+                            _payload(snapshot).get("predictive_confidence"),
+                        )
+                    ),
                     "Quality Gate": _snapshot_value(snapshot, "score_quality_gate_reason", "quality_gate_reason") or "-",
                     "Red Flags": _red_flags_count(snapshot),
                 }
@@ -395,6 +402,171 @@ def run_basic_signal_backtest(
     return events, results, summary
 
 
+
+def _confidence_bucket(value: Any) -> str:
+    """Agrupa una probabilidad/confianza en bandas estables."""
+
+    number = _as_float(value)
+    if number is None:
+        return "Sin confianza"
+    if number < 0.50:
+        return "Baja <50%"
+    if number < 0.70:
+        return "Media 50-70%"
+    if number < 0.85:
+        return "Alta 70-85%"
+    return "Muy alta ≥85%"
+
+
+def _confidence_value_for_row(row: pd.Series) -> float | None:
+    """Prioriza confianza predictiva explícita y cae a confianza general."""
+
+    predictive = _as_float(row.get("Confianza Predictiva"))
+    if predictive is not None:
+        return predictive
+
+    confidence = _as_float(row.get("Confianza"))
+    if confidence is not None:
+        return confidence
+
+    score = _as_float(row.get("ValueQuant"))
+    if score is not None:
+        return max(0.0, min(1.0, score / 100.0))
+
+    return None
+
+
+def calibration_eligible_results(results: pd.DataFrame) -> pd.DataFrame:
+    """Filtra resultados con hit observable y confianza disponible."""
+
+    if results is None or results.empty:
+        return pd.DataFrame()
+
+    df = results.copy()
+    df["Hit"] = df["Hit"].where(df["Hit"].notna(), None)
+    df = df[df["Hit"].notna()].copy()
+    if df.empty:
+        return pd.DataFrame()
+
+    df["Confianza Calibración"] = df.apply(_confidence_value_for_row, axis=1)
+    df["Confianza Calibración"] = pd.to_numeric(df["Confianza Calibración"], errors="coerce")
+    df = df.dropna(subset=["Confianza Calibración"])
+    if df.empty:
+        return pd.DataFrame()
+
+    df["Confianza Calibración"] = df["Confianza Calibración"].clip(0.0, 1.0)
+    df["Banda Confianza"] = df["Confianza Calibración"].apply(_confidence_bucket)
+    df["Hit Numérico"] = df["Hit"].astype(float)
+    return df.reset_index(drop=True)
+
+
+def build_predictive_confidence_calibration(results: pd.DataFrame) -> pd.DataFrame:
+    """Construye tabla de calibración: confianza esperada vs acierto observado."""
+
+    df = calibration_eligible_results(results)
+    if df.empty:
+        return pd.DataFrame()
+
+    table = (
+        df.groupby("Banda Confianza", dropna=False)
+        .agg(
+            Señales=("Banda Confianza", "size"),
+            Confianza_Media=("Confianza Calibración", "mean"),
+            Hit_Rate_Observado=("Hit Numérico", "mean"),
+            Retorno_Medio=("Retorno Futuro", "mean"),
+        )
+        .reset_index()
+    )
+
+    order = {
+        "Baja <50%": 0,
+        "Media 50-70%": 1,
+        "Alta 70-85%": 2,
+        "Muy alta ≥85%": 3,
+        "Sin confianza": 4,
+    }
+    table["_order"] = table["Banda Confianza"].map(order).fillna(99)
+    table = table.sort_values("_order").drop(columns=["_order"]).reset_index(drop=True)
+    table["Gap_Calibración"] = table["Hit_Rate_Observado"] - table["Confianza_Media"]
+    table["Error_Absoluto"] = table["Gap_Calibración"].abs()
+    return table
+
+
+def summarize_predictive_confidence_calibration(results: pd.DataFrame) -> dict[str, Any]:
+    """Resume la fiabilidad de la confianza predictiva."""
+
+    eligible = calibration_eligible_results(results)
+    table = build_predictive_confidence_calibration(results)
+
+    if eligible.empty or table.empty:
+        return {
+            "eligible_signals": 0,
+            "coverage": 0.0,
+            "mean_confidence": None,
+            "observed_hit_rate": None,
+            "calibration_gap": None,
+            "mean_abs_error": None,
+            "reliability_score": None,
+            "label": "Sin datos suficientes",
+            "table": table,
+        }
+
+    total_results = int(len(results)) if results is not None else 0
+    coverage = float(len(eligible) / total_results) if total_results else 0.0
+    mean_confidence = float(eligible["Confianza Calibración"].mean())
+    observed_hit_rate = float(eligible["Hit Numérico"].mean())
+    calibration_gap = observed_hit_rate - mean_confidence
+
+    weighted_error = (
+        table["Error_Absoluto"] * table["Señales"]
+    ).sum() / max(1, int(table["Señales"].sum()))
+    mean_abs_error = float(weighted_error)
+    reliability_score = max(0.0, min(1.0, 1.0 - mean_abs_error))
+
+    if len(eligible) < 5:
+        label = "Muestra insuficiente"
+    elif mean_abs_error <= 0.08:
+        label = "Bien calibrada"
+    elif mean_abs_error <= 0.18:
+        label = "Calibración aceptable"
+    else:
+        label = "Mal calibrada"
+
+    return {
+        "eligible_signals": int(len(eligible)),
+        "coverage": coverage,
+        "mean_confidence": mean_confidence,
+        "observed_hit_rate": observed_hit_rate,
+        "calibration_gap": float(calibration_gap),
+        "mean_abs_error": mean_abs_error,
+        "reliability_score": reliability_score,
+        "label": label,
+        "table": table,
+    }
+
+
+def apply_calibrated_confidence_to_results(results: pd.DataFrame) -> pd.DataFrame:
+    """Añade columnas de diagnóstico de calibración a cada evento evaluado."""
+
+    if results is None or results.empty:
+        return pd.DataFrame()
+
+    df = results.copy()
+    df["Confianza Calibración"] = df.apply(_confidence_value_for_row, axis=1)
+    df["Confianza Calibración"] = pd.to_numeric(df["Confianza Calibración"], errors="coerce").clip(0.0, 1.0)
+    df["Banda Confianza"] = df["Confianza Calibración"].apply(_confidence_bucket)
+
+    calibration = build_predictive_confidence_calibration(df)
+    if calibration.empty:
+        df["Hit Rate Banda"] = None
+        df["Gap Banda"] = None
+        return df
+
+    lookup = calibration.set_index("Banda Confianza")
+    df["Hit Rate Banda"] = df["Banda Confianza"].map(lookup["Hit_Rate_Observado"])
+    df["Gap Banda"] = df["Banda Confianza"].map(lookup["Gap_Calibración"])
+    return df
+
 def _fmt_pct(value: Any) -> str:
     number = _as_float(value)
     return f"{number:+.1%}" if number is not None else "N/D"
@@ -450,6 +622,7 @@ def render_signal_backtest_panel(default_ticker: str | None = None) -> None:
                 "Acción Score",
                 "Margen Seguridad",
                 "Confianza",
+                "Confianza Predictiva",
                 "Red Flags",
             ]
         ].style.format(
@@ -475,6 +648,40 @@ def render_signal_backtest_panel(default_ticker: str | None = None) -> None:
     c3.metric("Retorno medio BUY", _fmt_pct(summary.avg_forward_return_buy))
     c4.metric("Hit rate BUY", _fmt_pct(summary.hit_rate_buy))
 
+    calibration_summary = summarize_predictive_confidence_calibration(results)
+    c5, c6, c7, c8 = st.columns(4)
+    c5.metric("Señales calibrables", calibration_summary["eligible_signals"])
+    c6.metric("Fiabilidad confianza", _fmt_pct(calibration_summary["reliability_score"]))
+    c7.metric("Hit observado", _fmt_pct(calibration_summary["observed_hit_rate"]))
+    c8.metric("Gap calibración", _fmt_pct(calibration_summary["calibration_gap"]))
+
+    label = calibration_summary["label"]
+    if label == "Bien calibrada":
+        st.success("Confianza predictiva bien calibrada frente a resultados históricos.")
+    elif label in {"Calibración aceptable", "Muestra insuficiente"}:
+        st.info(f"Diagnóstico de confianza predictiva: {label}.")
+    elif label == "Sin datos suficientes":
+        st.warning("No hay suficientes señales con hit observable para calibrar la confianza.")
+    else:
+        st.warning("La confianza predictiva parece mal calibrada frente a los resultados históricos.")
+
+    calibration_table = calibration_summary.get("table", pd.DataFrame())
+    if isinstance(calibration_table, pd.DataFrame) and not calibration_table.empty:
+        st.markdown("#### Calibración de confianza predictiva")
+        st.dataframe(
+            calibration_table.style.format(
+                {
+                    "Confianza_Media": "{:.0%}",
+                    "Hit_Rate_Observado": "{:.0%}",
+                    "Retorno_Medio": "{:+.1%}",
+                    "Gap_Calibración": "{:+.1%}",
+                    "Error_Absoluto": "{:.1%}",
+                }
+            ),
+            use_container_width=True,
+            hide_index=True,
+        )
+
     by_signal = summary_payload.get("by_signal", pd.DataFrame())
     if isinstance(by_signal, pd.DataFrame) and not by_signal.empty:
         st.markdown("#### Resumen por señal")
@@ -499,6 +706,7 @@ def render_signal_backtest_panel(default_ticker: str | None = None) -> None:
         st.bar_chart(chart_ready.set_index("Fecha Entrada")["Retorno Futuro"])
 
     st.markdown("#### Detalle de resultados")
+    results = apply_calibrated_confidence_to_results(results)
     display_cols = [
         "Ticker",
         "Fecha Entrada",
@@ -509,6 +717,8 @@ def render_signal_backtest_panel(default_ticker: str | None = None) -> None:
         "Precio Salida",
         "Retorno Futuro",
         "Hit",
+        "Banda Confianza",
+        "Gap Banda",
     ]
     display_cols = [col for col in display_cols if col in results.columns]
 
@@ -519,6 +729,7 @@ def render_signal_backtest_panel(default_ticker: str | None = None) -> None:
                 "Precio Entrada": "${:.2f}",
                 "Precio Salida": "${:.2f}",
                 "Retorno Futuro": "{:+.1%}",
+                "Gap Banda": "{:+.1%}",
             }
         ),
         use_container_width=True,
