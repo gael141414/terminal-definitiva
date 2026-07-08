@@ -57,38 +57,250 @@ def _veredicto(score: float | None) -> tuple[str, str]:
     return "Evitar por ahora", "La combinación de calidad, valoración y riesgo no justifica prioridad de análisis."
 
 
+
+def _as_float(value: Any, default: float | None = None) -> float | None:
+    """Convierte valores numéricos sin romper la UI."""
+
+    try:
+        if value is None:
+            return default
+        number = float(value)
+        if number != number or number in (float("inf"), float("-inf")):
+            return default
+        return number
+    except Exception:
+        return default
+
+
+def _score_bucket(score: float | None) -> tuple[str, str, str]:
+    """Clasifica el score en una banda accionable de producto."""
+
+    if score is None:
+        return "Pendiente", "Sin datos suficientes", "Revisar cobertura antes de tomar decisiones."
+    if score >= 80:
+        return "Excelente", "Alta prioridad", "Profundizar tesis, valoración y riesgos antes de entrada."
+    if score >= 65:
+        return "Invertible", "Prioridad media", "Candidato razonable; exigir margen de seguridad y confirmar catalizadores."
+    if score >= 50:
+        return "Observación", "Baja prioridad", "Mantener en seguimiento salvo mejora clara de score o precio."
+    return "Débil", "Descartar / recalcular", "No dedicar tiempo adicional salvo cambio material en datos o tesis."
+
+
+def _red_flags_count(valuequant_score: Any) -> int:
+    """Cuenta banderas rojas del score sin acoplarse a la implementación interna."""
+
+    explicit = _score_attr(valuequant_score, "red_flags_count")
+    try:
+        if explicit is not None:
+            return max(0, int(explicit))
+    except Exception:
+        pass
+
+    flags = _score_attr(valuequant_score, "red_flags", [])
+    if isinstance(flags, list):
+        return len(flags)
+    if isinstance(flags, tuple):
+        return len(flags)
+    return 0
+
+
+def build_research_ux_summary(
+    ticker_input: str,
+    ticker_competidor: str,
+    nota_buffett: float,
+    valuequant_score: Any,
+) -> dict[str, Any]:
+    """Construye el payload de UX del panel principal de Research Core."""
+
+    final_score = _as_float(_score_attr(valuequant_score, "final_score"))
+    raw_score = _as_float(_score_attr(valuequant_score, "raw_score"))
+    coverage = _as_float(_score_attr(valuequant_score, "data_coverage"))
+    confidence = _as_float(_score_attr(valuequant_score, "confidence"))
+    predictive_confidence = _as_float(_score_attr(valuequant_score, "predictive_confidence"))
+    model_version = _score_attr(valuequant_score, "model_version", "N/D")
+    decision_action = str(_score_attr(valuequant_score, "decision_action", "") or "").strip()
+    quality_adjusted = bool(_score_attr(valuequant_score, "quality_adjusted", False))
+    quality_gate_reason = str(_score_attr(valuequant_score, "quality_gate_reason", "") or "").strip()
+    red_flags = _red_flags_count(valuequant_score)
+
+    verdict, verdict_text = _veredicto(final_score)
+    score_bucket, priority_label, priority_detail = _score_bucket(final_score)
+
+    if red_flags > 0 or quality_adjusted:
+        risk_state = "Alerta"
+        risk_detail = quality_gate_reason or f"{red_flags} bandera(s) roja(s) detectada(s)."
+    elif final_score is not None and final_score >= 65:
+        risk_state = "Controlado"
+        risk_detail = "Sin ajustes críticos detectados en el score."
+    else:
+        risk_state = "Pendiente"
+        risk_detail = "Conviene validar fundamentales, valoración y narrativa antes de priorizar."
+
+    if decision_action:
+        primary_action = decision_action
+    elif final_score is not None and final_score >= 80:
+        primary_action = "Analizar entrada con prioridad"
+    elif final_score is not None and final_score >= 65:
+        primary_action = "Estudiar con margen de seguridad"
+    elif final_score is not None and final_score >= 50:
+        primary_action = "Mantener en observación"
+    else:
+        primary_action = "Evitar por ahora"
+
+    return {
+        "ticker": str(ticker_input or "").upper(),
+        "competitor": str(ticker_competidor or "").upper(),
+        "final_score": final_score,
+        "raw_score": raw_score,
+        "buffett_score": _as_float(nota_buffett),
+        "coverage": coverage,
+        "confidence": confidence,
+        "predictive_confidence": predictive_confidence,
+        "model_version": model_version,
+        "verdict": verdict,
+        "verdict_text": verdict_text,
+        "score_bucket": score_bucket,
+        "priority_label": priority_label,
+        "priority_detail": priority_detail,
+        "primary_action": primary_action,
+        "risk_state": risk_state,
+        "risk_detail": risk_detail,
+        "quality_adjusted": quality_adjusted,
+        "quality_gate_reason": quality_gate_reason or "-",
+        "red_flags": red_flags,
+    }
+
+
+def build_research_workflow_steps(summary: dict[str, Any]) -> list[dict[str, str]]:
+    """Devuelve los pasos de lectura recomendados para el análisis principal."""
+
+    final_score = _as_float(summary.get("final_score"))
+    coverage = _as_float(summary.get("coverage"))
+    confidence = _as_float(summary.get("confidence"))
+    predictive_confidence = _as_float(summary.get("predictive_confidence"))
+    red_flags = int(summary.get("red_flags") or 0)
+    quality_adjusted = bool(summary.get("quality_adjusted"))
+
+    score_status = "OK" if final_score is not None else "Pendiente"
+    data_status = "OK" if coverage is not None and coverage >= 0.70 else "Revisar"
+    confidence_status = "OK" if confidence is not None and confidence >= 0.60 else "Revisar"
+    prediction_status = "OK" if predictive_confidence is not None and predictive_confidence >= 0.55 else "Pendiente"
+    risk_status = "Alerta" if red_flags > 0 or quality_adjusted else "OK"
+
+    return [
+        {
+            "Paso": "1. Score institucional",
+            "Estado": score_status,
+            "Lectura": "Confirmar score final, score bruto y acción recomendada.",
+        },
+        {
+            "Paso": "2. Calidad de datos",
+            "Estado": data_status,
+            "Lectura": "Validar cobertura antes de confiar en conclusiones automáticas.",
+        },
+        {
+            "Paso": "3. Confianza operativa",
+            "Estado": confidence_status,
+            "Lectura": "Medir si la señal tiene suficiente fiabilidad para priorizar tiempo.",
+        },
+        {
+            "Paso": "4. Confianza predictiva",
+            "Estado": prediction_status,
+            "Lectura": "Contrastar fiabilidad esperada frente a backtesting histórico.",
+        },
+        {
+            "Paso": "5. Riesgos y quality gates",
+            "Estado": risk_status,
+            "Lectura": "Revisar banderas rojas, ajustes de calidad y razones de gate.",
+        },
+        {
+            "Paso": "6. Tesis, valoración y seguimiento",
+            "Estado": "Acción",
+            "Lectura": "Completar tesis, margen de seguridad, comparativa y guardado en watchlist.",
+        },
+    ]
+
+
+def _state_badge(status: str) -> str:
+    status = str(status or "").lower()
+    if status == "ok":
+        return "✅ OK"
+    if status == "alerta":
+        return "⚠️ Alerta"
+    if status == "acción":
+        return "➡️ Acción"
+    return "🟡 Revisar"
+
+
+def _render_workflow_steps(summary: dict[str, Any]) -> None:
+    """Renderiza un workflow compacto de decisión."""
+
+    steps = build_research_workflow_steps(summary)
+    st.markdown("#### Ruta recomendada de análisis")
+
+    for step in steps:
+        c1, c2, c3 = st.columns([1.2, 0.8, 3.0])
+        c1.markdown(f"**{step['Paso']}**")
+        c2.markdown(_state_badge(step["Estado"]))
+        c3.caption(step["Lectura"])
+
+
+def _render_action_card(summary: dict[str, Any]) -> None:
+    """Tarjeta ejecutiva de decisión."""
+
+    st.markdown("#### Decisión ejecutiva")
+
+    c1, c2, c3 = st.columns([1.3, 1.0, 1.0])
+    c1.metric("Acción sugerida", summary["primary_action"])
+    c2.metric("Prioridad", summary["priority_label"])
+    c3.metric("Riesgo", summary["risk_state"])
+
+    if summary["risk_state"] == "Alerta":
+        st.warning(summary["risk_detail"])
+    elif summary["priority_label"] == "Alta prioridad":
+        st.success(summary["priority_detail"])
+    else:
+        st.info(summary["priority_detail"])
+
+
 def _render_research_header(
     ticker_input: str,
     ticker_competidor: str,
     nota_buffett: float,
     valuequant_score: Any,
 ) -> None:
-    """Cabecera sintética del flujo Research Core."""
+    """Cabecera ejecutiva del flujo Research Core."""
 
-    final_score = _score_attr(valuequant_score, "final_score")
-    coverage = _score_attr(valuequant_score, "data_coverage")
-    confidence = _score_attr(valuequant_score, "confidence")
-    predictive_confidence = _score_attr(valuequant_score, "predictive_confidence")
-    model_version = _score_attr(valuequant_score, "model_version", "N/D")
-    verdict, verdict_text = _veredicto(float(final_score) if final_score is not None else None)
+    summary = build_research_ux_summary(
+        ticker_input=ticker_input,
+        ticker_competidor=ticker_competidor,
+        nota_buffett=nota_buffett,
+        valuequant_score=valuequant_score,
+    )
 
-    st.markdown(f"## 🧩 Research Core — {ticker_input}")
+    st.markdown(f"## 🧩 Research Core — {summary['ticker']}")
     st.caption(
-        "Vista consolidada de análisis de empresa: score, tesis, fundamentales, valoración, "
-        "forense, escenarios, narrativa directiva e informe exportable."
+        "Panel principal de decisión: score, confianza, riesgos, tesis, seguimiento e informe en una sola ruta."
     )
 
     c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("ValueQuant Score", _fmt_score(final_score))
-    c2.metric("Buffett Quality", _fmt_score(nota_buffett))
-    c3.metric("Cobertura datos", _fmt_pct(coverage))
-    c4.metric("Confianza operativa", _fmt_pct(confidence))
-    c5.metric("Confianza predictiva", _fmt_pct(predictive_confidence) if predictive_confidence is not None else "Pendiente")
+    c1.metric("ValueQuant", _fmt_score(summary["final_score"]))
+    c2.metric("Buffett", _fmt_score(summary["buffett_score"]))
+    c3.metric("Cobertura", _fmt_pct(summary["coverage"]))
+    c4.metric("Confianza", _fmt_pct(summary["confidence"]))
+    c5.metric(
+        "Predictiva",
+        _fmt_pct(summary["predictive_confidence"]) if summary["predictive_confidence"] is not None else "Pendiente",
+    )
 
-    st.info(f"**Veredicto operativo:** {verdict}. {verdict_text}")
-    st.caption(f"Modelo: **{model_version}**")
-    if ticker_competidor:
-        st.caption(f"Comparador activo: **{ticker_competidor}**")
+    _render_action_card(summary)
+
+    with st.expander("Ver ruta de análisis recomendada", expanded=True):
+        _render_workflow_steps(summary)
+
+    st.caption(f"Modelo: **{summary['model_version']}**")
+    if summary["competitor"]:
+        st.caption(f"Comparador activo: **{summary['competitor']}**")
 
 
 def ejecutar_research_core(
