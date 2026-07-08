@@ -11,6 +11,7 @@ from income_analyzer import analizar_cuenta_resultados
 from balance_analyzer import analizar_balance
 from cashflow_analyzer import analizar_flujo_efectivo
 from screener import calcular_score_buffett # Reutilizamos tu función del screener
+from modulos.yahoo_resilience import safe_yfinance_download
 
 # Lista de universo de acciones para el backtest (Ampliable)
 UNIVERSO_TICKERS = [
@@ -59,7 +60,18 @@ def ejecutar_backtest(anios_historia=6, top_n=5):
     tickers_yf = UNIVERSO_TICKERS + ["SPY"]
     
     # Forzamos descargar los precios de "Close"
-    datos_precios = yf.download(tickers_yf, start=f"{anio_inicio}-01-01", end=f"{anio_actual}-12-31", progress=False)['Close']
+    raw_prices = safe_yfinance_download(
+        yf,
+        tickers_yf,
+        start=f"{anio_inicio}-01-01",
+        end=f"{anio_actual}-12-31",
+        progress=False,
+        context="backtester:universe",
+    )
+    if raw_prices.empty or "Close" not in raw_prices.columns:
+        print("⚠️ No se pudieron descargar precios históricos desde Yahoo Finance. Backtest cancelado sin romper ejecución.")
+        return None
+    datos_precios = raw_prices['Close']
 
     # 🛡️ BLINDAJE 1: Quitar la zona horaria para que no rompa los filtros
     if datos_precios.index.tz is not None:
