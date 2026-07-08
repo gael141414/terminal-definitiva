@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sys
+import warnings
 from pathlib import Path
 
 import pandas as pd
@@ -47,6 +48,14 @@ def run_contract_checks() -> list[str]:
     assert_true(partial.status == dq.PARTIAL, "Debe marcar cobertura parcial")
     assert_true(partial.usable and not partial.blocking, "Parcial debe ser usable pero no bloqueante")
     checks.append("partial dataframe coverage")
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", FutureWarning)
+        clean = dq.validate_dataframe(partial_df, ["a", "b"], source="compat", min_coverage=0.10)
+    pandas_future_warnings = [item for item in caught if issubclass(item.category, FutureWarning)]
+    assert_true(clean.usable, "La validación compatible debe seguir produciendo resultado usable")
+    assert_true(not pandas_future_warnings, "validate_dataframe no debe emitir FutureWarning de pandas")
+    checks.append("pandas compatibility without FutureWarning")
 
     series = dq.safe_numeric_series(pd.DataFrame({"x": ["1", "bad", 3, None]}), "x")
     assert_true(series.tolist() == [1, 3], "safe_numeric_series debe limpiar valores no numéricos")
