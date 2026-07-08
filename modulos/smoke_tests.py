@@ -47,6 +47,7 @@ CRITICAL_FILES = [
     "scripts/test_basic_signal_backtesting.py",
     "scripts/test_predictive_confidence_calibration.py",
     "scripts/test_research_core_ux_contract.py",
+    "scripts/test_institutional_export_pack.py",
     "modulos/research_core.py",
     "modulos/investment_thesis.py",
     "modulos/research_report.py",
@@ -463,6 +464,20 @@ def _check_research_core_ux_contract() -> list[SmokeCheck]:
         checks.append(_fail("research_core_ux_contract:behavior", f"{type(exc).__name__}: {exc}"))
     return checks
 
+
+def _check_institutional_export_pack_contract() -> list[SmokeCheck]:
+    """Ejecuta los checks contractuales del pack institucional de exportación."""
+
+    checks: list[SmokeCheck] = []
+    try:
+        contract = importlib.import_module("scripts.test_institutional_export_pack")
+        contract_checks = contract.run_contract_checks()
+        checks.append(_ok("institutional_export_pack_contract:loaded", f"{len(contract_checks)} checks"))
+        checks.append(_ok("institutional_export_pack_contract:behavior", "institutional export pack contract OK"))
+    except Exception as exc:
+        checks.append(_fail("institutional_export_pack_contract:behavior", f"{type(exc).__name__}: {exc}"))
+    return checks
+
 def _check_scoring_model() -> list[SmokeCheck]:
     checks: list[SmokeCheck] = []
     try:
@@ -501,6 +516,7 @@ def run_smoke_tests() -> list[SmokeCheck]:
     checks.extend(_check_basic_signal_backtesting_contract())
     checks.extend(_check_predictive_confidence_calibration_contract())
     checks.extend(_check_research_core_ux_contract())
+    checks.extend(_check_institutional_export_pack_contract())
     checks.extend(_check_scoring_model())
     return checks
 
