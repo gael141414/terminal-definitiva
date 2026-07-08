@@ -1,16 +1,25 @@
 # ValueQuant Terminal
 
-ValueQuant Terminal es una plataforma Streamlit de análisis financiero orientada a research, valoración, scoring, screener, watchlist y seguimiento de carteras.
+ValueQuant Terminal es una plataforma Streamlit de análisis financiero orientada a research, valoración, scoring, tesis de inversión, watchlist, backtesting básico de señales, exportación institucional y control de calidad local.
 
-> Estado actual: prototipo avanzado en estabilización. No debe presentarse como asesor financiero automático ni como sistema que garantice rentabilidad.
+> Estado actual: prototipo avanzado estabilizado para uso local de research. No constituye asesoramiento financiero personalizado ni garantiza rentabilidad.
 
-## Objetivo del producto
-
-El objetivo del proyecto es evolucionar hacia un terminal de apoyo a la decisión inversora:
+## Qué permite hacer
 
 ```text
-Datos -> Análisis -> ValueQuant Score -> Backtesting -> Screener -> Tesis -> Watchlist -> Alertas
+Datos -> Análisis Fundamental -> ValueQuant Score -> Tesis -> Watchlist -> Backtesting -> Exportación -> QA
 ```
+
+Capacidades principales:
+
+- **Research Core**: centro operativo para analizar una empresa con score, tesis, seguimiento, informe, comparativa y módulos financieros.
+- **ValueQuant Score**: score institucional orientativo con componentes, confidence diagnostics, quality gates, decision guidance y payload trazable.
+- **Tesis de inversión**: lectura estructurada de acción operativa, valoración, margen de seguridad, riesgos y próximos pasos.
+- **Watchlist**: guardado de análisis y seguimiento de snapshots.
+- **Backtesting básico de señales**: evaluación histórica simple de señales BUY / WATCH / AVOID guardadas.
+- **Calibración de confianza predictiva**: lectura de fiabilidad de la confianza cuando hay muestra histórica suficiente.
+- **Exportación institucional**: informes Markdown, HTML imprimible, memo ejecutivo, metadata JSON y ZIP institucional.
+- **QA final**: healthcheck, smoke tests estrictos y release readiness gate.
 
 ## Instalación local
 
@@ -23,7 +32,7 @@ pip install -r requirements.txt
 
 ## Configuración
 
-Copia los ejemplos de configuración y añade tus claves reales en local:
+Copia los ejemplos de configuración y añade tus claves reales solo en local:
 
 ```bash
 cp .env.example .env
@@ -48,24 +57,48 @@ Nunca subas `.env` ni `.streamlit/secrets.toml` reales al repositorio.
 streamlit run app.py
 ```
 
+## QA local recomendado
+
+Antes de entregar, fusionar o usar una versión como estable:
+
+```bash
+python scripts/run_healthcheck.py
+python scripts/run_smoke_tests.py --strict
+python scripts/run_release_readiness.py
+python scripts/run_release_readiness.py --json
+```
+
+El release gate debe terminar con:
+
+```text
+Estado: READY
+Resultado: OK para merge/release interno.
+```
+
+## Guías
+
+- [Guía de uso](docs/USER_GUIDE.md)
+- [Runbook de release y QA](docs/RELEASE_RUNBOOK.md)
+
 ## Módulos principales
 
+- Research Core
 - Resumen Ejecutivo
 - Análisis Fundamental
 - ValueQuant Score
 - Auditoría Forense
 - Valoración
-- Técnico y Opciones
-- Macro y Liquidez
-- Screener
+- Comparativa relativa
 - Watchlist
-- Portfolio Manager
-- Backtesting
-- Monte Carlo
+- Briefing de Oportunidades
+- Centro de Automatización
+- Backtesting básico de señales
+- Exportación institucional
+- Release Readiness
 
 ## ValueQuant Score
 
-El `ValueQuant Score` es una nota institucional orientativa. Pondera:
+El `ValueQuant Score` es una nota institucional orientativa. Pondera, entre otros bloques:
 
 - Calidad fundamental
 - Valoración
@@ -76,18 +109,18 @@ El `ValueQuant Score` es una nota institucional orientativa. Pondera:
 - Macro, sector y liquidez
 - Opciones, alt data y NLP
 
-La confianza predictiva queda pendiente de validación mediante backtesting histórico. Hasta que exista esa validación, la nota debe usarse como herramienta de research, no como señal automática de compra o venta.
+El score no debe usarse como señal automática de compra o venta. Debe interpretarse junto con cobertura de datos, confianza operativa, quality gates, red flags, backtesting y validación manual.
+
+## Exportación institucional
+
+Desde `Research Core -> Informe` se puede descargar:
+
+- Informe completo en Markdown.
+- HTML imprimible para guardar como PDF.
+- Memo ejecutivo de comité.
+- Metadata JSON estructurada.
+- ZIP institucional con todos los artefactos.
 
 ## Advertencia
 
 Este proyecto no constituye asesoramiento financiero personalizado. Cualquier decisión de inversión debe ser validada por el usuario y contrastada con fuentes externas.
-
-## Roadmap inmediato
-
-1. Estabilización técnica y seguridad.
-2. Reorganización/fusión de herramientas.
-3. ValueQuant Score v1.1 trazable.
-4. Backtesting transversal del score.
-5. Screener y ranking de oportunidades.
-6. Tesis de inversión exportable.
-7. Watchlist, alertas y portfolio.
