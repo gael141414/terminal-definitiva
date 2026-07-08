@@ -9,6 +9,7 @@ from income_analyzer import analizar_cuenta_resultados
 from balance_analyzer import analizar_balance
 from cashflow_analyzer import analizar_flujo_efectivo
 from valuator import valorar_empresa
+from modulos.yahoo_resilience import safe_yfinance_info
 
 # Copiamos aquí la función del Score para que el bot pueda evaluarlas
 def calcular_score_buffett(df_is, df_bs, df_cf):
@@ -74,8 +75,7 @@ def ejecutar_screener():
             is_df, bs_df, cf_df = obtener_estados_financieros(ticker, años=5, usar_cache=True)
             
             # 2. Extracción de Datos en Vivo (Yahoo Finance) para Valoración Múltiple
-            ticker_yf = yf.Ticker(ticker)
-            info = ticker_yf.info
+            info = safe_yfinance_info(yf, ticker, context="screener")
             
             ev_ebitda = info.get('enterpriseToEbitda', 0)
             if ev_ebitda is None: ev_ebitda = 0
