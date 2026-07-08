@@ -7,6 +7,9 @@ revisión humana: no constituye asesoramiento financiero personalizado.
 
 from __future__ import annotations
 
+import io
+import json
+import zipfile
 from datetime import datetime
 from html import escape
 from typing import Any
@@ -576,6 +579,268 @@ def research_report_to_html(markdown: str, ticker: str) -> str:
 """
 
 
+
+def _json_safe(value: Any) -> Any:
+    """Convierte valores habituales de pandas/numpy/dataclasses a JSON seguro."""
+
+    if value is None:
+        return None
+    if isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): _json_safe(val) for key, val in value.items()}
+    if hasattr(value, "isoformat"):
+        try:
+            return value.isoformat()
+        except Exception:
+            pass
+    if hasattr(value, "__dict__"):
+        return _json_safe(vars(value))
+    try:
+        if pd.isna(value):
+            return None
+    except Exception:
+        pass
+    return str(value)
+
+
+def _generated_timestamp() -> str:
+    return datetime.now().replace(microsecond=0).isoformat()
+
+
+def _safe_filename_part(value: str) -> str:
+    cleaned = "".join(ch.lower() if ch.isalnum() else "_" for ch in str(value or "asset"))
+    while "__" in cleaned:
+        cleaned = cleaned.replace("__", "_")
+    return cleaned.strip("_") or "asset"
+
+
+def build_institutional_memo_markdown(
+    ticker: str,
+    ticker_competidor: str | None,
+    valuequant_score: Any,
+    res_val: dict[str, Any] | None,
+    nota_buffett: float | None,
+) -> str:
+    """Genera un memo corto de comité a partir de la tesis y el score."""
+
+    thesis = build_investment_thesis(ticker, valuequant_score, res_val, nota_buffett)
+    score_payload = _report_score_payload(valuequant_score, ticker)
+    generated_at = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    decision_action = score_payload.get("decision_action") or getattr(thesis, "score_decision_action", None) or thesis.action
+    quality_adjusted = "Sí" if bool(score_payload.get("quality_adjusted", False)) else "No"
+    quality_gate_reason = score_payload.get("quality_gate_reason") or "N/D"
+
+    lines = [
+        f"# Memo ejecutivo — {ticker}",
+        "",
+        f"**Generado:** {generated_at}",
+        "",
+        f"> {DISCLAIMER}",
+        "",
+        "## Decisión propuesta",
+        f"- **Acción operativa:** {thesis.action}",
+        f"- **Acción del score:** {decision_action}",
+        f"- **Detalle:** {thesis.action_detail}",
+        f"- **Comparador:** {ticker_competidor or 'N/D'}",
+        "",
+        "## Métricas clave",
+        f"- **ValueQuant Score:** {_fmt_score(score_payload.get('final_score') if score_payload else thesis.final_score)}",
+        f"- **Score bruto:** {_fmt_score(score_payload.get('raw_score'))}",
+        f"- **Buffett Quality:** {_fmt_score(thesis.buffett_score)}",
+        f"- **Confianza operativa:** {_fmt_pct(score_payload.get('confidence') if score_payload else _score_attr(valuequant_score, 'confidence'))}",
+        f"- **Confianza predictiva:** {_fmt_pct(score_payload.get('predictive_confidence')) if score_payload.get('predictive_confidence') is not None else 'Pendiente'}",
+        f"- **Cobertura de datos:** {_fmt_pct(score_payload.get('data_coverage') if score_payload else _score_attr(valuequant_score, 'data_coverage'))}",
+        "",
+        "## Valoración",
+        f"- **Precio actual:** {_fmt_money(thesis.current_price)}",
+        f"- **Valor intrínseco / razonable:** {_fmt_money(thesis.intrinsic_value)}",
+        f"- **Margen de seguridad:** {_fmt_pct(thesis.margin_of_safety)}",
+        f"- **Régimen:** {thesis.valuation_regime}",
+        f"- **Zona razonable de entrada:** {_fmt_money(thesis.reasonable_entry_price)}",
+        f"- **Zona conservadora:** {_fmt_money(thesis.conservative_entry_price)}",
+        "",
+        "## Riesgos y quality gates",
+        f"- **Ajuste por calidad:** {quality_adjusted}",
+        f"- **Motivo quality gate:** {quality_gate_reason}",
+    ]
+
+    red_flags = list(getattr(thesis, "red_flags", []) or [])
+    if red_flags:
+        lines.append("- **Banderas rojas:**")
+        for flag in red_flags[:6]:
+            lines.append(f"  - {flag}")
+    else:
+        lines.append("- **Banderas rojas:** N/D")
+
+    lines.extend(
+        [
+            "",
+            "## Próximos pasos",
+            "- Validar manualmente estados financieros y supuestos de valoración.",
+            "- Contrastar múltiplos, FCF Yield y calidad con competidores.",
+            "- Revisar sensibilidad de crecimiento/WACC antes de tomar una decisión.",
+            "- Guardar en watchlist si requiere seguimiento operativo.",
+            "",
+        ]
+    )
+
+    return "\n".join(lines).strip() + "\n"
+
+
+def build_institutional_export_metadata(
+    ticker: str,
+    ticker_competidor: str | None,
+    valuequant_score: Any,
+    res_val: dict[str, Any] | None,
+    nota_buffett: float | None,
+) -> dict[str, Any]:
+    """Metadata estructurada para trazabilidad del paquete institucional."""
+
+    thesis = build_investment_thesis(ticker, valuequant_score, res_val, nota_buffett)
+    score_payload = _report_score_payload(valuequant_score, ticker)
+
+    metadata = {
+        "schema_version": "institutional_export_v1",
+        "generated_at": _generated_timestamp(),
+        "ticker": str(ticker or "").upper(),
+        "competitor": str(ticker_competidor or "").upper() or None,
+        "disclaimer": DISCLAIMER,
+        "score": {
+            "model_version": score_payload.get("model_version") or _score_attr(valuequant_score, "model_version"),
+            "final_score": score_payload.get("final_score") if score_payload else getattr(thesis, "final_score", None),
+            "raw_score": score_payload.get("raw_score"),
+            "verdict": score_payload.get("verdict") or _score_attr(valuequant_score, "verdict"),
+            "decision_action": score_payload.get("decision_action") or getattr(thesis, "score_decision_action", None),
+            "confidence": score_payload.get("confidence") if score_payload else _score_attr(valuequant_score, "confidence"),
+            "confidence_label": score_payload.get("confidence_label"),
+            "predictive_confidence": score_payload.get("predictive_confidence"),
+            "data_coverage": score_payload.get("data_coverage") if score_payload else _score_attr(valuequant_score, "data_coverage"),
+            "quality_adjusted": bool(score_payload.get("quality_adjusted", False)),
+            "quality_gate_reason": score_payload.get("quality_gate_reason"),
+            "red_flags": score_payload.get("red_flags") or [],
+        },
+        "thesis": {
+            "action": thesis.action,
+            "action_detail": thesis.action_detail,
+            "current_price": thesis.current_price,
+            "intrinsic_value": thesis.intrinsic_value,
+            "margin_of_safety": thesis.margin_of_safety,
+            "valuation_regime": thesis.valuation_regime,
+            "reasonable_entry_price": thesis.reasonable_entry_price,
+            "conservative_entry_price": thesis.conservative_entry_price,
+            "deep_value_entry_price": thesis.deep_value_entry_price,
+            "red_flags": list(getattr(thesis, "red_flags", []) or []),
+        },
+        "exports": {
+            "markdown_report": True,
+            "html_report": True,
+            "executive_memo": True,
+            "metadata_json": True,
+            "zip_bundle": True,
+        },
+    }
+    return _json_safe(metadata)
+
+
+def build_institutional_export_files(
+    ticker: str,
+    ticker_competidor: str | None,
+    valuequant_score: Any,
+    res_val: dict[str, Any] | None,
+    nota_buffett: float | None,
+    res_is: dict[str, Any] | None,
+    res_bs: dict[str, Any] | None,
+    res_cf: dict[str, Any] | None,
+) -> dict[str, bytes]:
+    """Construye todos los archivos del paquete institucional."""
+
+    safe_ticker = _safe_filename_part(ticker)
+    markdown = build_research_report_markdown(
+        ticker=ticker,
+        ticker_competidor=ticker_competidor,
+        valuequant_score=valuequant_score,
+        res_val=res_val,
+        nota_buffett=nota_buffett,
+        res_is=res_is,
+        res_bs=res_bs,
+        res_cf=res_cf,
+    )
+    html = research_report_to_html(markdown, ticker)
+    memo = build_institutional_memo_markdown(
+        ticker=ticker,
+        ticker_competidor=ticker_competidor,
+        valuequant_score=valuequant_score,
+        res_val=res_val,
+        nota_buffett=nota_buffett,
+    )
+    metadata = build_institutional_export_metadata(
+        ticker=ticker,
+        ticker_competidor=ticker_competidor,
+        valuequant_score=valuequant_score,
+        res_val=res_val,
+        nota_buffett=nota_buffett,
+    )
+    metadata_json = json.dumps(metadata, ensure_ascii=False, indent=2, sort_keys=True)
+
+    return {
+        f"{safe_ticker}_research_report.md": markdown.encode("utf-8"),
+        f"{safe_ticker}_research_report_print.html": html.encode("utf-8"),
+        f"{safe_ticker}_committee_memo.md": memo.encode("utf-8"),
+        f"{safe_ticker}_metadata.json": metadata_json.encode("utf-8"),
+    }
+
+
+def build_institutional_export_zip(files: dict[str, bytes]) -> bytes:
+    """Empaqueta los archivos institucionales en un ZIP reproducible."""
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for filename in sorted(files):
+            payload = files[filename]
+            if isinstance(payload, str):
+                payload = payload.encode("utf-8")
+            zf.writestr(filename, payload)
+    return buffer.getvalue()
+
+
+def build_institutional_export_pack(
+    ticker: str,
+    ticker_competidor: str | None,
+    valuequant_score: Any,
+    res_val: dict[str, Any] | None,
+    nota_buffett: float | None,
+    res_is: dict[str, Any] | None,
+    res_bs: dict[str, Any] | None,
+    res_cf: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Devuelve payload completo de exportación institucional."""
+
+    files = build_institutional_export_files(
+        ticker=ticker,
+        ticker_competidor=ticker_competidor,
+        valuequant_score=valuequant_score,
+        res_val=res_val,
+        nota_buffett=nota_buffett,
+        res_is=res_is,
+        res_bs=res_bs,
+        res_cf=res_cf,
+    )
+    zip_bytes = build_institutional_export_zip(files)
+    metadata_filename = next((name for name in files if name.endswith("_metadata.json")), "")
+
+    return {
+        "ticker": str(ticker or "").upper(),
+        "files": files,
+        "zip": zip_bytes,
+        "metadata_filename": metadata_filename,
+        "file_count": len(files),
+        "zip_size_bytes": len(zip_bytes),
+    }
+
 def render_research_report_export(
     ticker: str,
     ticker_competidor: str | None,
@@ -608,6 +873,19 @@ def render_research_report_export(
 
     st.info(PRINT_EXPORT_HELP)
 
+    export_pack = build_institutional_export_pack(
+        ticker=ticker,
+        ticker_competidor=ticker_competidor,
+        valuequant_score=valuequant_score,
+        res_val=res_val,
+        nota_buffett=nota_buffett,
+        res_is=res_is,
+        res_bs=res_bs,
+        res_cf=res_cf,
+    )
+    safe_ticker = _safe_filename_part(ticker)
+
+    st.markdown("#### Descargas")
     col_a, col_b = st.columns(2)
     with col_a:
         st.download_button(
@@ -623,6 +901,36 @@ def render_research_report_export(
             file_name=f"research_core_{ticker.lower()}_print.html",
             mime="text/html",
         )
+
+    st.markdown("#### Pack institucional")
+    col_c, col_d, col_e = st.columns(3)
+    with col_c:
+        st.download_button(
+            "Descargar ZIP institucional",
+            data=export_pack["zip"],
+            file_name=f"{safe_ticker}_institutional_export_pack.zip",
+            mime="application/zip",
+        )
+    with col_d:
+        memo_name = next((name for name in export_pack["files"] if name.endswith("_committee_memo.md")), "")
+        st.download_button(
+            "Descargar memo comité",
+            data=export_pack["files"].get(memo_name, b""),
+            file_name=memo_name or f"{safe_ticker}_committee_memo.md",
+            mime="text/markdown",
+        )
+    with col_e:
+        metadata_name = export_pack.get("metadata_filename") or f"{safe_ticker}_metadata.json"
+        st.download_button(
+            "Descargar metadata JSON",
+            data=export_pack["files"].get(metadata_name, b"{}"),
+            file_name=metadata_name,
+            mime="application/json",
+        )
+
+    st.caption(
+        f"Pack institucional: {export_pack['file_count']} archivos · ZIP {export_pack['zip_size_bytes']:,} bytes."
+    )
 
     preview_mode = st.radio("Vista previa", ["HTML renderizado", "Markdown", "HTML fuente"], horizontal=True)
     if preview_mode == "HTML renderizado":
