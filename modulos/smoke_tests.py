@@ -74,6 +74,7 @@ CONTRACT_MODULES = [
     ("yahoo_resilience_contract", "scripts.test_yahoo_resilience_contract"),
     ("yfinance_helper_migration_contract", "scripts.test_yfinance_helper_migration_contract"),
     ("charts_yfinance_resilience_contract", "scripts.test_charts_yfinance_resilience_contract"),
+    ("final_cleanup_contract", "scripts.test_final_cleanup_contract"),
 ]
 
 CRITICAL_IMPORTS = [
