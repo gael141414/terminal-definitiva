@@ -1,6 +1,5 @@
 import pandas as pd
 import time
-import os
 import requests
 import yfinance as yf
 
@@ -8,7 +7,6 @@ from downloader import obtener_estados_financieros
 from income_analyzer import analizar_cuenta_resultados
 from balance_analyzer import analizar_balance
 from cashflow_analyzer import analizar_flujo_efectivo
-from valuator import valorar_empresa
 from modulos.yahoo_resilience import safe_yfinance_info
 
 # Copiamos aquí la función del Score para que el bot pueda evaluarlas
@@ -147,9 +145,6 @@ def ejecutar_screener():
         print("\nResultados guardados en 'ranking_mercado.csv'.")
     else:
         print("\n⚠️ No se pudieron analizar las empresas.")
-
-if __name__ == "__main__":
-    ejecutar_screener()
 
 if __name__ == "__main__":
     ejecutar_screener()
