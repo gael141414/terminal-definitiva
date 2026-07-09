@@ -24,32 +24,12 @@ class SmokeCheck:
 
 CRITICAL_FILES = [
     "app.py",
+    "sitecustomize.py",
     "modulos/config.py",
     "modulos/data_quality.py",
     "modulos/scoring_engine.py",
     "modulos/tool_catalog.py",
     "modulos/tool_router.py",
-    "scripts/print_product_surface_audit.py",
-    "scripts/test_module_loader_contract.py",
-    "scripts/test_data_quality_contract.py",
-    "scripts/test_fmp_data_quality_contract.py",
-    "scripts/test_company_data_quality_contract.py",
-    "scripts/test_scoring_quality_gates.py",
-    "scripts/test_scoring_confidence_diagnostics.py",
-    "scripts/test_scoring_audit_trail.py",
-    "scripts/test_scoring_decision_guidance.py",
-    "scripts/test_scoring_summary_payload.py",
-    "scripts/test_report_score_payload_integration.py",
-    "scripts/test_watchlist_score_payload_integration.py",
-    "scripts/test_opportunity_briefing_score_payload.py",
-    "scripts/test_analysis_score_history.py",
-    "scripts/test_score_evolution_surfaces.py",
-    "scripts/test_basic_signal_backtesting.py",
-    "scripts/test_predictive_confidence_calibration.py",
-    "scripts/test_research_core_ux_contract.py",
-    "scripts/test_institutional_export_pack.py",
-    "scripts/test_release_readiness_contract.py",
-    "scripts/run_release_readiness.py",
     "modulos/research_core.py",
     "modulos/investment_thesis.py",
     "modulos/research_report.py",
@@ -63,6 +43,37 @@ CRITICAL_FILES = [
     "modulos/briefing_runner.py",
     "modulos/healthcheck.py",
     "modulos/release_readiness.py",
+    "modulos/yahoo_resilience.py",
+    "modulos/yfinance_global_guard.py",
+    "scripts/print_product_surface_audit.py",
+    "scripts/run_release_readiness.py",
+]
+
+CONTRACT_MODULES = [
+    ("data_quality_contract", "scripts.test_data_quality_contract"),
+    ("fmp_data_quality_contract", "scripts.test_fmp_data_quality_contract"),
+    ("company_data_quality_contract", "scripts.test_company_data_quality_contract"),
+    ("module_loader_contract", "scripts.test_module_loader_contract"),
+    ("scoring_quality_gates_contract", "scripts.test_scoring_quality_gates"),
+    ("scoring_confidence_diagnostics_contract", "scripts.test_scoring_confidence_diagnostics"),
+    ("scoring_audit_trail_contract", "scripts.test_scoring_audit_trail"),
+    ("scoring_decision_guidance_contract", "scripts.test_scoring_decision_guidance"),
+    ("scoring_summary_payload_contract", "scripts.test_scoring_summary_payload"),
+    ("report_score_payload_integration_contract", "scripts.test_report_score_payload_integration"),
+    ("watchlist_score_payload_integration_contract", "scripts.test_watchlist_score_payload_integration"),
+    ("opportunity_briefing_score_payload_contract", "scripts.test_opportunity_briefing_score_payload"),
+    ("analysis_score_history_contract", "scripts.test_analysis_score_history"),
+    ("score_evolution_surfaces_contract", "scripts.test_score_evolution_surfaces"),
+    ("basic_signal_backtesting_contract", "scripts.test_basic_signal_backtesting"),
+    ("predictive_confidence_calibration_contract", "scripts.test_predictive_confidence_calibration"),
+    ("research_core_ux_contract", "scripts.test_research_core_ux_contract"),
+    ("institutional_export_pack_contract", "scripts.test_institutional_export_pack"),
+    ("release_readiness_contract", "scripts.test_release_readiness_contract"),
+    ("documentation_contract", "scripts.test_documentation_contract"),
+    ("release_manifest_contract", "scripts.test_release_manifest_contract"),
+    ("yahoo_resilience_contract", "scripts.test_yahoo_resilience_contract"),
+    ("yfinance_helper_migration_contract", "scripts.test_yfinance_helper_migration_contract"),
+    ("charts_yfinance_resilience_contract", "scripts.test_charts_yfinance_resilience_contract"),
 ]
 
 CRITICAL_IMPORTS = [
@@ -90,6 +101,8 @@ CRITICAL_IMPORTS = [
     "modulos.briefing_runner",
     "modulos.healthcheck",
     "modulos.release_readiness",
+    "modulos.yahoo_resilience",
+    "modulos.yfinance_global_guard",
 ]
 
 EXPECTED_TOOLS = [
@@ -126,7 +139,7 @@ def _fail(name: str, detail: str = "") -> SmokeCheck:
 def _check_file(path_text: str) -> list[SmokeCheck]:
     path = PROJECT_ROOT / path_text
     checks = [_ok(f"file:{path_text}", "exists") if path.exists() else _fail(f"file:{path_text}", "missing")]
-    if path.exists():
+    if path.exists() and path.suffix == ".py":
         try:
             py_compile.compile(str(path), doraise=True)
             checks.append(_ok(f"compile:{path_text}", "compiled"))
@@ -143,47 +156,17 @@ def _check_import(module_name: str) -> SmokeCheck:
         return _fail(f"import:{module_name}", f"{type(exc).__name__}: {exc}")
 
 
-
-def _check_data_quality_contract() -> list[SmokeCheck]:
-    """Ejecuta los checks contractuales de data_quality."""
-
+def _check_contract(slug: str, module_name: str) -> list[SmokeCheck]:
     checks: list[SmokeCheck] = []
     try:
-        contract = importlib.import_module("scripts.test_data_quality_contract")
+        contract = importlib.import_module(module_name)
         contract_checks = contract.run_contract_checks()
-        checks.append(_ok("data_quality_contract:loaded", f"{len(contract_checks)} checks"))
-        checks.append(_ok("data_quality_contract:behavior", "data quality contract OK"))
+        checks.append(_ok(f"{slug}:loaded", f"{len(contract_checks)} checks"))
+        checks.append(_ok(f"{slug}:behavior", f"{slug} OK"))
     except Exception as exc:
-        checks.append(_fail("data_quality_contract:behavior", f"{type(exc).__name__}: {exc}"))
+        checks.append(_fail(f"{slug}:behavior", f"{type(exc).__name__}: {exc}"))
     return checks
 
-
-def _check_fmp_data_quality_contract() -> list[SmokeCheck]:
-    """Ejecuta los checks contractuales de integración FMP + data_quality."""
-
-    checks: list[SmokeCheck] = []
-    try:
-        contract = importlib.import_module("scripts.test_fmp_data_quality_contract")
-        contract_checks = contract.run_contract_checks()
-        checks.append(_ok("fmp_data_quality_contract:loaded", f"{len(contract_checks)} checks"))
-        checks.append(_ok("fmp_data_quality_contract:behavior", "FMP data quality contract OK"))
-    except Exception as exc:
-        checks.append(_fail("fmp_data_quality_contract:behavior", f"{type(exc).__name__}: {exc}"))
-    return checks
-
-
-def _check_company_data_quality_contract() -> list[SmokeCheck]:
-    """Ejecuta los checks contractuales de company_data_helpers + data_quality."""
-
-    checks: list[SmokeCheck] = []
-    try:
-        contract = importlib.import_module("scripts.test_company_data_quality_contract")
-        contract_checks = contract.run_contract_checks()
-        checks.append(_ok("company_data_quality_contract:loaded", f"{len(contract_checks)} checks"))
-        checks.append(_ok("company_data_quality_contract:behavior", "company data quality contract OK"))
-    except Exception as exc:
-        checks.append(_fail("company_data_quality_contract:behavior", f"{type(exc).__name__}: {exc}"))
-    return checks
 
 def _check_catalog() -> list[SmokeCheck]:
     checks: list[SmokeCheck] = []
@@ -223,13 +206,9 @@ def _check_router() -> list[SmokeCheck]:
         mod = importlib.import_module("modulos.tool_router")
         direct_routes = set(getattr(mod, "INDEPENDENT_TOOL_ROUTES")) | set(getattr(mod, "COMPANY_TOOL_ROUTES"))
         checks.append(_ok("router:loaded", f"{len(direct_routes)} direct routes"))
-
         for label in EXPECTED_DIRECT_ROUTES:
             checks.append(_ok(f"router:{label}", "registered") if label in direct_routes else _fail(f"router:{label}", "missing"))
 
-        # Research Core, Resumen Ejecutivo and Fundamental are intentionally routed
-        # through explicit branches in render_company_tool because they need custom
-        # argument binding. They do not live in COMPANY_TOOL_ROUTES.
         has_company_renderer = callable(getattr(mod, "render_company_tool", None))
         for label in EXPECTED_SPECIAL_COMPANY_TOOLS:
             checks.append(
@@ -242,25 +221,19 @@ def _check_router() -> list[SmokeCheck]:
     return checks
 
 
-
 def _check_product_surface_audit() -> list[SmokeCheck]:
-    """Comprueba que catálogo, router, módulos y callables estén alineados."""
-
     checks: list[SmokeCheck] = []
     try:
         audit = importlib.import_module("scripts.print_product_surface_audit")
         issues, routes, mode_counts = audit.audit_catalog()
         failures = [issue for issue in issues if issue.severity == "FAIL"]
         warnings = [issue for issue in issues if issue.severity == "WARN"]
-
         checks.append(_ok("product_surface:loaded", f"{len(routes)} routes audited"))
-
         if failures:
             sample = "; ".join(f"{issue.code}:{issue.label}" for issue in failures[:5])
             checks.append(_fail("product_surface:routes", f"{len(failures)} failures; sample={sample}"))
         else:
             checks.append(_ok("product_surface:routes", f"{len(routes)} routes OK; warnings={len(warnings)}"))
-
         for mode in ("mvp", "consolidated", "complete"):
             count = int(mode_counts.get(mode, 0))
             checks.append(
@@ -272,229 +245,6 @@ def _check_product_surface_audit() -> list[SmokeCheck]:
         checks.append(_fail("product_surface:loaded", f"{type(exc).__name__}: {exc}"))
     return checks
 
-
-def _check_module_loader_contract() -> list[SmokeCheck]:
-    """Ejecuta los checks contractuales de module_loader/safe_call."""
-
-    checks: list[SmokeCheck] = []
-    try:
-        contract = importlib.import_module("scripts.test_module_loader_contract")
-        contract_checks = contract.run_contract_checks()
-        checks.append(_ok("module_loader_contract:loaded", f"{len(contract_checks)} checks"))
-        checks.append(_ok("module_loader_contract:behavior", "safe_call contract OK"))
-    except Exception as exc:
-        checks.append(_fail("module_loader_contract:behavior", f"{type(exc).__name__}: {exc}"))
-    return checks
-
-
-def _check_scoring_quality_gates_contract() -> list[SmokeCheck]:
-    """Ejecuta los checks contractuales de quality gates del scoring."""
-
-    checks: list[SmokeCheck] = []
-    try:
-        contract = importlib.import_module("scripts.test_scoring_quality_gates")
-        contract_checks = contract.run_contract_checks()
-        checks.append(_ok("scoring_quality_gates_contract:loaded", f"{len(contract_checks)} checks"))
-        checks.append(_ok("scoring_quality_gates_contract:behavior", "scoring quality gates contract OK"))
-    except Exception as exc:
-        checks.append(_fail("scoring_quality_gates_contract:behavior", f"{type(exc).__name__}: {exc}"))
-    return checks
-
-
-def _check_scoring_confidence_diagnostics_contract() -> list[SmokeCheck]:
-    """Ejecuta los checks contractuales de diagnóstico de confianza del scoring."""
-
-    checks: list[SmokeCheck] = []
-    try:
-        contract = importlib.import_module("scripts.test_scoring_confidence_diagnostics")
-        contract_checks = contract.run_contract_checks()
-        checks.append(_ok("scoring_confidence_diagnostics_contract:loaded", f"{len(contract_checks)} checks"))
-        checks.append(_ok("scoring_confidence_diagnostics_contract:behavior", "scoring confidence diagnostics contract OK"))
-    except Exception as exc:
-        checks.append(_fail("scoring_confidence_diagnostics_contract:behavior", f"{type(exc).__name__}: {exc}"))
-    return checks
-
-
-def _check_scoring_audit_trail_contract() -> list[SmokeCheck]:
-    """Ejecuta los checks contractuales de trazabilidad del scoring."""
-
-    checks: list[SmokeCheck] = []
-    try:
-        contract = importlib.import_module("scripts.test_scoring_audit_trail")
-        contract_checks = contract.run_contract_checks()
-        checks.append(_ok("scoring_audit_trail_contract:loaded", f"{len(contract_checks)} checks"))
-        checks.append(_ok("scoring_audit_trail_contract:behavior", "scoring audit trail contract OK"))
-    except Exception as exc:
-        checks.append(_fail("scoring_audit_trail_contract:behavior", f"{type(exc).__name__}: {exc}"))
-    return checks
-
-
-def _check_scoring_decision_guidance_contract() -> list[SmokeCheck]:
-    """Ejecuta los checks contractuales de guía de decisión del scoring."""
-
-    checks: list[SmokeCheck] = []
-    try:
-        contract = importlib.import_module("scripts.test_scoring_decision_guidance")
-        contract_checks = contract.run_contract_checks()
-        checks.append(_ok("scoring_decision_guidance_contract:loaded", f"{len(contract_checks)} checks"))
-        checks.append(_ok("scoring_decision_guidance_contract:behavior", "scoring decision guidance contract OK"))
-    except Exception as exc:
-        checks.append(_fail("scoring_decision_guidance_contract:behavior", f"{type(exc).__name__}: {exc}"))
-    return checks
-
-
-def _check_scoring_summary_payload_contract() -> list[SmokeCheck]:
-    """Ejecuta los checks contractuales del payload resumen del scoring."""
-
-    checks: list[SmokeCheck] = []
-    try:
-        contract = importlib.import_module("scripts.test_scoring_summary_payload")
-        contract_checks = contract.run_contract_checks()
-        checks.append(_ok("scoring_summary_payload_contract:loaded", f"{len(contract_checks)} checks"))
-        checks.append(_ok("scoring_summary_payload_contract:behavior", "scoring summary payload contract OK"))
-    except Exception as exc:
-        checks.append(_fail("scoring_summary_payload_contract:behavior", f"{type(exc).__name__}: {exc}"))
-    return checks
-
-
-def _check_report_score_payload_integration_contract() -> list[SmokeCheck]:
-    """Ejecuta los checks contractuales de integración score payload -> informes."""
-
-    checks: list[SmokeCheck] = []
-    try:
-        contract = importlib.import_module("scripts.test_report_score_payload_integration")
-        contract_checks = contract.run_contract_checks()
-        checks.append(_ok("report_score_payload_integration_contract:loaded", f"{len(contract_checks)} checks"))
-        checks.append(_ok("report_score_payload_integration_contract:behavior", "report score payload integration contract OK"))
-    except Exception as exc:
-        checks.append(_fail("report_score_payload_integration_contract:behavior", f"{type(exc).__name__}: {exc}"))
-    return checks
-
-
-def _check_watchlist_score_payload_integration_contract() -> list[SmokeCheck]:
-    """Ejecuta los checks contractuales de integración score payload -> watchlist."""
-
-    checks: list[SmokeCheck] = []
-    try:
-        contract = importlib.import_module("scripts.test_watchlist_score_payload_integration")
-        contract_checks = contract.run_contract_checks()
-        checks.append(_ok("watchlist_score_payload_integration_contract:loaded", f"{len(contract_checks)} checks"))
-        checks.append(_ok("watchlist_score_payload_integration_contract:behavior", "watchlist score payload integration contract OK"))
-    except Exception as exc:
-        checks.append(_fail("watchlist_score_payload_integration_contract:behavior", f"{type(exc).__name__}: {exc}"))
-    return checks
-
-
-def _check_opportunity_briefing_score_payload_contract() -> list[SmokeCheck]:
-    """Ejecuta los checks contractuales de integración score payload -> briefing."""
-
-    checks: list[SmokeCheck] = []
-    try:
-        contract = importlib.import_module("scripts.test_opportunity_briefing_score_payload")
-        contract_checks = contract.run_contract_checks()
-        checks.append(_ok("opportunity_briefing_score_payload_contract:loaded", f"{len(contract_checks)} checks"))
-        checks.append(_ok("opportunity_briefing_score_payload_contract:behavior", "opportunity briefing score payload contract OK"))
-    except Exception as exc:
-        checks.append(_fail("opportunity_briefing_score_payload_contract:behavior", f"{type(exc).__name__}: {exc}"))
-    return checks
-
-
-def _check_analysis_score_history_contract() -> list[SmokeCheck]:
-    """Ejecuta los checks contractuales de histórico temporal del score."""
-
-    checks: list[SmokeCheck] = []
-    try:
-        contract = importlib.import_module("scripts.test_analysis_score_history")
-        contract_checks = contract.run_contract_checks()
-        checks.append(_ok("analysis_score_history_contract:loaded", f"{len(contract_checks)} checks"))
-        checks.append(_ok("analysis_score_history_contract:behavior", "analysis score history contract OK"))
-    except Exception as exc:
-        checks.append(_fail("analysis_score_history_contract:behavior", f"{type(exc).__name__}: {exc}"))
-    return checks
-
-
-def _check_score_evolution_surfaces_contract() -> list[SmokeCheck]:
-    """Ejecuta los checks contractuales de evolución temporal en superficies."""
-
-    checks: list[SmokeCheck] = []
-    try:
-        contract = importlib.import_module("scripts.test_score_evolution_surfaces")
-        contract_checks = contract.run_contract_checks()
-        checks.append(_ok("score_evolution_surfaces_contract:loaded", f"{len(contract_checks)} checks"))
-        checks.append(_ok("score_evolution_surfaces_contract:behavior", "score evolution surfaces contract OK"))
-    except Exception as exc:
-        checks.append(_fail("score_evolution_surfaces_contract:behavior", f"{type(exc).__name__}: {exc}"))
-    return checks
-
-
-def _check_basic_signal_backtesting_contract() -> list[SmokeCheck]:
-    """Ejecuta los checks contractuales de backtesting básico de señales."""
-
-    checks: list[SmokeCheck] = []
-    try:
-        contract = importlib.import_module("scripts.test_basic_signal_backtesting")
-        contract_checks = contract.run_contract_checks()
-        checks.append(_ok("basic_signal_backtesting_contract:loaded", f"{len(contract_checks)} checks"))
-        checks.append(_ok("basic_signal_backtesting_contract:behavior", "basic signal backtesting contract OK"))
-    except Exception as exc:
-        checks.append(_fail("basic_signal_backtesting_contract:behavior", f"{type(exc).__name__}: {exc}"))
-    return checks
-
-
-def _check_predictive_confidence_calibration_contract() -> list[SmokeCheck]:
-    """Ejecuta los checks contractuales de calibración de confianza predictiva."""
-
-    checks: list[SmokeCheck] = []
-    try:
-        contract = importlib.import_module("scripts.test_predictive_confidence_calibration")
-        contract_checks = contract.run_contract_checks()
-        checks.append(_ok("predictive_confidence_calibration_contract:loaded", f"{len(contract_checks)} checks"))
-        checks.append(_ok("predictive_confidence_calibration_contract:behavior", "predictive confidence calibration contract OK"))
-    except Exception as exc:
-        checks.append(_fail("predictive_confidence_calibration_contract:behavior", f"{type(exc).__name__}: {exc}"))
-    return checks
-
-
-def _check_research_core_ux_contract() -> list[SmokeCheck]:
-    """Ejecuta los checks contractuales de UX del Research Core."""
-
-    checks: list[SmokeCheck] = []
-    try:
-        contract = importlib.import_module("scripts.test_research_core_ux_contract")
-        contract_checks = contract.run_contract_checks()
-        checks.append(_ok("research_core_ux_contract:loaded", f"{len(contract_checks)} checks"))
-        checks.append(_ok("research_core_ux_contract:behavior", "research core UX contract OK"))
-    except Exception as exc:
-        checks.append(_fail("research_core_ux_contract:behavior", f"{type(exc).__name__}: {exc}"))
-    return checks
-
-
-def _check_institutional_export_pack_contract() -> list[SmokeCheck]:
-    """Ejecuta los checks contractuales del pack institucional de exportación."""
-
-    checks: list[SmokeCheck] = []
-    try:
-        contract = importlib.import_module("scripts.test_institutional_export_pack")
-        contract_checks = contract.run_contract_checks()
-        checks.append(_ok("institutional_export_pack_contract:loaded", f"{len(contract_checks)} checks"))
-        checks.append(_ok("institutional_export_pack_contract:behavior", "institutional export pack contract OK"))
-    except Exception as exc:
-        checks.append(_fail("institutional_export_pack_contract:behavior", f"{type(exc).__name__}: {exc}"))
-    return checks
-
-
-def _check_release_readiness_contract() -> list[SmokeCheck]:
-    """Ejecuta los checks contractuales del release readiness gate."""
-
-    checks: list[SmokeCheck] = []
-    try:
-        contract = importlib.import_module("scripts.test_release_readiness_contract")
-        contract_checks = contract.run_contract_checks()
-        checks.append(_ok("release_readiness_contract:loaded", f"{len(contract_checks)} checks"))
-        checks.append(_ok("release_readiness_contract:behavior", "release readiness contract OK"))
-    except Exception as exc:
-        checks.append(_fail("release_readiness_contract:behavior", f"{type(exc).__name__}: {exc}"))
-    return checks
 
 def _check_scoring_model() -> list[SmokeCheck]:
     checks: list[SmokeCheck] = []
@@ -513,29 +263,15 @@ def run_smoke_tests() -> list[SmokeCheck]:
     checks: list[SmokeCheck] = []
     for path in CRITICAL_FILES:
         checks.extend(_check_file(path))
+    for _, module_name in CONTRACT_MODULES:
+        module_path = module_name.replace(".", "/") + ".py"
+        checks.extend(_check_file(module_path))
     checks.extend(_check_import(name) for name in CRITICAL_IMPORTS)
-    checks.extend(_check_data_quality_contract())
-    checks.extend(_check_fmp_data_quality_contract())
-    checks.extend(_check_company_data_quality_contract())
     checks.extend(_check_catalog())
     checks.extend(_check_router())
     checks.extend(_check_product_surface_audit())
-    checks.extend(_check_module_loader_contract())
-    checks.extend(_check_scoring_quality_gates_contract())
-    checks.extend(_check_scoring_confidence_diagnostics_contract())
-    checks.extend(_check_scoring_audit_trail_contract())
-    checks.extend(_check_scoring_decision_guidance_contract())
-    checks.extend(_check_scoring_summary_payload_contract())
-    checks.extend(_check_report_score_payload_integration_contract())
-    checks.extend(_check_watchlist_score_payload_integration_contract())
-    checks.extend(_check_opportunity_briefing_score_payload_contract())
-    checks.extend(_check_analysis_score_history_contract())
-    checks.extend(_check_score_evolution_surfaces_contract())
-    checks.extend(_check_basic_signal_backtesting_contract())
-    checks.extend(_check_predictive_confidence_calibration_contract())
-    checks.extend(_check_research_core_ux_contract())
-    checks.extend(_check_institutional_export_pack_contract())
-    checks.extend(_check_release_readiness_contract())
+    for slug, module_name in CONTRACT_MODULES:
+        checks.extend(_check_contract(slug, module_name))
     checks.extend(_check_scoring_model())
     return checks
 
