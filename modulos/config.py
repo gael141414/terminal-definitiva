@@ -87,6 +87,7 @@ class AppConfig:
     telegram_bot_token: str
     telegram_chat_id: str
     debug: bool = False
+    fmp_news_enabled: bool = False
 
 
 @lru_cache(maxsize=1)
@@ -99,6 +100,7 @@ def get_config() -> AppConfig:
         telegram_bot_token=str(get_secret("TELEGRAM_BOT_TOKEN", "")),
         telegram_chat_id=str(get_secret("TELEGRAM_CHAT_ID", "")),
         debug=get_bool_secret("VALUEQUANT_DEBUG", get_bool_secret("DEBUG", False)),
+        fmp_news_enabled=get_bool_secret("FMP_NEWS_ENABLED", False),
     )
 
 

@@ -19,6 +19,7 @@ import streamlit as st
 import yfinance as yf
 
 from modulos.fmp_api import BASE_URL, FMP_API_KEY, REQUEST_TIMEOUT
+from modulos.yahoo_resilience import safe_yfinance_info
 
 
 SCREENER_ENDPOINT = f"{BASE_URL}/stock-screener"
@@ -100,7 +101,7 @@ def _fallback_universe_dataframe(filters: ScreenerFilters) -> pd.DataFrame:
         for symbol in FALLBACK_UNIVERSE.get(sector, []):
             try:
                 ticker = yf.Ticker(symbol)
-                info = ticker.info or {}
+                info = safe_yfinance_info(yf, symbol, context=f"screener_avanzado:fallback:{symbol}")
                 fast = getattr(ticker, "fast_info", {}) or {}
                 market_cap = _safe_float(info.get("marketCap") or fast.get("market_cap"))
                 price = _safe_float(info.get("currentPrice") or fast.get("last_price") or fast.get("lastPrice"))
@@ -185,7 +186,7 @@ def enrich_with_quality_metrics(symbols: tuple[str, ...]) -> pd.DataFrame:
                         pe = price / eps if eps and eps > 0 else np.nan
                         earnings_yield = eps / price if price > 0 and (np.isnan(earnings_yield) or earnings_yield == 0) else earnings_yield
             if np.isnan(pe) or np.isnan(roe):
-                info = yf.Ticker(symbol).info or {}
+                info = safe_yfinance_info(yf, symbol, context=f"screener_avanzado:enrich:{symbol}")
                 pe = pe if not np.isnan(pe) else _safe_float(info.get("trailingPE") or info.get("forwardPE"))
                 roe = roe if not np.isnan(roe) else _safe_float(info.get("returnOnEquity"))
                 earnings_yield = earnings_yield if not np.isnan(earnings_yield) else (1 / pe if pe and pe > 0 else np.nan)
@@ -259,6 +260,10 @@ def render_screener_avanzado() -> None:
         roe_min=float(roe_min),
         limit=int(limit),
     )
+
+    if not st.button("⚡ Ejecutar Screener Avanzado", type="primary", use_container_width=True):
+        st.info("Ajusta los filtros en la barra lateral y pulsa el botón para escanear el universo FMP + Yahoo. No se hacen peticiones a los proveedores de datos hasta que lo ejecutes.")
+        return
 
     with st.spinner("Descargando universo FMP y calculando ranking multi-factor..."):
         raw = fetch_fmp_screener(filters)

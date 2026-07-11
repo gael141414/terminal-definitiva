@@ -75,6 +75,10 @@ CONTRACT_MODULES = [
     ("yfinance_helper_migration_contract", "scripts.test_yfinance_helper_migration_contract"),
     ("charts_yfinance_resilience_contract", "scripts.test_charts_yfinance_resilience_contract"),
     ("final_cleanup_contract", "scripts.test_final_cleanup_contract"),
+    ("data_layer_consolidation_contract", "scripts.test_data_layer_consolidation_contract"),
+    ("ticker_tape_fallback_contract", "scripts.test_ticker_tape_fallback_contract"),
+    ("watchlist_price_cache_contract", "scripts.test_watchlist_price_cache_contract"),
+    ("fmp_news_resilience_contract", "scripts.test_fmp_news_resilience_contract"),
 ]
 
 CRITICAL_IMPORTS = [

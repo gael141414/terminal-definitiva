@@ -6,14 +6,18 @@ import pandas as pd
 import requests
 import xml.etree.ElementTree as ET
 from modulos.fmp_api import extraer_datos_fundamentales_fmp
+from modulos.yahoo_resilience import safe_yfinance_fetch, safe_yfinance_info
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def obtener_transacciones_insiders(ticker):
     """Descarga las últimas compras/ventas de los directivos (Form 4)"""
     try:
-        ticker_yf = yf.Ticker(ticker)
-        transacciones = ticker_yf.insider_transactions
-        
+        transacciones, _status = safe_yfinance_fetch(
+            lambda: yf.Ticker(ticker).insider_transactions,
+            empty_value=pd.DataFrame(),
+            context=f"utils:insiders:{ticker}",
+        )
+
         if transacciones is not None and not transacciones.empty:
             cols_deseadas = ['Start Date', 'Insider', 'Position', 'Transaction', 'Value', 'Shares']
             cols_presentes = [c for c in cols_deseadas if c in transacciones.columns]
@@ -117,10 +121,12 @@ def analizar_sentimiento_noticias(ticker):
     try:
         noticias_normalizadas = []
 
-        try:
-            noticias_yf = yf.Ticker(ticker).news or []
-        except Exception:
-            noticias_yf = []
+        noticias_yf, _status = safe_yfinance_fetch(
+            lambda: yf.Ticker(ticker).news,
+            empty_value=[],
+            context=f"utils:news:{ticker}",
+        )
+        noticias_yf = noticias_yf or []
 
         for noticia in noticias_yf:
             if isinstance(noticia, dict):
@@ -193,7 +199,9 @@ def renderizar_grafico_tradingview(ticker):
 def obtener_valoracion_sectorial(ticker):
     """Aplica la regla de valoración relativa según el sector"""
     try:
-        info = yf.Ticker(ticker).info
+        info = safe_yfinance_info(yf, ticker, context=f"utils:valoracion_sectorial:{ticker}")
+        if not info:
+            return None, None, 0, "No se pudieron obtener datos de Yahoo Finance (rate limit temporal o ticker inválido).", {}, 0
         sector = info.get('sector', 'Desconocido')
         multiplos = {
             'P/E (Price/Earnings)': info.get('trailingPE', 0),
@@ -224,9 +232,9 @@ def obtener_valoracion_sectorial(ticker):
 def obtener_datos_directiva(ticker):
     """Extrae qué porcentaje de la empresa tienen los directivos y fondos"""
     try:
-        info = yf.Ticker(ticker).info
+        info = safe_yfinance_info(yf, ticker, context=f"utils:datos_directiva:{ticker}")
         return info.get('heldPercentInsiders', 0) * 100, info.get('heldPercentInstitutions', 0) * 100, info.get('shortRatio', 0)
-    except:
+    except Exception:
         return 0, 0, 0
 
 def escanear_vulnerabilidades(res_is, res_bs, res_cf):

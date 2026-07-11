@@ -11,16 +11,22 @@ import requests
 import streamlit as st
 import yfinance as yf
 
+from modulos import quotes as quotes_provider
 from modulos.config import CONFIG
+from modulos.fmp_api import FMP_STATUS_OK, fetch_fmp_json_classified
+from modulos.yahoo_resilience import is_yahoo_rate_limit_error, safe_yfinance_fetch
 
 YAHOO_LOGGER = logging.getLogger("valuequant.yahoo")
 
 
 def _is_yahoo_rate_limit_error(exc: Exception) -> bool:
-    """Detecta errores temporales de rate limit de Yahoo/yfinance."""
+    """Detecta errores temporales de rate limit de Yahoo/yfinance.
 
-    text = f"{type(exc).__name__}: {exc}".lower()
-    return "429" in text or "too many requests" in text or "rate limit" in text
+    Delega en el detector centralizado de ``modulos.yahoo_resilience`` para evitar
+    mantener dos implementaciones divergentes del mismo criterio.
+    """
+
+    return is_yahoo_rate_limit_error(exc)
 
 
 def _safe_yahoo_history(
@@ -30,22 +36,26 @@ def _safe_yahoo_history(
     interval: str = "1d",
     auto_adjust: bool | None = None,
 ) -> pd.DataFrame:
-    """Descarga histórico Yahoo sin propagar ruido por rate limits temporales."""
+    """Descarga histórico Yahoo sin propagar ruido por rate limits temporales.
+
+    Envuelto sobre ``yahoo_resilience.safe_yfinance_fetch`` (con reintento corto
+    ante rate limit) en vez de un ``try/except`` propio duplicado.
+    """
 
     kwargs: dict[str, Any] = {"period": period, "interval": interval}
     if auto_adjust is not None:
         kwargs["auto_adjust"] = auto_adjust
 
-    try:
-        data = yf.Ticker(str(ticker).strip()).history(**kwargs)
-        if isinstance(data, pd.DataFrame):
-            return data
-    except Exception as exc:
-        if _is_yahoo_rate_limit_error(exc):
-            YAHOO_LOGGER.warning("Yahoo rate limit para %s; se omite lectura temporal.", ticker)
-        else:
-            YAHOO_LOGGER.debug("Yahoo history omitido para %s: %s: %s", ticker, type(exc).__name__, exc)
-    return pd.DataFrame()
+    data, status = safe_yfinance_fetch(
+        lambda: yf.Ticker(str(ticker).strip()).history(**kwargs),
+        empty_value=pd.DataFrame(),
+        context=f"market_widgets:{ticker}",
+    )
+    if status == "rate_limited":
+        YAHOO_LOGGER.warning("Yahoo rate limit para %s; se omite lectura temporal.", ticker)
+    elif status == "error":
+        YAHOO_LOGGER.debug("Yahoo history omitido para %s tras error de proveedor.", ticker)
+    return data if isinstance(data, pd.DataFrame) else pd.DataFrame()
 
 
 def _safe_fast_market_cap(yf_ticker: Any) -> float | None:
@@ -98,7 +108,13 @@ def buscar_etf_yahoo(query):
 
 @st.cache_data(ttl=900, show_spinner=False)
 def obtener_datos_ticker_tape() -> str:
-    """Genera los items HTML de la cinta de mercado con datos recientes de Yahoo Finance."""
+    """Genera los items HTML de la cinta de mercado con datos recientes.
+
+    Usa ``modulos.quotes.fetch_quotes_with_fallback``: intenta Yahoo Finance primero
+    y, si falla, hace fallback a FMP para instrumentos que lo soportan. Los símbolos
+    sin dato (rate limit, fuente no disponible, etc.) muestran un estado explícito en
+    vez de desaparecer en silencio de la cinta.
+    """
     activos = {
         "Oro": "GC=F",
         "Petróleo": "CL=F",
@@ -111,37 +127,43 @@ def obtener_datos_ticker_tape() -> str:
         "META": "META",
         "TSLA": "TSLA",
     }
+    resultados = quotes_provider.fetch_quotes_with_fallback(activos.values(), period="5d")
     items: list[str] = []
 
     for nombre, ticker in activos.items():
-        data = _safe_yahoo_history(ticker, period="5d", interval="1d", auto_adjust=False)
-        if data is None or data.empty or "Close" not in data.columns:
-            continue
-        cierres = data["Close"].dropna()
-        if len(cierres) < 2:
-            continue
-        precio = float(cierres.iloc[-1])
-        previo = float(cierres.iloc[-2])
-        if previo == 0:
-            continue
-        variacion = ((precio - previo) / previo) * 100
-        clase = "is-up" if variacion >= 0 else "is-down"
-        icono = "bi-caret-up-fill" if variacion >= 0 else "bi-caret-down-fill"
+        quote = resultados.get(ticker)
+        if quote is not None and quote.ok:
+            clase = "is-up" if (quote.change_pct or 0) >= 0 else "is-down"
+            icono = "bi-caret-up-fill" if (quote.change_pct or 0) >= 0 else "bi-caret-down-fill"
+            variacion_html = (
+                f"<span class='{clase}'><i class='bi {icono}'></i> {quote.change_pct:+.2f}%</span>"
+                if quote.change_pct is not None
+                else "<span class='is-flat'>· FMP</span>"
+            )
+            items.append(
+                f"<span class='vq-tape-item'>"
+                f"<a href='https://finance.yahoo.com/quote/{ticker}' target='_blank' style='text-decoration:none; color:inherit; display:flex; gap:0.42rem; align-items:center;'>"
+                f"<strong>{html.escape(nombre)}</strong> "
+                f"<span>${quote.price:,.2f}</span> "
+                f"{variacion_html}"
+                f"</a></span>"
+            )
+        else:
+            estado = quote.status_label if quote is not None else "Sin datos disponibles"
+            items.append(
+                f"<span class='vq-tape-item'>"
+                f"<strong>{html.escape(nombre)}</strong> "
+                f"<span>$--</span> "
+                f"<span class='is-flat' title='{html.escape(estado)}'>{html.escape(estado)}</span>"
+                f"</span>"
+            )
 
-        items.append(
-            f"<span class='vq-tape-item'>"
-            f"<a href='https://finance.yahoo.com/quote/{ticker}' target='_blank' style='text-decoration:none; color:inherit; display:flex; gap:0.42rem; align-items:center;'>"
-            f"<strong>{html.escape(nombre)}</strong> "
-            f"<span>${precio:,.2f}</span> "
-            f"<span class='{clase}'><i class='bi {icono}'></i> {variacion:+.2f}%</span>"
-            f"</a></span>"
-        )
+    if not quotes_provider.any_quote_succeeded(resultados):
+        # Fallo total del lote: no queremos que un 429 puntual bloquee la cinta
+        # durante los 15 minutos completos de TTL. Se limpia la propia caché para
+        # que el próximo rerun reintente en vez de servir el fallo congelado.
+        obtener_datos_ticker_tape.clear()
 
-    if not items:
-        items = [
-            "<span class='vq-tape-item'><strong>SPY</strong> <span>$--</span> <span class='is-flat'>Mercado pendiente</span></span>",
-            "<span class='vq-tape-item'><strong>NVDA</strong> <span>$--</span> <span class='is-flat'>Datos no disponibles</span></span>",
-        ]
     return "".join(items)
 
 
@@ -187,7 +209,11 @@ def analizar_rotacion_sectores():
 
 @st.cache_data(ttl=600, show_spinner=False)
 def obtener_market_snapshot() -> list[dict[str, str]]:
-    """Obtiene una lectura breve de mercado para la pantalla Home, incluyendo indicadores macro."""
+    """Obtiene una lectura breve de mercado para la pantalla Home, incluyendo indicadores macro.
+
+    Símbolos sin dato disponible (rate limit, sin fallback para índices/futuros...)
+    muestran un estado explícito en el propio snapshot en vez de desaparecer.
+    """
     activos = {
         "SPY": "SPY",
         "Nasdaq": "QQQ",
@@ -198,32 +224,46 @@ def obtener_market_snapshot() -> list[dict[str, str]]:
         "VIX": "^VIX",
         "US 10Y": "^TNX",
     }
+    resultados = quotes_provider.fetch_quotes_with_fallback(activos.values(), period="5d")
     snapshot: list[dict[str, str]] = []
     for nombre, ticker in activos.items():
-        hist = _safe_yahoo_history(ticker, period="5d")
-        if hist is None or hist.empty or "Close" not in hist.columns:
+        quote = resultados.get(ticker)
+        if quote is None or not quote.ok:
+            estado = quote.status_label if quote is not None else "Sin datos disponibles"
+            snapshot.append({
+                "nombre": nombre,
+                "precio": "--",
+                "change_val": 0.0,
+                "cambio": estado,
+                "clase": "is-flat",
+            })
             continue
-        close = hist["Close"].dropna()
-        if len(close) < 2:
-            continue
-        precio = float(close.iloc[-1])
-        previo = float(close.iloc[-2])
-        if previo == 0:
-            continue
-        cambio = ((precio - previo) / previo) * 100
 
+        precio = quote.price
         if ticker in ["^VIX", "^TNX"]:
             precio_str = f"{precio:,.2f}" if ticker == "^VIX" else f"{precio:.2f}%"
         else:
             precio_str = f"${precio:,.2f}"
 
+        if quote.change_pct is not None:
+            cambio_val = quote.change_pct
+            cambio_str = f"{cambio_val:+.2f}%"
+            clase = "is-up" if cambio_val >= 0 else "is-down"
+        else:
+            cambio_val = 0.0
+            cambio_str = quote.status_label
+            clase = "is-flat"
+
         snapshot.append({
             "nombre": nombre,
             "precio": precio_str,
-            "change_val": cambio,
-            "cambio": f"{cambio:+.2f}%",
-            "clase": "is-up" if cambio >= 0 else "is-down",
+            "change_val": cambio_val,
+            "cambio": cambio_str,
+            "clase": clase,
         })
+
+    if not quotes_provider.any_quote_succeeded(resultados):
+        obtener_market_snapshot.clear()
     return snapshot
 
 
@@ -280,52 +320,47 @@ def obtener_market_treemap_data() -> pd.DataFrame:
             else:
                 YAHOO_LOGGER.debug("Treemap omitido para %s: %s: %s", ticker, type(exc).__name__, exc)
             continue
+    if not rows:
+        # Igual que el ticker tape: no bloquear el treemap 30 minutos si el lote
+        # entero falló por un rate limit puntual.
+        obtener_market_treemap_data.clear()
     return pd.DataFrame(rows, columns=["Ticker", "Sector", "MarketCap", "Rendimiento_Diario"])
 
 
 @st.cache_data(ttl=1800, show_spinner=False)
 def obtener_ultimas_noticias(limit: int = 6) -> list[dict[str, str]]:
-    """Descarga noticias recientes desde FMP con logging de diagnóstico y Yahoo RSS como respaldo."""
+    """Descarga noticias recientes desde FMP, con Yahoo RSS como respaldo.
+
+    Las noticias de Home son opcionales: un fallo aquí nunca debe romper el
+    resto de la página. Nunca se registra la URL de la petición ni la API key
+    (ni siquiera vía el texto de una excepción de requests, que embebe la URL
+    completa) — solo el status clasificado (ok/disabled/unauthorized/
+    restricted_plan/rate_limited/provider_error/no_data).
+    """
     noticias: list[dict[str, str]] = []
     logger = logging.getLogger("valuequant.news")
 
-    try:
-        clave_api = CONFIG.fmp_api_key
-        if not clave_api:
-            raise RuntimeError("FMP_API_KEY no configurada")
-
-        url = "https://financialmodelingprep.com/api/v3/stock_news"
-        params = {"tickers": "AAPL,MSFT,NVDA,SPY,QQQ", "limit": limit, "apikey": clave_api}
-        headers = {"User-Agent": "ValueQuantTerminal/1.0"}
-        response = requests.get(url, params=params, headers=headers, timeout=10)
-        print(f"[ValueQuant][FMP news] status={response.status_code} url={response.url}")
-        response.raise_for_status()
-        data = response.json()
-
-        if not isinstance(data, list):
-            print(f"[ValueQuant][FMP news] JSON inesperado: {data}")
-            logger.warning("FMP stock_news devolvió un JSON no-list: %s", data)
-        elif not data:
-            print("[ValueQuant][FMP news] Lista vacía desde FMP.")
-        else:
-            print(f"[ValueQuant][FMP news] primer item crudo: {data[0]}")
-            for item in data[:limit]:
+    if CONFIG.fmp_news_enabled:
+        payload, status = fetch_fmp_json_classified(
+            "https://financialmodelingprep.com/api/v3/stock_news",
+            {"tickers": "AAPL,MSFT,NVDA,SPY,QQQ", "limit": limit, "apikey": CONFIG.fmp_api_key},
+            context="market_widgets:home_news",
+        )
+        if status == FMP_STATUS_OK and payload:
+            for item in payload[:limit]:
                 if not isinstance(item, dict):
-                    print(f"[ValueQuant][FMP news] item ignorado por tipo inválido: {item}")
                     continue
-                img_src = _normalizar_url_imagen_noticia(item)
-                if not img_src:
-                    print(f"[ValueQuant][FMP news] noticia sin miniatura válida. keys={list(item.keys())} title={item.get('title')}")
                 noticias.append({
                     "title": str(item.get("title") or item.get("headline") or "Noticia financiera"),
                     "date": str(item.get("publishedDate") or item.get("publishedAt") or item.get("date") or "")[:16],
-                    "image": img_src,
+                    "image": _normalizar_url_imagen_noticia(item),
                     "url": str(item.get("url") or item.get("link") or "#"),
+                    "source": "FMP",
                 })
-    except Exception as exc:
-        print(f"[ValueQuant][FMP news] ERROR exacto: {type(exc).__name__}: {exc}")
-        logger.exception("Error descargando noticias FMP")
-        noticias = []
+        elif status != FMP_STATUS_OK:
+            logger.info("FMP news no disponible para Home (status=%s); se prueba Yahoo RSS.", status)
+    else:
+        logger.debug("FMP_NEWS_ENABLED=false; se omite noticias FMP en Home.")
 
     if noticias:
         return noticias[:limit]
@@ -337,7 +372,6 @@ def obtener_ultimas_noticias(limit: int = 6) -> list[dict[str, str]]:
         if rss.status_code == 429:
             YAHOO_LOGGER.warning("Yahoo RSS rate limit; se omiten noticias de respaldo.")
             return noticias[:limit]
-        print(f"[ValueQuant][Yahoo RSS] status={rss.status_code} url={rss.url}")
         rss.raise_for_status()
         root = ET.fromstring(rss.content)
         for item in root.findall("./channel/item")[:limit]:
@@ -346,12 +380,12 @@ def obtener_ultimas_noticias(limit: int = 6) -> list[dict[str, str]]:
                 "date": item.findtext("pubDate") or "",
                 "image": "",
                 "url": item.findtext("link") or "#",
+                "source": "Yahoo RSS",
             })
     except Exception as exc:
         if _is_yahoo_rate_limit_error(exc):
             YAHOO_LOGGER.warning("Yahoo RSS rate limit; se omiten noticias de respaldo.")
         else:
-            print(f"[ValueQuant][Yahoo RSS] ERROR exacto: {type(exc).__name__}: {exc}")
-            logger.exception("Error descargando noticias Yahoo RSS")
+            logger.warning("Yahoo RSS no disponible: %s", type(exc).__name__)
 
     return noticias[:limit]

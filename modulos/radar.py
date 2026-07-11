@@ -3,6 +3,13 @@ import yfinance as yf
 import pandas as pd
 import plotly.express as px
 from modulos.gemini_helper import aviso_gemini_no_configurado, obtener_modelo_gemini
+from modulos.yahoo_resilience import safe_yfinance_info
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _obtener_info_multibagger(ticker: str) -> dict:
+    """``.info`` cacheado 24h y protegido ante rate limits de Yahoo."""
+    return safe_yfinance_info(yf, ticker, context=f"radar_multibagger:{ticker}")
 
 
 def _veredicto_multibagger_local(score, ticker, sector, revenue_growth, gross_margins, insider_hold, current_ratio):
@@ -37,12 +44,10 @@ def ejecutar_radar_multibagger(ticker_input):
 
     with st.spinner("Extrayendo métricas de crecimiento, márgenes y alineación de la directiva..."):
         try:
-            import yfinance as yf
-            import pandas as pd
-            import plotly.express as px
-
-            empresa = yf.Ticker(ticker_input)
-            info = empresa.info
+            info = _obtener_info_multibagger(ticker_input)
+            if not info:
+                st.error("⚠️ No se pudieron obtener datos de Yahoo Finance (rate limit temporal o ticker inválido). Inténtalo de nuevo en unos minutos.")
+                return
 
             # 1. Extracción de Métricas Críticas (El ADN del pelotazo)
             market_cap = info.get('marketCap', 0)

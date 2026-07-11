@@ -196,12 +196,17 @@ f"</article>"
                 title = html.escape(noticia.get("title", "Noticia financiera"))
                 date = html.escape(noticia.get("date", ""))[:32]
                 url = html.escape(noticia.get("url", "#"))
-                
+                source = html.escape(noticia.get("source", "") or "")
+
                 image_url = noticia.get("image")
                 img_src = html.escape(image_url) if image_url and len(image_url) > 5 else logo_uri
-                
+
+                source_badge = (
+                    f"<div class='vq-news-source' style='font-size:0.7rem; letter-spacing:0.04em; text-transform:uppercase; opacity:0.65; margin-bottom:2px;'>{source}</div>"
+                    if source else ""
+                )
                 # HTML Compactado con estilos in-line (object-fit: cover) para que la imagen quede perfecta
-                news_html += f"<a class='vq-news-card' href='{url}' target='_blank' rel='noopener noreferrer' style='text-decoration:none;'><img src='{img_src}' alt='News image' onerror=\"this.src='{logo_uri}'\" style='width: 100%; height: 140px; object-fit: cover; border-radius: 6px 6px 0 0; border-bottom: 1px solid rgba(148, 163, 184, 0.1);'><div class='vq-news-body'><div class='vq-news-date'>{date}</div><div class='vq-news-title'>{title}</div></div></a>"
+                news_html += f"<a class='vq-news-card' href='{url}' target='_blank' rel='noopener noreferrer' style='text-decoration:none;'><img src='{img_src}' alt='News image' onerror=\"this.src='{logo_uri}'\" style='width: 100%; height: 140px; object-fit: cover; border-radius: 6px 6px 0 0; border-bottom: 1px solid rgba(148, 163, 184, 0.1);'><div class='vq-news-body'>{source_badge}<div class='vq-news-date'>{date}</div><div class='vq-news-title'>{title}</div></div></a>"
                 
             st.markdown(f"<div class='vq-news-grid'>{news_html}</div>", unsafe_allow_html=True)
 

@@ -9,9 +9,18 @@ import pandas as pd
 import plotly.graph_objects as go
 import requests
 import streamlit as st
-import xml.etree.ElementTree as ET
 
-from modulos.fmp_api import BASE_URL, FMP_API_KEY, REQUEST_TIMEOUT
+from modulos.config import CONFIG
+from modulos.fmp_api import (
+    BASE_URL,
+    FMP_API_KEY,
+    FMP_STATUS_DISABLED,
+    FMP_STATUS_MESSAGES,
+    FMP_STATUS_NO_DATA,
+    FMP_STATUS_OK,
+    REQUEST_TIMEOUT,
+    fetch_fmp_json_classified,
+)
 
 
 SENATE_ENDPOINT = "https://financialmodelingprep.com/api/v4/senate-trading"
@@ -86,32 +95,6 @@ def _request_list(url: str, params: dict[str, Any]) -> list[dict[str, Any]]:
         return []
 
 
-def _fetch_yahoo_rss_news(ticker: str, limit: int) -> list[dict[str, Any]]:
-    """Fallback news source when FMP stock_news is unavailable."""
-    try:
-        response = requests.get(
-            "https://feeds.finance.yahoo.com/rss/2.0/headline",
-            params={"s": ticker.upper(), "region": "US", "lang": "en-US"},
-            headers={"User-Agent": "Mozilla/5.0"},
-            timeout=REQUEST_TIMEOUT,
-        )
-        response.raise_for_status()
-        root = ET.fromstring(response.content)
-        rows: list[dict[str, Any]] = []
-        for item in root.findall(".//item")[:limit]:
-            title = (item.findtext("title") or "").strip()
-            if title:
-                rows.append({
-                    "publishedDate": None,
-                    "title": title,
-                    "site": (item.findtext("source") or "Yahoo Finance").strip(),
-                    "url": (item.findtext("link") or "").strip(),
-                })
-        return rows
-    except Exception:
-        return []
-
-
 @st.cache_data(ttl=86400, show_spinner=False)
 def fetch_congress_trading(ticker: str) -> pd.DataFrame:
     """Fetch Senate trading data from FMP.
@@ -135,17 +118,35 @@ def fetch_congress_trading(ticker: str) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=1800, show_spinner=False)
-def fetch_fmp_news(ticker: str, limit: int = 20) -> pd.DataFrame:
-    """Fetch latest stock news from FMP, with Yahoo RSS fallback."""
-    rows = _request_list(NEWS_ENDPOINT, {"tickers": ticker.upper(), "limit": limit, "apikey": FMP_API_KEY})
-    if not rows:
-        rows = _fetch_yahoo_rss_news(ticker, limit)
-    if not rows:
-        return pd.DataFrame()
-    df = pd.DataFrame(rows)
+def fetch_fmp_news(ticker: str, limit: int = 20) -> tuple[pd.DataFrame, str]:
+    """Fetch latest stock news from FMP.
+
+    Devuelve ``(DataFrame, status)``. ``status`` distingue por qué no hay
+    noticias (desactivado por configuración, plan restringido, rate limit,
+    fallo del proveedor, o simplemente sin resultados) para que la UI pueda
+    mostrar un mensaje preciso en vez de un genérico "sin datos" — y para que
+    un 402 (endpoint fuera de plan) nunca se confunda con una clave inválida
+    ni marque toda la integración FMP como caída.
+
+    Las noticias son opcionales: un fallo aquí nunca debe propagar una
+    excepción — el resto del análisis (perfil, cotización, financieros) no
+    depende de esta función.
+    """
+    if not CONFIG.fmp_news_enabled:
+        return pd.DataFrame(), FMP_STATUS_DISABLED
+
+    payload, status = fetch_fmp_json_classified(
+        NEWS_ENDPOINT,
+        {"tickers": ticker.upper(), "limit": limit, "apikey": FMP_API_KEY},
+        context=f"alt_data:news:{ticker.upper()}",
+    )
+    if status != FMP_STATUS_OK or not payload:
+        return pd.DataFrame(), status
+
+    df = pd.DataFrame(payload)
     if "publishedDate" in df.columns:
         df["publishedDate"] = pd.to_datetime(df["publishedDate"], errors="coerce")
-    return df
+    return df, FMP_STATUS_OK
 
 
 def score_headline_sentiment(title: str) -> float:
@@ -158,10 +159,15 @@ def score_headline_sentiment(title: str) -> float:
     return float(np.clip((positive - negative) / max(positive + negative, 1), -1, 1))
 
 
-def aggregate_media_sentiment(news: pd.DataFrame) -> tuple[float, pd.DataFrame]:
-    """Compute 0-100 media sentiment gauge value."""
+def aggregate_media_sentiment(news: pd.DataFrame) -> tuple[float | None, pd.DataFrame]:
+    """Compute 0-100 media sentiment gauge value.
+
+    Devuelve ``None`` (no disponible) cuando no hay noticias que analizar —
+    en vez de un valor "neutral" (50.0) inventado, que ocultaría que en
+    realidad no hay datos y podría leerse como una señal real.
+    """
     if news.empty or "title" not in news.columns:
-        return 50.0, news
+        return None, news
     result = news.copy()
     result["sentimentScore"] = result["title"].map(score_headline_sentiment)
     result["sentimentLabel"] = pd.cut(
@@ -213,15 +219,18 @@ def render_alt_data(ticker: str) -> None:
 
     with st.spinner("Descargando operaciones políticas y noticias FMP..."):
         congress = fetch_congress_trading(ticker)
-        news = fetch_fmp_news(ticker, 20)
+        news, news_status = fetch_fmp_news(ticker, 20)
         gauge, scored_news = aggregate_media_sentiment(news)
 
     c1, c2, c3 = st.columns(3)
     c1.metric("Trades políticos", len(congress))
     c2.metric("Noticias analizadas", len(scored_news))
-    c3.metric("Score mediático", f"{gauge:.0f}/100")
+    c3.metric("Score mediático", f"{gauge:.0f}/100" if gauge is not None else "N/D")
 
-    st.plotly_chart(build_sentiment_gauge(gauge), use_container_width=True)
+    if gauge is not None:
+        st.plotly_chart(build_sentiment_gauge(gauge), use_container_width=True)
+    else:
+        st.info(f"Sentimiento mediático: N/D — {FMP_STATUS_MESSAGES.get(news_status, 'no hay noticias disponibles para calcularlo.')}")
 
     st.markdown("#### Operaciones políticas recientes")
     if congress.empty:
@@ -243,7 +252,10 @@ def render_alt_data(ticker: str) -> None:
 
     st.markdown("#### News Sentiment")
     if scored_news.empty:
-        st.info("FMP no devolvió titulares recientes.")
+        if news_status == FMP_STATUS_NO_DATA:
+            st.info("FMP no devolvió titulares recientes para este ticker.")
+        else:
+            st.info(FMP_STATUS_MESSAGES.get(news_status, "Noticias no disponibles."))
     else:
         visible = [col for col in ["publishedDate", "title", "site", "sentimentLabel", "sentimentScore", "url"] if col in scored_news.columns]
         st.dataframe(

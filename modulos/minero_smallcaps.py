@@ -10,6 +10,8 @@ import pandas as pd
 import streamlit as st
 import yfinance as yf
 
+from modulos.yahoo_resilience import safe_yfinance_fetch
+
 
 UNIVERSO_STARTUP_LIKE: dict[str, list[str]] = {
     "IA / Automatizacion": ["SOUN", "BBAI", "PATH", "AI", "SERV", "UPST"],
@@ -61,19 +63,21 @@ def _leer_csv_historico(ruta_csv: Path) -> pd.DataFrame | None:
 
 
 def _obtener_info_segura(ticker: yf.Ticker) -> dict:
-    try:
-        info = ticker.info
-        return info if isinstance(info, dict) else {}
-    except Exception:
-        return {}
+    info, _status = safe_yfinance_fetch(
+        lambda: ticker.info,
+        empty_value={},
+        context="minero_smallcaps:info",
+    )
+    return info if isinstance(info, dict) else {}
 
 
 def _obtener_historial_seguro(ticker: yf.Ticker) -> pd.DataFrame:
-    try:
-        hist = ticker.history(period="1y", auto_adjust=True)
-        return hist if isinstance(hist, pd.DataFrame) else pd.DataFrame()
-    except Exception:
-        return pd.DataFrame()
+    hist, _status = safe_yfinance_fetch(
+        lambda: ticker.history(period="1y", auto_adjust=True),
+        empty_value=pd.DataFrame(),
+        context="minero_smallcaps:history",
+    )
+    return hist if isinstance(hist, pd.DataFrame) else pd.DataFrame()
 
 
 def _score_startup(info: dict, hist: pd.DataFrame) -> dict[str, float | str]:

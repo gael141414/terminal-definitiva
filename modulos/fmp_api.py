@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import logging
+import re
+import time
+from typing import Any
+
 import pandas as pd
 import requests
 import streamlit as st
@@ -13,6 +18,110 @@ BASE_URL = "https://financialmodelingprep.com/api/v3"
 STABLE_BASE_URL = "https://financialmodelingprep.com/stable"
 REQUEST_TIMEOUT = 15
 FMP_MAX_LIMIT_CURRENT_PLAN = 5
+
+logger = logging.getLogger("valuequant.fmp")
+
+# Estados posibles de una llamada FMP clasificada por fetch_fmp_json_classified().
+# Distinguen causas que requieren manejo/mensajes distintos en la UI: una clave
+# inválida (401) no es lo mismo que un endpoint fuera de plan (402/403), un
+# rate limit temporal (429) o un fallo transitorio del proveedor (timeout/5xx).
+FMP_STATUS_OK = "ok"
+FMP_STATUS_DISABLED = "disabled"
+FMP_STATUS_UNAUTHORIZED = "unauthorized"
+FMP_STATUS_RESTRICTED_PLAN = "restricted_plan"
+FMP_STATUS_RATE_LIMITED = "rate_limited"
+FMP_STATUS_PROVIDER_ERROR = "provider_error"
+FMP_STATUS_NO_DATA = "no_data"
+
+FMP_STATUS_MESSAGES = {
+    FMP_STATUS_DISABLED: "Noticias desactivadas por configuración (FMP_NEWS_ENABLED=false).",
+    FMP_STATUS_UNAUTHORIZED: "Clave de API de FMP inválida o ausente.",
+    FMP_STATUS_RESTRICTED_PLAN: "Noticias no disponibles con el plan actual de FMP.",
+    FMP_STATUS_RATE_LIMITED: "Límite de peticiones de FMP alcanzado temporalmente. Inténtalo de nuevo en unos minutos.",
+    FMP_STATUS_PROVIDER_ERROR: "FMP no está disponible temporalmente (error del proveedor). Inténtalo más tarde.",
+    FMP_STATUS_NO_DATA: "FMP no devolvió datos para esta consulta.",
+}
+
+
+def classify_fmp_status_code(status_code: int | None) -> str:
+    """Clasifica un status HTTP de FMP en una causa accionable.
+
+    401 -> credenciales; 402/403 -> endpoint fuera del plan contratado (no es
+    un problema de clave ni de conexión); 429 -> rate limit temporal;
+    5xx -> fallo transitorio del proveedor.
+    """
+    if status_code is None:
+        return FMP_STATUS_PROVIDER_ERROR
+    if status_code == 401:
+        return FMP_STATUS_UNAUTHORIZED
+    if status_code in (402, 403):
+        return FMP_STATUS_RESTRICTED_PLAN
+    if status_code == 429:
+        return FMP_STATUS_RATE_LIMITED
+    if status_code >= 500:
+        return FMP_STATUS_PROVIDER_ERROR
+    if status_code == 200:
+        return FMP_STATUS_OK
+    return FMP_STATUS_PROVIDER_ERROR
+
+
+def fetch_fmp_json_classified(
+    url: str,
+    params: dict[str, Any],
+    *,
+    context: str,
+    retries: int = 1,
+    backoff_seconds: float = 1.5,
+) -> tuple[list[dict] | None, str]:
+    """GET a FMP con clasificación de errores y sin exponer nunca la API key.
+
+    Devuelve ``(payload, status)``. Reintenta una única vez, y solo ante
+    ``rate_limited``/``provider_error`` (causas transitorias) — un 401/402/403
+    es una causa permanente hasta que cambie la configuración o el plan, así
+    que reintentarlo en el momento no serviría de nada y solo generaría más
+    tráfico contra un endpoint ya restringido.
+
+    Importante: nunca se registra ``url``, ``params`` ni el texto de la
+    excepción de requests (``str(exc)`` incluye la URL completa, incl. la
+    apikey, para errores HTTP) — solo ``context`` y el status HTTP/nombre de
+    clase de la excepción.
+    """
+    attempt = 0
+    while True:
+        try:
+            response = requests.get(url, params=params, timeout=REQUEST_TIMEOUT)
+        except requests.exceptions.Timeout:
+            if attempt < retries:
+                time.sleep(backoff_seconds)
+                attempt += 1
+                continue
+            logger.warning("FMP timeout en %s tras %s intento(s).", context, attempt + 1)
+            return None, FMP_STATUS_PROVIDER_ERROR
+        except requests.exceptions.RequestException as exc:
+            logger.warning("FMP error de red en %s: %s", context, type(exc).__name__)
+            return None, FMP_STATUS_PROVIDER_ERROR
+
+        status = classify_fmp_status_code(response.status_code)
+
+        if status in (FMP_STATUS_RATE_LIMITED, FMP_STATUS_PROVIDER_ERROR) and attempt < retries:
+            time.sleep(backoff_seconds)
+            attempt += 1
+            continue
+
+        if status != FMP_STATUS_OK:
+            logger.warning("FMP status=%s (http %s) en %s.", status, response.status_code, context)
+            return None, status
+
+        try:
+            payload = response.json()
+        except ValueError:
+            logger.warning("FMP devolvió JSON inválido en %s.", context)
+            return None, FMP_STATUS_NO_DATA
+
+        if not isinstance(payload, list) or not payload:
+            return None, FMP_STATUS_NO_DATA
+
+        return payload, FMP_STATUS_OK
 
 
 def _normalizar_ticker(ticker: str) -> str:
@@ -58,6 +167,26 @@ def _params_sin_secretos(params: dict[str, str | int] | None) -> dict[str, str |
     return safe_params
 
 
+_APIKEY_QUERY_PATTERN = re.compile(r"apikey=[^&\s]+", re.IGNORECASE)
+
+
+def _error_sin_secretos(exc: BaseException) -> str:
+    """Representación de un error de requests sin la apikey.
+
+    ``repr()``/``str()`` de ``requests.exceptions.HTTPError`` incluye la URL
+    completa reconstruida (base + query string), que contiene la apikey real
+    aunque los ``params`` de entrada ya estuvieran redactados — por eso no
+    basta con redactar ``params``, hay que redactar también el texto del
+    propio error antes de mostrarlo en la UI (``st.json`` en el panel de
+    diagnóstico) o registrarlo en logs.
+    """
+    text = repr(exc)
+    text = _APIKEY_QUERY_PATTERN.sub("apikey=***", text)
+    if FMP_API_KEY:
+        text = text.replace(FMP_API_KEY, "***")
+    return text
+
+
 def _probar_endpoint(
     url: str,
     params: dict[str, str | int] | None,
@@ -93,7 +222,7 @@ def _probar_endpoint(
         else:
             resultado["error"] = f"Respuesta JSON inesperada: {type(payload).__name__}"
     except Exception as exc:
-        resultado["error"] = repr(exc)
+        resultado["error"] = _error_sin_secretos(exc)
 
     return resultado
 

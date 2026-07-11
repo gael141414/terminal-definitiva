@@ -9,6 +9,8 @@ import pandas as pd
 import streamlit as st
 import yfinance as yf
 
+from modulos.yahoo_resilience import safe_yfinance_fetch, safe_yfinance_info
+
 try:
     from modulos.utils import analizar_sentimiento_noticias
 except Exception:  # evita romper la app si el módulo NLP falla
@@ -262,8 +264,7 @@ def _market_data_snapshot(ticker: str) -> dict[str, Any]:
     }
 
     try:
-        yf_ticker = yf.Ticker(ticker)
-        info = yf_ticker.info or {}
+        info = safe_yfinance_info(yf, ticker, context=f"scoring_engine:info:{ticker}")
         output["beta"] = info.get("beta")
         output["market_cap"] = info.get("marketCap")
         output["sector"] = info.get("sector")
@@ -271,7 +272,11 @@ def _market_data_snapshot(ticker: str) -> dict[str, Any]:
         output["inst_pct"] = (info.get("heldPercentInstitutions") or 0) * 100
         output["short_ratio"] = info.get("shortRatio")
 
-        hist = yf_ticker.history(period="18mo", interval="1d", auto_adjust=True)
+        hist, _status = safe_yfinance_fetch(
+            lambda: yf.Ticker(ticker).history(period="18mo", interval="1d", auto_adjust=True),
+            empty_value=pd.DataFrame(),
+            context=f"scoring_engine:history:{ticker}",
+        )
         if hist is not None and not hist.empty and "Close" in hist.columns:
             close = hist["Close"].dropna()
             if len(close) >= 220:
@@ -310,8 +315,18 @@ def _market_data_snapshot(ticker: str) -> dict[str, Any]:
         }
         sector_etf = sector_to_etf.get(str(output.get("sector") or ""))
         if sector_etf:
-            sector_close = yf.Ticker(sector_etf).history(period="4mo", interval="1d", auto_adjust=True)["Close"].dropna()
-            spy_close = yf.Ticker("SPY").history(period="4mo", interval="1d", auto_adjust=True)["Close"].dropna()
+            sector_hist, _status = safe_yfinance_fetch(
+                lambda: yf.Ticker(sector_etf).history(period="4mo", interval="1d", auto_adjust=True),
+                empty_value=pd.DataFrame(),
+                context=f"scoring_engine:sector_etf:{sector_etf}",
+            )
+            spy_hist, _status = safe_yfinance_fetch(
+                lambda: yf.Ticker("SPY").history(period="4mo", interval="1d", auto_adjust=True),
+                empty_value=pd.DataFrame(),
+                context="scoring_engine:sector_etf:SPY",
+            )
+            sector_close = sector_hist["Close"].dropna() if not sector_hist.empty else sector_hist
+            spy_close = spy_hist["Close"].dropna() if not spy_hist.empty else spy_hist
             if len(sector_close) > 63 and len(spy_close) > 63:
                 sector_return = float(sector_close.iloc[-1] / sector_close.iloc[-63] - 1)
                 spy_return = float(spy_close.iloc[-1] / spy_close.iloc[-63] - 1)

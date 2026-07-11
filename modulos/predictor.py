@@ -3,17 +3,22 @@ import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
 
+from modulos.yahoo_resilience import safe_yfinance_fetch
+
 @st.cache_data(ttl=86400, show_spinner=False)
 def calcular_z_score(ticker):
     # 1. Protección contra ticker vacío
     if not ticker or str(ticker).strip() == "":
         return None
-        
+
     try:
         # 2. Descarga robusta usando el objeto Ticker
-        accion = yf.Ticker(ticker)
-        df = accion.history(period="5y")
-        
+        df, _status = safe_yfinance_fetch(
+            lambda: yf.Ticker(ticker).history(period="5y"),
+            empty_value=pd.DataFrame(),
+            context=f"predictor:{ticker}",
+        )
+
         # 3. Comprobar si hay datos y si superan los 200 días
         if df.empty or len(df) < 200:
             return None

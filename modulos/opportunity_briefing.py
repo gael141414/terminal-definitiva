@@ -20,9 +20,9 @@ import json
 
 import pandas as pd
 import streamlit as st
-import yfinance as yf
 
 from modulos.watchlist_alerts import alert_summary, build_watchlist_alerts
+from modulos.quotes import fetch_quotes_with_fallback
 from modulos.briefing_payloads import build_briefing_payloads
 from modulos.manual_delivery import render_manual_telegram_panel
 from modulos.analysis_store import score_evolution_summary
@@ -210,21 +210,16 @@ def _trend_priority_adjustment(summary: dict[str, Any]) -> float:
 
 @st.cache_data(ttl=900, show_spinner=False)
 def _price_snapshot(ticker: str) -> dict[str, float]:
-    """Obtiene precio reciente con caché corta para no saturar yfinance."""
+    """Obtiene precio reciente con caché corta para no saturar yfinance.
 
-    try:
-        tk = yf.Ticker(ticker)
-        hist = tk.history(period="5d")
-        if not hist.empty and len(hist) >= 2:
-            current = float(hist["Close"].iloc[-1])
-            previous = float(hist["Close"].iloc[-2])
-        else:
-            current = float(tk.fast_info.last_price)
-            previous = float(tk.fast_info.previous_close)
-        change = ((current - previous) / previous) * 100 if previous else 0.0
-        return {"price": current, "change_pct": change}
-    except Exception:
+    Delega en ``modulos.quotes.fetch_quotes_with_fallback`` en vez de duplicar la
+    lógica de descarga — de paso hereda el fallback a FMP que esta función no
+    tenía antes.
+    """
+    resultado = fetch_quotes_with_fallback([ticker], period="5d").get(ticker)
+    if resultado is None or not resultado.ok:
         return {"price": 0.0, "change_pct": 0.0}
+    return {"price": resultado.price, "change_pct": resultado.change_pct or 0.0}
 
 
 def build_watchlist_dataframe() -> pd.DataFrame:

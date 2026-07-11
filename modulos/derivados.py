@@ -13,6 +13,8 @@ import streamlit as st
 import yfinance as yf
 from scipy.stats import norm
 
+from modulos.yahoo_resilience import safe_yfinance_fetch
+
 
 OptionType = Literal["call", "put"]
 
@@ -79,13 +81,17 @@ def calculate_greeks(S: float, K: float, T: float, r: float, sigma: float, optio
 @st.cache_data(ttl=1800, show_spinner=False)
 def _download_option_chain(ticker: str, expiration: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Download option chain from yfinance."""
-    try:
-        chain = yf.Ticker(ticker).option_chain(expiration)
-        return chain.calls.copy(), chain.puts.copy()
-    except Exception:
+    chain, status = safe_yfinance_fetch(
+        lambda: yf.Ticker(ticker).option_chain(expiration),
+        empty_value=None,
+        context=f"derivados:option_chain:{ticker}:{expiration}",
+    )
+    if status != "ok" or chain is None:
         return pd.DataFrame(), pd.DataFrame()
+    return chain.calls.copy(), chain.puts.copy()
 
 
+@st.cache_data(ttl=900, show_spinner=False)
 def _current_price(ticker: str) -> float:
     """Get latest price from yfinance."""
     try:
@@ -93,10 +99,25 @@ def _current_price(ticker: str) -> float:
         price = fast_info.get("last_price") or fast_info.get("lastPrice")
         if price:
             return float(price)
-        hist = yf.Ticker(ticker).history(period="5d")
-        return float(hist["Close"].dropna().iloc[-1]) if not hist.empty else 0.0
     except Exception:
-        return 0.0
+        pass
+    hist, _status = safe_yfinance_fetch(
+        lambda: yf.Ticker(ticker).history(period="5d"),
+        empty_value=pd.DataFrame(),
+        context=f"derivados:price:{ticker}",
+    )
+    return float(hist["Close"].dropna().iloc[-1]) if not hist.empty else 0.0
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def _option_expirations(ticker: str) -> list[str]:
+    """Vencimientos de opciones disponibles, cacheados y protegidos ante rate limits."""
+    expirations, _status = safe_yfinance_fetch(
+        lambda: list(yf.Ticker(ticker).options),
+        empty_value=[],
+        context=f"derivados:expirations:{ticker}",
+    )
+    return expirations if isinstance(expirations, list) else []
 
 
 def build_volatility_smile(calls: pd.DataFrame, puts: pd.DataFrame, spot: float) -> go.Figure | None:
@@ -146,10 +167,7 @@ def render_derivados(ticker: str) -> None:
         st.error("No se pudo obtener precio spot.")
         return
 
-    try:
-        expirations = list(yf.Ticker(ticker).options)
-    except Exception:
-        expirations = []
+    expirations = _option_expirations(ticker)
     if not expirations:
         st.warning("Yahoo Finance no devolvió vencimientos de opciones para este ticker.")
         return

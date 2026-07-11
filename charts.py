@@ -3,9 +3,12 @@ import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 import plotly.io as pio
+import streamlit as st
 from plotly.subplots import make_subplots
 import yfinance as yf
 from roboadvisor_engine import PortfolioOptimizer
+
+from modulos.yahoo_resilience import safe_yfinance_fetch
 
 # ---------------- VALUEQUANT GLOBAL PLOTLY THEME ---------------- #
 VQ_COLORS = ['#4f8cff', '#37c6e6', '#36c486', '#e2a93b', '#ef5b6b', '#93a4bb']
@@ -54,6 +57,102 @@ VQ_THEME = go.layout.Template(
 )
 pio.templates[VQ_TEMPLATE_NAME] = VQ_THEME
 pio.templates.default = VQ_TEMPLATE_NAME
+
+
+@st.cache_data(ttl=900, show_spinner=False)
+def _cached_history(ticker: str, period: str = "1y", **kwargs) -> pd.DataFrame:
+    """Histórico de precios cacheado (15 min) y protegido ante rate limits de Yahoo.
+
+    Sustituye las ~15 llamadas directas a ``yf.Ticker(ticker).history(...)`` que
+    antes se repetían sin caché en cada función de este módulo.
+    """
+    data, _status = safe_yfinance_fetch(
+        lambda: yf.Ticker(ticker).history(period=period, **kwargs),
+        empty_value=pd.DataFrame(),
+        context=f"charts:history:{ticker}:{period}",
+    )
+    return data if isinstance(data, pd.DataFrame) else pd.DataFrame()
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _cached_info(ticker: str) -> dict:
+    """``.info`` cacheado 24h y protegido ante 429/quoteSummary.
+
+    Los datos de ``.info`` (sector, nombre, metadata) cambian con poca frecuencia,
+    a diferencia del precio — de ahí el TTL más largo que ``_cached_history``.
+    """
+    data, _status = safe_yfinance_fetch(
+        lambda: yf.Ticker(ticker).info,
+        empty_value={},
+        context=f"charts:info:{ticker}",
+    )
+    return data if isinstance(data, dict) else {}
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _cached_dividends(ticker: str) -> pd.Series:
+    """``.dividends`` cacheado 24h y protegido ante rate limits de Yahoo."""
+    data, _status = safe_yfinance_fetch(
+        lambda: yf.Ticker(ticker).dividends,
+        empty_value=pd.Series(dtype=float),
+        context=f"charts:dividends:{ticker}",
+    )
+    return data if isinstance(data, pd.Series) else pd.Series(dtype=float)
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _cached_ticker_attr(ticker: str, attr: str) -> pd.DataFrame:
+    """Atributo de ``yf.Ticker`` (``financials``, ``cashflow``, ``balance_sheet``, ...)
+    cacheado 24h y protegido ante rate limits — los estados financieros cambian
+    trimestralmente, así que un TTL largo es apropiado.
+    """
+    data, _status = safe_yfinance_fetch(
+        lambda: getattr(yf.Ticker(ticker), attr),
+        empty_value=pd.DataFrame(),
+        context=f"charts:{attr}:{ticker}",
+    )
+    return data if isinstance(data, pd.DataFrame) else pd.DataFrame()
+
+
+@st.cache_data(ttl=900, show_spinner=False)
+def _cached_option_flow(ticker: str, max_expiries: int = 3) -> dict:
+    """Resumen cacheado (15 min) de Open Interest de calls/puts para los próximos
+    vencimientos, protegido ante rate limits de Yahoo.
+    """
+    fechas, _status = safe_yfinance_fetch(
+        lambda: yf.Ticker(ticker).options,
+        empty_value=(),
+        context=f"charts:options:{ticker}",
+    )
+    if not fechas:
+        return {"fechas": (), "calls_totales": 0, "puts_totales": 0}
+
+    calls_totales = 0
+    puts_totales = 0
+    for fecha in fechas[:max_expiries]:
+        cadena, _status = safe_yfinance_fetch(
+            lambda f=fecha: yf.Ticker(ticker).option_chain(f),
+            empty_value=None,
+            context=f"charts:option_chain:{ticker}:{fecha}",
+        )
+        if cadena is None:
+            continue
+        calls_totales += int(cadena.calls['openInterest'].sum())
+        puts_totales += int(cadena.puts['openInterest'].sum())
+    return {"fechas": tuple(fechas), "calls_totales": calls_totales, "puts_totales": puts_totales}
+
+
+@st.cache_data(ttl=900, show_spinner=False)
+def _cached_download(tickers, period: str = "1y", **kwargs) -> pd.DataFrame:
+    """``yf.download`` cacheado (15 min).
+
+    ``yf.download`` ya está protegido globalmente ante 429 por el guard instalado
+    en el arranque (``sitecustomize.py`` + ``modulos/yfinance_global_guard.py``);
+    este wrapper añade además caché, que antes no existía en ningún punto de
+    ``charts.py``.
+    """
+    data = yf.download(tickers, period=period, progress=False, **kwargs)
+    return data if isinstance(data, pd.DataFrame) else pd.DataFrame()
 
 
 def _apply_vq_layout(fig: go.Figure, *, margin: dict | None = None) -> go.Figure:
@@ -254,7 +353,7 @@ def plot_per_bands(ticker, eps_dict=None):
             return None
 
         # Descargar 10 años de precio
-        df_price = yf.Ticker(ticker).history(period="10y")
+        df_price = _cached_history(ticker, period="10y")
         if df_price.empty: return None
 
         df_price.reset_index(inplace=True)
@@ -315,8 +414,8 @@ def plot_per_bands(ticker, eps_dict=None):
 def plot_tsr_vs_sp500(ticker):
     """Genera un gráfico base $10,000 comparando la acción contra el S&P 500 y su Sector"""
     try:
-        hist_ticker = yf.Ticker(ticker).history(period="10y")['Close']
-        hist_spy = yf.Ticker("SPY").history(period="10y")['Close']
+        hist_ticker = _cached_history(ticker, period="10y")['Close']
+        hist_spy = _cached_history("SPY", period="10y")['Close']
         
         # Diccionario de Sectores a ETFs
         sector_etfs = {
@@ -326,13 +425,13 @@ def plot_tsr_vs_sp500(ticker):
             'Utilities': 'XLU', 'Basic Materials': 'XLB'
         }
         
-        sector_nombre = yf.Ticker(ticker).info.get('sector', '')
+        sector_nombre = _cached_info(ticker).get('sector', '')
         etf_ticker = sector_etfs.get(sector_nombre)
         
         datos = {ticker: hist_ticker, "SPY (Mercado)": hist_spy}
         
         if etf_ticker:
-            hist_etf = yf.Ticker(etf_ticker).history(period="10y")['Close']
+            hist_etf = _cached_history(etf_ticker, period="10y")['Close']
             datos[f"{etf_ticker} (Sector {sector_nombre})"] = hist_etf
 
         df = pd.DataFrame(datos).dropna()
@@ -369,9 +468,8 @@ def plot_tsr_vs_sp500(ticker):
 def plot_calidad_beneficios(ticker):
     """Filtro de Trampas de Valor: Compara Beneficio Neto vs Flujo de Caja Operativo"""
     try:
-        ticker_yf = yf.Ticker(ticker)
-        is_yf = ticker_yf.financials
-        cf_yf = ticker_yf.cashflow
+        is_yf = _cached_ticker_attr(ticker, "financials")
+        cf_yf = _cached_ticker_attr(ticker, "cashflow")
         
         if is_yf.empty or cf_yf.empty: return None
         
@@ -407,9 +505,8 @@ def plot_calidad_beneficios(ticker):
 def plot_auditoria_forense(ticker, precio_actual, acciones_actuales):
     """Calcula el Altman Z-Score y escanea las Banderas Rojas de liquidez"""
     try:
-        ticker_yf = yf.Ticker(ticker)
-        bs = ticker_yf.balance_sheet
-        is_stmt = ticker_yf.financials
+        bs = _cached_ticker_attr(ticker, "balance_sheet")
+        is_stmt = _cached_ticker_attr(ticker, "financials")
         
         if bs.empty or is_stmt.empty:
             return None, "Datos insuficientes en Yahoo Finance para la auditoría."
@@ -503,23 +600,16 @@ def plot_auditoria_forense(ticker, precio_actual, acciones_actuales):
 def plot_flujo_opciones(ticker):
     """Analiza el mercado de derivados (Open Interest) para calcular el Put/Call Ratio Institucional"""
     try:
-        empresa = yf.Ticker(ticker)
-        fechas_opciones = empresa.options
-        
+        resumen = _cached_option_flow(ticker)
+        fechas_opciones = resumen["fechas"]
+
         # Si la empresa es muy pequeña o no es de EE.UU., puede no tener derivados
         if not fechas_opciones:
             return None, "No hay mercado de opciones disponible para esta empresa (Sin derivados líquidos)."
-            
-        puts_totales = 0
-        calls_totales = 0
-        
-        # Analizamos los próximos 3 vencimientos (Corto/Medio plazo = Dinero táctico)
-        for fecha in fechas_opciones[:3]:
-            cadena = empresa.option_chain(fecha)
-            # Sumamos el Open Interest (Contratos abiertos REALES, dinero bloqueado en la mesa)
-            calls_totales += cadena.calls['openInterest'].sum()
-            puts_totales += cadena.puts['openInterest'].sum()
-            
+
+        calls_totales = resumen["calls_totales"]
+        puts_totales = resumen["puts_totales"]
+
         if calls_totales == 0 and puts_totales == 0:
             return None, "No hay suficiente interés abierto (Open Interest) en las opciones a corto plazo."
             
@@ -561,8 +651,7 @@ def plot_flujo_opciones(ticker):
 def plot_proyeccion_dividendos(ticker, precio_compra, anios_proyeccion=20):
     """Proyecta el crecimiento del dividendo y el Yield on Cost a 20 años"""
     try:
-        ticker_yf = yf.Ticker(ticker)
-        divs = ticker_yf.dividends
+        divs = _cached_dividends(ticker)
         
         if divs.empty or len(divs) < 4:
             return None, "Esta empresa no paga dividendos consistentes o no hay datos."
@@ -635,10 +724,9 @@ def plot_proyeccion_dividendos(ticker, precio_compra, anios_proyeccion=20):
 def plot_beneish_m_score(ticker):
     """Calcula el Beneish M-Score cruzando datos contables de los últimos 2 años para detectar manipulación"""
     try:
-        empresa = yf.Ticker(ticker)
-        bs = empresa.balance_sheet
-        is_stmt = empresa.financials
-        cf = empresa.cashflow
+        bs = _cached_ticker_attr(ticker, "balance_sheet")
+        is_stmt = _cached_ticker_attr(ticker, "financials")
+        cf = _cached_ticker_attr(ticker, "cashflow")
         
         # Si no tenemos al menos 2 años de datos, no podemos calcular la evolución temporal
         if bs.empty or is_stmt.empty or len(bs.columns) < 2 or len(is_stmt.columns) < 2:
@@ -761,7 +849,7 @@ def plot_treemap_competidores(ticker, competidor):
         
         datos = []
         for t in tickers:
-            info = yf.Ticker(t).info
+            info = _cached_info(t)
             datos.append({
                 'Ticker': t,
                 'MarketCap': info.get('marketCap', 1),
@@ -800,7 +888,7 @@ def plot_treemap_competidores(ticker, competidor):
 def plot_adn_financiero(ticker):
     """Genera un gráfico de Radar que muestra la huella dactilar de la empresa"""
     try:
-        info = yf.Ticker(ticker).info
+        info = _cached_info(ticker)
         
         # 1. Extraer métricas y normalizarlas de 0 a 100 (Aproximación para el gráfico)
         # Rentabilidad
@@ -876,7 +964,7 @@ def plot_frontera_eficiente(tickers):
         if len(tickers) < 2:
             return None, None
 
-        datos = yf.download(tickers, period="5y", progress=False)["Close"]
+        datos = _cached_download(tickers, period="5y")["Close"]
         if isinstance(datos, pd.Series):
             datos = datos.to_frame(name=tickers[0])
         datos = datos.dropna(axis=1, how="all").dropna(how="any")
@@ -936,7 +1024,7 @@ def plot_estacionalidad_quant(ticker):
     """Descarga 20 años de historia y calcula la probabilidad de éxito mensual (Win Rate)"""
     try:
         # 1. Extracción masiva de datos (20 años)
-        df = yf.Ticker(ticker).history(period="20y")
+        df = _cached_history(ticker, period="20y")
         if df.empty:
             return None, "No hay datos históricos suficientes para calcular probabilidades."
             
@@ -1014,7 +1102,7 @@ def plot_estacionalidad_quant(ticker):
 def plot_grafico_tecnico_pro(ticker):
     """Genera un gráfico de velas premium con medias móviles y volumen integrado"""
     try:
-        df = yf.Ticker(ticker).history(period="1y")
+        df = _cached_history(ticker, period="1y")
         if df.empty: return None
 
         # Calcular Medias Móviles Clave
@@ -1065,10 +1153,10 @@ def plot_termometro_macro():
     """Descarga datos macroeconómicos y calcula el sentimiento del mercado"""
     try:
         # 1. Descarga individual (Mucho más estable que yf.download en paquete)
-        vix_data = yf.Ticker('^VIX').history(period="1mo")['Close']
-        tnx_data = yf.Ticker('^TNX').history(period="1mo")['Close']
+        vix_data = _cached_history('^VIX', period="1mo")['Close']
+        tnx_data = _cached_history('^TNX', period="1mo")['Close']
         # Descargamos 2 años de SPY para asegurarnos de tener 200 días hábiles para la Media Móvil
-        spy_data = yf.Ticker('SPY').history(period="2y")['Close'] 
+        spy_data = _cached_history('SPY', period="2y")['Close']
         
         if vix_data.empty or tnx_data.empty or spy_data.empty:
             return None, "Los datos macroeconómicos no están disponibles en este momento."
@@ -1213,7 +1301,7 @@ def plot_football_field(ticker, precio_actual, res_val):
         return None
         
     try:
-        info = yf.Ticker(ticker).info
+        info = _cached_info(ticker)
         
         # Manejo seguro si Yahoo Finance no devuelve los datos exactos
         low_52 = info.get('fiftyTwoWeekLow')
@@ -1448,7 +1536,7 @@ def plot_ev_fcf_historico(ticker, df_bs, df_cf, acciones_actuales):
     """Genera un gráfico del múltiplo de valoración EV/FCF Histórico"""
     try:
         # 1. Traer precios históricos para calcular la capitalización pasada
-        df_price = yf.Ticker(ticker).history(period="10y")
+        df_price = _cached_history(ticker, period="10y")
         if df_price.empty: return None
 
         df_price.reset_index(inplace=True)
@@ -1556,7 +1644,7 @@ def plot_visor_trend_following(ticker, period="1y"):
     """Visor 1: EMAs (Tendencia) + MACD (Momentum) + RSI (Sobrecompra/Sobreventa)"""
     try:
         # 1. Descarga de datos
-        df = yf.download(ticker, period=period)
+        df = _cached_download(ticker, period=period)
         if df.empty or len(df) < 200:
             return None, None
             
@@ -1638,7 +1726,7 @@ def plot_visor_breakout_volatilidad(ticker, period="1y"):
         import numpy as np
         
         # 1. Descarga de datos
-        df = yf.download(ticker, period=period)
+        df = _cached_download(ticker, period=period)
         if df.empty or len(df) < 50:
             return None, None
             
@@ -1734,7 +1822,7 @@ def plot_visor_reversion_media(ticker, period="1y"):
         import numpy as np
         
         # 1. Descarga de datos
-        df = yf.download(ticker, period=period)
+        df = _cached_download(ticker, period=period)
         if df.empty or len(df) < 50:
             return None, None
             
@@ -1835,7 +1923,7 @@ def plot_visor_ichimoku(ticker, period="1y"):
         import numpy as np
         
         # 1. Descarga de datos
-        df = yf.download(ticker, period=period)
+        df = _cached_download(ticker, period=period)
         if df.empty or len(df) < 100:
             return None, None
             

@@ -160,17 +160,19 @@ def _fetch_yfinance_snapshot(ticker: str) -> CompanySnapshot:
     except Exception:
         return CompanySnapshot(ticker=symbol)
 
+    from modulos.yahoo_resilience import safe_yfinance_fetch, safe_yfinance_info
+
     info: dict[str, Any] = {}
     hist = None
     try:
-        yf_ticker = yf.Ticker(symbol)
-        raw_info = yf_ticker.info
+        raw_info = safe_yfinance_info(yf, symbol, context=f"relative_comparison:info:{symbol}")
         if isinstance(raw_info, dict):
             info = raw_info
-        try:
-            hist = yf_ticker.history(period="1y", auto_adjust=True)
-        except Exception:
-            hist = None
+        hist, _status = safe_yfinance_fetch(
+            lambda: yf.Ticker(symbol).history(period="1y", auto_adjust=True),
+            empty_value=None,
+            context=f"relative_comparison:history:{symbol}",
+        )
     except Exception:
         return CompanySnapshot(ticker=symbol)
 

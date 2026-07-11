@@ -3,6 +3,14 @@ import yfinance as yf
 import pandas as pd
 import plotly.express as px
 from modulos.gemini_helper import aviso_gemini_no_configurado, obtener_modelo_gemini
+from modulos.yahoo_resilience import safe_yfinance_info
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _obtener_info_etf(ticker: str) -> dict:
+    """``.info`` del fondo, cacheado 24h y protegido ante rate limits de Yahoo."""
+    return safe_yfinance_info(yf, ticker, context=f"etf:{ticker}")
+
 
 def ejecutar_radiografia_etf(ticker_input):
     st.markdown(f"### 🩻 ETF X-Ray: Radiografía del Fondo {ticker_input}")
@@ -10,9 +18,11 @@ def ejecutar_radiografia_etf(ticker_input):
 
     with st.spinner("Desempaquetando holdings, sectores y folletos del fondo..."):
         try:
-            fondo = yf.Ticker(ticker_input)
-            info = fondo.info
-            
+            info = _obtener_info_etf(ticker_input)
+            if not info:
+                st.error("⚠️ No se pudieron obtener datos de Yahoo Finance para este fondo (rate limit temporal o ticker inválido). Inténtalo de nuevo en unos minutos.")
+                return
+
             # Comprobar si realmente es un ETF/Fondo
             tipo_activo = info.get('quoteType', '')
             if tipo_activo not in ['ETF', 'MUTUALFUND']:

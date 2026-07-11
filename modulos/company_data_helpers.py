@@ -9,6 +9,7 @@ import streamlit as st
 import yfinance as yf
 
 from modulos.data_quality import is_valid_value, validate_dataframe, validate_mapping
+from modulos.yahoo_resilience import safe_yfinance_fetch, safe_yfinance_info
 
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
@@ -36,12 +37,16 @@ def _safe_percent(value: Any) -> float | None:
     return numeric * 100
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
 def obtener_transacciones_insiders(ticker):
     """Descarga las últimas compras/ventas de los directivos (Form 4)."""
 
     try:
-        ticker_yf = yf.Ticker(ticker)
-        transacciones = ticker_yf.insider_transactions
+        transacciones, _status = safe_yfinance_fetch(
+            lambda: yf.Ticker(ticker).insider_transactions,
+            empty_value=pd.DataFrame(),
+            context=f"company_data:insiders:{ticker}",
+        )
 
         quality = validate_dataframe(transacciones, source="yahoo_insider_transactions", min_rows=1)
         if quality.blocking:
@@ -106,11 +111,12 @@ def obtener_tickers_filtrados():
         return ["AAPL - Apple Inc.", "MSFT - Microsoft Corp."]
 
 
+@st.cache_data(ttl=86400, show_spinner=False)
 def obtener_valoracion_sectorial(ticker):
     """Aplica la regla de valoración relativa según el sector."""
 
     try:
-        info = yf.Ticker(ticker).info
+        info = safe_yfinance_info(yf, ticker, context=f"company_data:valoracion_sectorial:{ticker}")
         if not isinstance(info, dict) or not info:
             return None, None, 0, "No se pudieron validar los datos de Yahoo Finance.", {}, 0
 
@@ -164,7 +170,7 @@ def obtener_datos_directiva(ticker):
     """Extrae qué porcentaje de la empresa tienen los directivos y fondos."""
 
     try:
-        info = yf.Ticker(ticker).info
+        info = safe_yfinance_info(yf, ticker, context=f"company_data:directiva:{ticker}")
         quality = validate_mapping(
             info,
             ["heldPercentInsiders", "heldPercentInstitutions", "shortRatio"],

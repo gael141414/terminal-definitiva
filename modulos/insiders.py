@@ -2,6 +2,18 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 from modulos.gemini_helper import aviso_gemini_no_configurado, obtener_modelo_gemini
+from modulos.yahoo_resilience import safe_yfinance_fetch
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _obtener_transacciones_insiders_raw(ticker: str) -> pd.DataFrame:
+    """``.insider_transactions`` cacheado 1h y protegido ante rate limits de Yahoo."""
+    data, _status = safe_yfinance_fetch(
+        lambda: yf.Ticker(ticker).insider_transactions,
+        empty_value=pd.DataFrame(),
+        context=f"insiders:{ticker}",
+    )
+    return data if isinstance(data, pd.DataFrame) else pd.DataFrame()
 
 
 def _interpretacion_insiders_local(compras_totales, ventas_totales):
@@ -17,10 +29,9 @@ def ejecutar_rastreador_insiders(ticker_input):
 
     with st.spinner("Conectando con bases de datos regulatorias y extrayendo transacciones..."):
         try:
-            empresa = yf.Ticker(ticker_input)
             # Extraemos las transacciones de insiders
-            transacciones = empresa.insider_transactions
-            
+            transacciones = _obtener_transacciones_insiders_raw(ticker_input)
+
             if transacciones is None or transacciones.empty:
                 st.warning("No se han registrado movimientos recientes de insiders en la SEC para esta empresa.")
             else:
