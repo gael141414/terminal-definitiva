@@ -40,3 +40,10 @@ __pycache__/
 .venv/
 *.html
 resultado_backtest.html
+.streamlit/secrets.toml
+data/
+db_inversion/
+resultado_backtest.html
+Informe objetivo.txt
+logs/
+exports/
