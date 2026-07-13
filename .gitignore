@@ -33,3 +33,10 @@ scripts/*.local.sh
 .DS_Store
 .vscode/
 .idea/
+db_inversion/
+.streamlit/secrets.toml
+__pycache__/
+*.pyc
+.venv/
+*.html
+resultado_backtest.html
