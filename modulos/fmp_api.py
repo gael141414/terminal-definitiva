@@ -10,7 +10,21 @@ import requests
 import streamlit as st
 
 from modulos.config import CONFIG
-from modulos.data_quality import validate_dataframe
+from modulos.data_provider_errors import (
+    PROVIDER_ERROR,
+    RATE_LIMITED,
+    RESTRICTED,
+    TIMEOUT,
+    DataProviderError,
+    DataTimeoutError,
+    InsufficientCoverageError,
+    InvalidTickerError,
+    NoDataError,
+    ProviderError,
+    RateLimitedError,
+    RestrictedError,
+)
+from modulos.data_quality import INSUFFICIENT_ROWS, validate_dataframe
 
 
 FMP_API_KEY = CONFIG.fmp_api_key
@@ -142,19 +156,72 @@ def _variantes_ticker_fmp(ticker: str) -> list[str]:
     return list(dict.fromkeys([variant for variant in variantes if variant]))
 
 
-def _descargar_json(url: str, params: dict[str, str | int] | None = None) -> list[dict] | None:
+def _endpoint_context(url: str) -> str:
+    """Identificador de log seguro derivado de ``url`` (sin query string).
+
+    La apikey viaja siempre en ``params``, nunca en ``url``, en todos los
+    endpoints que construye este módulo — pero se recorta cualquier posible
+    query string igualmente, por la misma cautela que ``_error_sin_secretos``:
+    nunca depender de que ningún llamador futuro rompa esa invariante.
+    """
+    base = url.split("?", 1)[0]
+    return base.replace(BASE_URL, "legacy").replace(STABLE_BASE_URL, "stable")
+
+
+def _fetch_fmp_payload(url: str, params: dict[str, str | int] | None) -> list[dict]:
+    """Como ``_descargar_json`` pero lanzando la excepción tipada correspondiente
+    en vez de devolver ``None`` silenciosamente; ``_descargar_json`` la atrapa y
+    la traduce al contrato de retorno existente (nadie más debe llamar a esta
+    función directamente)."""
+    context = _endpoint_context(url)
+
     try:
-        if not _fmp_api_disponible():
-            return None
         response = requests.get(url, params=params, timeout=REQUEST_TIMEOUT)
-        response.raise_for_status()
+    except requests.exceptions.Timeout as exc:
+        raise DataTimeoutError("Timeout en la petición.", context=context) from exc
+    except requests.exceptions.RequestException as exc:
+        raise ProviderError(f"Error de red ({type(exc).__name__}).", context=context) from exc
+
+    if response.status_code != 200:
+        status = classify_fmp_status_code(response.status_code)
+        if status == FMP_STATUS_RATE_LIMITED:
+            raise RateLimitedError(f"HTTP {response.status_code}.", context=context, code=RATE_LIMITED)
+        if status in (FMP_STATUS_UNAUTHORIZED, FMP_STATUS_RESTRICTED_PLAN):
+            # 401 (credenciales) y 402/403 (plan) son causas distintas para el
+            # diagnóstico detallado (fetch_fmp_json_classified las separa), pero
+            # para esta jerarquía ambas son "acceso denegado, no reintentable".
+            raise RestrictedError(f"HTTP {response.status_code}.", context=context, code=RESTRICTED)
+        raise ProviderError(f"HTTP {response.status_code}.", context=context)
+
+    try:
         payload = response.json()
-        if not isinstance(payload, list) or not payload:
-            return None
-        if isinstance(payload[0], dict) and payload[0].get("Error Message"):
-            return None
-        return payload
-    except Exception:
+    except ValueError as exc:
+        raise NoDataError("JSON inválido en la respuesta.", context=context) from exc
+
+    if not isinstance(payload, list) or not payload:
+        raise NoDataError("Payload vacío o con forma inesperada.", context=context)
+
+    if isinstance(payload[0], dict) and payload[0].get("Error Message"):
+        mensaje = str(payload[0]["Error Message"])
+        # Heurística best-effort: FMP no tiene un código de error dedicado para
+        # "símbolo inválido", así que se infiere del texto del mensaje.
+        if re.search(r"symbol|ticker", mensaje, re.IGNORECASE):
+            raise InvalidTickerError(mensaje, context=context)
+        raise ProviderError(mensaje, context=context)
+
+    return payload
+
+
+def _descargar_json(url: str, params: dict[str, str | int] | None = None) -> list[dict] | None:
+    if not _fmp_api_disponible():
+        return None
+    try:
+        return _fetch_fmp_payload(url, params)
+    except DataProviderError as exc:
+        logger.warning("FMP %s", exc)
+        return None
+    except Exception as exc:
+        logger.error("FMP error inesperado en %s: %s", _endpoint_context(url), type(exc).__name__)
         return None
 
 
@@ -196,6 +263,7 @@ def _probar_endpoint(
         "params": _params_sin_secretos(params),
         "ok": False,
         "status_code": None,
+        "code": None,
         "rows": 0,
         "has_date": False,
         "error": None,
@@ -206,10 +274,14 @@ def _probar_endpoint(
         resultado["error"] = "FMP_API_KEY no configurada. Define la clave en st.secrets o variable de entorno."
         return resultado
 
+    # Herramienta de diagnóstico interactivo: a propósito atrapa cualquier
+    # excepción (no solo las tipadas) para mostrarla siempre al usuario en vez
+    # de dejar que una causa inesperada tumbe el panel de diagnóstico.
     try:
         response = requests.get(url, params=params, timeout=REQUEST_TIMEOUT)
         resultado["status_code"] = response.status_code
         resultado["sample"] = response.text[:500]
+        resultado["code"] = classify_fmp_status_code(response.status_code)
         response.raise_for_status()
 
         payload = response.json()
@@ -217,12 +289,21 @@ def _probar_endpoint(
             resultado["rows"] = len(payload)
             resultado["has_date"] = bool(payload and isinstance(payload[0], dict) and "date" in payload[0])
             resultado["ok"] = bool(payload and resultado["has_date"])
+            if not resultado["ok"] and resultado["code"] == FMP_STATUS_OK:
+                resultado["code"] = FMP_STATUS_NO_DATA
         elif isinstance(payload, dict):
             resultado["error"] = payload.get("Error Message") or payload.get("message") or "Respuesta JSON no list"
+            resultado["code"] = FMP_STATUS_NO_DATA
         else:
             resultado["error"] = f"Respuesta JSON inesperada: {type(payload).__name__}"
+            resultado["code"] = FMP_STATUS_NO_DATA
+    except requests.exceptions.Timeout as exc:
+        resultado["error"] = _error_sin_secretos(exc)
+        resultado["code"] = TIMEOUT
     except Exception as exc:
         resultado["error"] = _error_sin_secretos(exc)
+        if resultado["code"] is None:
+            resultado["code"] = PROVIDER_ERROR
 
     return resultado
 
@@ -230,25 +311,40 @@ def _probar_endpoint(
 def _endpoint_a_dataframe(
     endpoints: list[tuple[str, dict[str, str | int] | None]],
 ) -> pd.DataFrame | None:
+    payload = None
+    context = "sin_endpoints_candidatos"
+    for url, params in endpoints:
+        context = _endpoint_context(url)
+        payload = _descargar_json(url, params)
+        if payload:
+            break
+
+    if not payload:
+        # _descargar_json ya registró la causa concreta de cada intento fallido;
+        # aquí no hay nada nuevo que loguear, solo agotar los candidatos.
+        return None
+
     try:
-        payload = None
-        for url, params in endpoints:
-            payload = _descargar_json(url, params)
-            if payload:
-                break
-
-        if not payload:
-            return None
-
         df = pd.DataFrame(payload)
         quality = validate_dataframe(df, ["date"], source="fmp_endpoint", min_rows=1)
         if quality.blocking:
+            if quality.status == INSUFFICIENT_ROWS:
+                logger.warning(
+                    "FMP %s",
+                    InsufficientCoverageError(quality.message or "cobertura insuficiente.", context=context),
+                )
+            else:
+                logger.warning(
+                    "FMP %s",
+                    NoDataError(quality.message or f"validación de calidad bloqueante ({quality.status}).", context=context),
+                )
             return None
 
         df["date"] = pd.to_datetime(df["date"], errors="coerce")
         df = df.dropna(subset=["date"]).set_index("date").sort_index(ascending=True)
 
         if df.empty:
+            logger.warning("FMP %s", NoDataError("todas las fechas del payload eran inválidas.", context=context))
             return None
 
         metadata_columns = {
@@ -262,7 +358,11 @@ def _endpoint_a_dataframe(
                     df[column] = converted
 
         return df
-    except Exception:
+    except (KeyError, ValueError, TypeError) as exc:
+        logger.warning("FMP %s", ProviderError(f"fallo construyendo DataFrame ({type(exc).__name__}).", context=context))
+        return None
+    except Exception as exc:
+        logger.error("FMP error inesperado construyendo DataFrame en %s: %s", context, type(exc).__name__)
         return None
 
 
@@ -340,11 +440,11 @@ def extraer_datos_fundamentales_fmp(
     limite_anios: int = 10,
 ) -> tuple[pd.DataFrame | None, pd.DataFrame | None, pd.DataFrame | None, pd.DataFrame | None]:
     """Descarga estados financieros y métricas institucionales desde FMP."""
+    ticker_limpio = _normalizar_ticker(ticker)
     try:
         if not _fmp_api_disponible():
             return None, None, None, None
 
-        ticker_limpio = _normalizar_ticker(ticker)
         limite = min(max(int(limite_anios), 1), FMP_MAX_LIMIT_CURRENT_PLAN)
         if not ticker_limpio:
             return None, None, None, None
@@ -357,21 +457,25 @@ def extraer_datos_fundamentales_fmp(
         df_metrics = _endpoint_a_dataframe(endpoints["key_metrics"])
 
         if all(df is None for df in (df_is, df_bs, df_cf, df_metrics)):
+            # Cada _endpoint_a_dataframe ya registró su causa concreta; aquí solo
+            # se deja constancia de que los 4 estados fallaron para este ticker.
+            logger.warning("FMP %s", NoDataError("ningún estado financiero disponible.", context=f"fundamentales:{ticker_limpio}"))
             return None, None, None, None
 
         return df_is, df_bs, df_cf, df_metrics
-    except Exception:
+    except Exception as exc:
+        logger.error("FMP error inesperado obteniendo fundamentales de %s: %s", ticker_limpio or ticker, type(exc).__name__)
         return None, None, None, None
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def obtener_cotizacion_fmp(ticker: str) -> float:
     """Obtiene la cotización actual de FMP."""
+    ticker_limpio = _normalizar_ticker(ticker)
     try:
         if not _fmp_api_disponible():
             return 0.0
 
-        ticker_limpio = _normalizar_ticker(ticker)
         if not ticker_limpio:
             return 0.0
 
@@ -389,9 +493,17 @@ def obtener_cotizacion_fmp(ticker: str) -> float:
                 break
 
         if not payload:
+            logger.warning("FMP %s", NoDataError("no hay cotización disponible.", context=f"cotizacion:{ticker_limpio}"))
             return 0.0
 
         price = payload[0].get("price", 0.0)
         return float(price) if price is not None else 0.0
-    except Exception:
+    except (TypeError, ValueError) as exc:
+        logger.warning(
+            "FMP %s",
+            ProviderError(f"precio con forma inesperada ({type(exc).__name__}).", context=f"cotizacion:{ticker_limpio}"),
+        )
+        return 0.0
+    except Exception as exc:
+        logger.error("FMP error inesperado obteniendo cotización de %s: %s", ticker_limpio or ticker, type(exc).__name__)
         return 0.0

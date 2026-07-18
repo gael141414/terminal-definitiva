@@ -7,6 +7,7 @@ import time
 from typing import Any, Callable, TypeVar
 
 import pandas as pd
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -20,10 +21,17 @@ YAHOO_RATE_LIMIT_MARKERS = (
 )
 
 # Estados posibles de una llamada a Yahoo/yfinance protegida por safe_yfinance_fetch.
+# STATUS_ERROR se mantiene tal cual (no se renombra a "provider_error"): varios
+# consumidores ya comparan por valor literal contra "error"/"rate_limited"
+# (modulos/quotes.py, modulos/market_widgets.py) y cambiar el string rompería
+# esas comparaciones en silencio. STATUS_TIMEOUT es nuevo (antes cualquier
+# timeout caía en STATUS_ERROR sin distinción).
 STATUS_OK = "ok"
 STATUS_RATE_LIMITED = "rate_limited"
 STATUS_NO_DATA = "no_data"
+STATUS_TIMEOUT = "timeout"
 STATUS_ERROR = "error"
+
 
 T = TypeVar("T")
 
@@ -33,6 +41,19 @@ def is_yahoo_rate_limit_error(exc: BaseException | str) -> bool:
 
     message = str(exc).lower()
     return any(marker in message for marker in YAHOO_RATE_LIMIT_MARKERS)
+
+
+def is_yahoo_timeout_error(exc: BaseException) -> bool:
+    """Detecta timeouts de red con isinstance (más preciso que el sniffing de texto).
+
+    yfinance usa ``requests`` internamente y no siempre envuelve sus
+    excepciones, así que un timeout de conexión puede llegar tal cual como
+    ``requests.exceptions.Timeout`` (o el ``TimeoutError`` builtin al que
+    ``socket.timeout`` es alias desde Python 3.10). A diferencia del rate
+    limit, yfinance no imprime el timeout como texto plano en stdout/stderr,
+    así que aquí sí se puede clasificar por tipo en vez de por contenido.
+    """
+    return isinstance(exc, (TimeoutError, requests.exceptions.Timeout))
 
 
 def _captured_provider_output(stdout: io.StringIO, stderr: io.StringIO) -> str:
@@ -63,12 +84,13 @@ def safe_yfinance_fetch(
     clasificación explícita del resultado.
 
     Devuelve ``(valor, status)`` donde ``status`` es uno de:
-    ``"ok"``, ``"rate_limited"``, ``"no_data"``, ``"error"``.
+    ``"ok"``, ``"rate_limited"``, ``"no_data"``, ``"timeout"``, ``"error"``.
 
-    Si el primer intento se clasifica como rate limit, reintenta hasta ``retries``
-    veces con un backoff corto (``backoff_seconds``) antes de rendirse — hoy no
-    existía ningún reintento en la capa de resiliencia, lo que convertía un 429
-    puntual en un fallo definitivo para todo el rerun de Streamlit.
+    Si el primer intento se clasifica como rate limit o timeout, reintenta
+    hasta ``retries`` veces con un backoff corto (``backoff_seconds``) antes
+    de rendirse — hoy no existía ningún reintento en la capa de resiliencia,
+    lo que convertía un 429/timeout puntual en un fallo definitivo para todo
+    el rerun de Streamlit.
     """
 
     attempt = 0
@@ -79,6 +101,18 @@ def safe_yfinance_fetch(
             with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
                 value = getter()
         except Exception as exc:
+            if is_yahoo_timeout_error(exc):
+                if attempt < retries:
+                    logger.warning(
+                        "Yahoo timeout en %s (intento %s/%s); reintentando en %.1fs.",
+                        context, attempt + 1, retries, backoff_seconds,
+                    )
+                    time.sleep(backoff_seconds)
+                    attempt += 1
+                    continue
+                logger.warning("Yahoo timeout en %s tras agotar reintentos.", context)
+                return empty_value, STATUS_TIMEOUT
+
             rate_limited = is_yahoo_rate_limit_error(exc)
             if rate_limited and attempt < retries:
                 logger.warning(
@@ -89,7 +123,7 @@ def safe_yfinance_fetch(
                 attempt += 1
                 continue
             status = STATUS_RATE_LIMITED if rate_limited else STATUS_ERROR
-            logger.warning("Yahoo no disponible en %s (%s): %s", context, status, exc)
+            logger.warning("Yahoo no disponible en %s (%s): %s: %s", context, status, type(exc).__name__, exc)
             return empty_value, status
 
         captured = _captured_provider_output(stdout, stderr)
@@ -125,10 +159,12 @@ def safe_yfinance_download(yf_module: Any, *args: Any, context: str = "yfinance"
         with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
             data = yf_module.download(*args, **kwargs)
     except Exception as exc:
-        if is_yahoo_rate_limit_error(exc):
+        if is_yahoo_timeout_error(exc):
+            logger.warning("Yahoo timeout en %s; se devuelve DataFrame vacío.", context)
+        elif is_yahoo_rate_limit_error(exc):
             logger.warning("Yahoo rate limit en %s; se devuelve DataFrame vacío.", context)
         else:
-            logger.warning("Yahoo no disponible en %s; se devuelve DataFrame vacío: %s", context, exc)
+            logger.warning("Yahoo no disponible en %s; se devuelve DataFrame vacío: %s: %s", context, type(exc).__name__, exc)
         return pd.DataFrame()
 
     captured = _captured_provider_output(stdout, stderr)
@@ -154,10 +190,15 @@ def safe_yfinance_info(yf_module: Any, ticker: str, *, context: str = "yfinance_
         with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
             info = yf_module.Ticker(ticker).info
     except Exception as exc:
-        if is_yahoo_rate_limit_error(exc):
+        if is_yahoo_timeout_error(exc):
+            logger.warning("Yahoo info timeout para %s en %s; se devuelve dict vacío.", ticker, context)
+        elif is_yahoo_rate_limit_error(exc):
             logger.warning("Yahoo info rate limit para %s en %s; se devuelve dict vacío.", ticker, context)
         else:
-            logger.warning("Yahoo info no disponible para %s en %s; se devuelve dict vacío: %s", ticker, context, exc)
+            logger.warning(
+                "Yahoo info no disponible para %s en %s; se devuelve dict vacío: %s: %s",
+                ticker, context, type(exc).__name__, exc,
+            )
         return {}
 
     captured = _captured_provider_output(stdout, stderr)
