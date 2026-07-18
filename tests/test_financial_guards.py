@@ -12,6 +12,8 @@ cashflow_analyzer.py y modulos/utils.py:
 4. La "Caja Neta" no debe sumar automáticamente inversiones a largo plazo.
 5. escanear_vulnerabilidades / calcular_score_buffett deben distinguir un 0.0
    real de un dato ausente (sin usar `if valor and ...`).
+6. COGS/SG&A/I+D ausentes (income_analyzer.py) y recompras/dividendos ausentes
+   (cashflow_analyzer.py) no deben mostrarse/sumarse como 0 sintético.
 """
 
 from __future__ import annotations
@@ -29,7 +31,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from balance_analyzer import analizar_balance
 from cashflow_analyzer import analizar_flujo_efectivo
-from income_analyzer import _safe_ratio
+from income_analyzer import _safe_ratio, analizar_cuenta_resultados
 from modulos.utils import calcular_score_buffett, escanear_vulnerabilidades
 
 
@@ -384,3 +386,137 @@ def test_serie_de_un_solo_anio_flujo_efectivo_no_rompe():
 
     assert resultado is not None
     assert resultado["ratios"].loc["2024", "CAPEX % sobre Beneficio"] == pytest.approx(25.0)
+
+
+# ---------------------------------------------------------------------------
+# Extensión: COGS / SG&A / I+D ausentes (income_analyzer.py) no son 0 sintético
+# ---------------------------------------------------------------------------
+
+
+def test_cogs_ausente_no_infla_margen_bruto_al_100_por_ciento():
+    # Sin "grossProfit" ni "costOfRevenue": el margen bruto no es derivable y
+    # debe quedar NaN, no "ventas - 0 = ventas" (100% de margen, falso).
+    is_df = pd.DataFrame(
+        {"revenue": [100e9], "netIncome": [20e9], "operatingIncome": [25e9]},
+        index=_idx([2024]),
+    )
+
+    resultado = analizar_cuenta_resultados(is_df, None)
+    ratios = resultado["ratios"]
+
+    assert pd.isna(ratios.loc["2024", "Margen Bruto %"])
+
+
+def test_sga_e_id_ausentes_no_se_muestran_como_cero_por_ciento():
+    is_df = pd.DataFrame(
+        {
+            "revenue": [100e9],
+            "grossProfit": [40e9],
+            "netIncome": [10e9],
+            "operatingIncome": [15e9],
+            # Sin sellingGeneralAndAdministrativeExpenses/generalAndAdministrativeExpenses/
+            # sellingAndMarketingExpenses ni researchAndDevelopmentExpenses.
+        },
+        index=_idx([2024]),
+    )
+
+    resultado = analizar_cuenta_resultados(is_df, None)
+    ratios = resultado["ratios"]
+
+    assert pd.isna(ratios.loc["2024", "SG&A % (s/MB)"])
+    assert pd.isna(ratios.loc["2024", "I+D % (s/MB)"])
+
+
+def test_sga_e_id_cero_real_se_conserva():
+    is_df = pd.DataFrame(
+        {
+            "revenue": [100e9],
+            "grossProfit": [40e9],
+            "netIncome": [10e9],
+            "operatingIncome": [15e9],
+            "sellingGeneralAndAdministrativeExpenses": [0.0],  # dato real reportado
+            "researchAndDevelopmentExpenses": [0.0],  # dato real reportado
+        },
+        index=_idx([2024]),
+    )
+
+    resultado = analizar_cuenta_resultados(is_df, None)
+    ratios = resultado["ratios"]
+
+    assert ratios.loc["2024", "SG&A % (s/MB)"] == pytest.approx(0.0)
+    assert ratios.loc["2024", "I+D % (s/MB)"] == pytest.approx(0.0)
+
+
+# ---------------------------------------------------------------------------
+# Extensión: Recompras / Dividendos ausentes (cashflow_analyzer.py) no son 0 sintético
+# ---------------------------------------------------------------------------
+
+
+def test_recompras_y_dividendos_ausentes_no_se_muestran_como_cero():
+    cf_df = pd.DataFrame(
+        {
+            "operatingCashFlow": [50e9],
+            "freeCashFlow": [45e9],
+            # Sin commonStockRepurchased/repurchasesOfStock ni dividendsPaid/commonDividendsPaid.
+        },
+        index=_idx([2024]),
+    )
+    is_df = pd.DataFrame({"revenue": [100e9], "netIncome": [20e9]}, index=_idx([2024]))
+
+    resultado = analizar_flujo_efectivo(cf_df, is_df)
+    ratios = resultado["ratios"]
+
+    assert pd.isna(ratios.loc["2024", "Recompras (B USD)"])
+    assert pd.isna(ratios.loc["2024", "Dividendos (B USD)"])
+
+
+def test_recompras_y_dividendos_cero_real_se_conserva():
+    cf_df = pd.DataFrame(
+        {
+            "operatingCashFlow": [50e9],
+            "freeCashFlow": [45e9],
+            "commonStockRepurchased": [0.0],  # dato real: no recompró acciones
+            "dividendsPaid": [0.0],  # dato real: no repartió dividendo
+        },
+        index=_idx([2024]),
+    )
+    is_df = pd.DataFrame({"revenue": [100e9], "netIncome": [20e9]}, index=_idx([2024]))
+
+    resultado = analizar_flujo_efectivo(cf_df, is_df)
+    ratios = resultado["ratios"]
+
+    assert ratios.loc["2024", "Recompras (B USD)"] == pytest.approx(0.0)
+    assert ratios.loc["2024", "Dividendos (B USD)"] == pytest.approx(0.0)
+
+
+def test_recompras_ausente_habria_roto_el_patron_viejo_de_buyback_yield():
+    """Reproduce por qué modulos/fundamental.py necesitó tocarse en esta tarea.
+
+    Antes del fix, "Recompras (B USD)" ausente siempre traía un 0.0 sintético,
+    así que `.dropna().iloc[-1]` (usado para Buyback Yield / FCF+Buyback Yield)
+    nunca se topaba con una serie vacía. Con el guard aplicado, una empresa con
+    la columna de recompras totalmente ausente en FMP produce una serie
+    íntegramente NaN, y ese patrón sin comprobar `.empty` explota.
+    """
+    cf_df = pd.DataFrame(
+        {
+            "operatingCashFlow": [50e9],
+            "freeCashFlow": [45e9],
+            "dividendsPaid": [3e9],
+        },
+        index=_idx([2024]),
+    )
+    is_df = pd.DataFrame({"revenue": [100e9], "netIncome": [20e9]}, index=_idx([2024]))
+
+    resultado = analizar_flujo_efectivo(cf_df, is_df)
+    recompras_series = resultado["ratios"]["Recompras (B USD)"]
+
+    assert recompras_series.isna().all()
+
+    with pytest.raises(IndexError):
+        recompras_series.dropna().iloc[-1]  # patrón viejo, sin comprobar .empty
+
+    # Patrón corregido (el que ahora usa modulos/fundamental.py): degrada a None.
+    dropped = recompras_series.dropna()
+    ultimas_recompras = dropped.iloc[-1] if not dropped.empty else None
+    assert ultimas_recompras is None

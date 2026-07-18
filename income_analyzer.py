@@ -138,7 +138,9 @@ def analizar_cuenta_resultados(
 
     ventas = _fmp_series(df, ["revenue"], years)
     margen_bruto = _fmp_series(df, ["grossProfit"], years)
-    cogs = _fmp_series(df, ["costOfRevenue"], years, default=0.0)
+    # costOfRevenue ausente (no solo grossProfit) no debe tratarse como 0: eso
+    # convertiría "ventas - cogs" en "ventas" (margen bruto del 100%, falso).
+    cogs = _fmp_series(df, ["costOfRevenue"], years, default=np.nan)
     margen_bruto = margen_bruto.fillna(ventas - cogs)
 
     vga = _fmp_series(
@@ -149,9 +151,9 @@ def analizar_cuenta_resultados(
             "sellingAndMarketingExpenses",
         ],
         years,
-        default=0.0,
-    ).fillna(0.0)
-    id_gasto = _fmp_series(df, ["researchAndDevelopmentExpenses"], years, default=0.0).fillna(0.0)
+        default=np.nan,
+    )
+    id_gasto = _fmp_series(df, ["researchAndDevelopmentExpenses"], years, default=np.nan)
     depreciacion = _fmp_series(
         cf_df,
         ["depreciationAndAmortization", "depreciationAndAmortizationExpense"],
@@ -224,7 +226,9 @@ def _analizar_cuenta_resultados_legacy(
         cols,
     )
     if margen_bruto.isna().all() and not cogs.isna().all():
-        margen_bruto = ventas - cogs.fillna(0)
+        # Mismo criterio que la ruta FMP: un año concreto sin cogs propaga NaN
+        # en vez de asumir "ventas - 0 = ventas" (margen bruto del 100%, falso).
+        margen_bruto = ventas - cogs
 
     vga = extraer_dato_robusto(
         df,

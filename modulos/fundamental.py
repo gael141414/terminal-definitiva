@@ -197,38 +197,51 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
     acciones = res_val.get('acciones_actuales')
     if precio_actual and acciones and "Free Cash Flow (B USD)" in res_cf["ratios"].columns:
         market_cap = precio_actual * acciones
-        
-        ultimo_fcf_b = res_cf["ratios"]["Free Cash Flow (B USD)"].dropna().iloc[-1]
-        ultimas_recompras_b = res_cf["ratios"]["Recompras (B USD)"].dropna().iloc[-1]
-        
-        fcf_real = ultimo_fcf_b * 1e9
-        recompras_reales = ultimas_recompras_b * 1e9
-        
-        fcf_yield = (fcf_real / market_cap) * 100
-        buyback_yield = (recompras_reales / market_cap) * 100
-        
+
+        fcf_series = res_cf["ratios"]["Free Cash Flow (B USD)"].dropna()
+        recompras_col = res_cf["ratios"].get("Recompras (B USD)")
+        recompras_series = recompras_col.dropna() if recompras_col is not None else pd.Series(dtype=float)
+
+        # Recompras ausente (columna sin datos, no un 0 real) no debe tratarse
+        # como "sin recompras": se muestra N/D en vez de sumarse como 0 al yield.
+        ultimo_fcf_b = fcf_series.iloc[-1] if not fcf_series.empty else None
+        ultimas_recompras_b = recompras_series.iloc[-1] if not recompras_series.empty else None
+
+        fcf_yield = (ultimo_fcf_b * 1e9 / market_cap) * 100 if ultimo_fcf_b is not None else None
+        buyback_yield = (ultimas_recompras_b * 1e9 / market_cap) * 100 if ultimas_recompras_b is not None else None
+
         c7, c8, c9 = st.columns(3)
-        
+
         if market_cap >= 1e12:
             c7.metric("Market Cap (Capitalización)", f"${market_cap / 1e12:.2f} Trillones")
         else:
             c7.metric("Market Cap (Capitalización)", f"${market_cap / 1e9:.2f} Billones")
-        
-        color_fcf = "normal" if fcf_yield >= 4.0 else "inverse"
-        c8.metric("FCF Yield (Rendimiento Efectivo)", f"{fcf_yield:.2f}%", "Óptimo > 4%" if fcf_yield >= 4.0 else "Pobre/Caro", delta_color=color_fcf)
-        
-        c9.metric("Buyback Yield (Recompras)", f"{buyback_yield:.2f}%", "Destrucción de acciones" if buyback_yield > 0 else "")
+
+        if fcf_yield is not None:
+            color_fcf = "normal" if fcf_yield >= 4.0 else "inverse"
+            c8.metric("FCF Yield (Rendimiento Efectivo)", f"{fcf_yield:.2f}%", "Óptimo > 4%" if fcf_yield >= 4.0 else "Pobre/Caro", delta_color=color_fcf)
+        else:
+            c8.metric("FCF Yield (Rendimiento Efectivo)", "N/D")
+
+        if buyback_yield is not None:
+            c9.metric("Buyback Yield (Recompras)", f"{buyback_yield:.2f}%", "Destrucción de acciones" if buyback_yield > 0 else "")
+        else:
+            c9.metric("Buyback Yield (Recompras)", "N/D")
 
         st.write("")
-        total_yield = fcf_yield + buyback_yield
-        
-        if total_yield >= 8.0:
-            st.success(f"✅ **Veredicto (Máquina de Efectivo):** Excepcional. La empresa te está devolviendo un **{total_yield:.2f}%** de tu inversión anual de forma 'invisible' (sumando su FCF Yield y las recompras). Está destruyendo acciones a buen ritmo y generando muchísima caja.")
-        elif total_yield >= 4.0:
-            st.info(f"⚖️ **Veredicto (Sano):** Razonable. Un rendimiento de efectivo total del **{total_yield:.2f}%**, en línea con empresas sólidas y estables. El dinero fluye correctamente hacia el accionista.")
+
+        if fcf_yield is not None and buyback_yield is not None:
+            total_yield = fcf_yield + buyback_yield
+
+            if total_yield >= 8.0:
+                st.success(f"✅ **Veredicto (Máquina de Efectivo):** Excepcional. La empresa te está devolviendo un **{total_yield:.2f}%** de tu inversión anual de forma 'invisible' (sumando su FCF Yield y las recompras). Está destruyendo acciones a buen ritmo y generando muchísima caja.")
+            elif total_yield >= 4.0:
+                st.info(f"⚖️ **Veredicto (Sano):** Razonable. Un rendimiento de efectivo total del **{total_yield:.2f}%**, en línea con empresas sólidas y estables. El dinero fluye correctamente hacia el accionista.")
+            else:
+                st.warning(f"⚠️ **Veredicto (Caja Pobre):** Un rendimiento del **{total_yield:.2f}%** significa que la empresa está muy cara respecto al dinero real que genera, o bien que su negocio requiere reinvertir todo lo que gana (muy intensivo en capital) dejando poco para ti.")
         else:
-            st.warning(f"⚠️ **Veredicto (Caja Pobre):** Un rendimiento del **{total_yield:.2f}%** significa que la empresa está muy cara respecto al dinero real que genera, o bien que su negocio requiere reinvertir todo lo que gana (muy intensivo en capital) dejando poco para ti.")
-        
+            st.info("No hay datos suficientes de FCF y/o recompras para calcular el retorno de efectivo total.")
+
     else:
         st.info("No hay datos suficientes de Flujo de Caja para calcular el FCF Yield.")
         

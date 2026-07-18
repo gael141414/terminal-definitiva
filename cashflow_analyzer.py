@@ -38,9 +38,13 @@ def analizar_flujo_efectivo(
         return None
 
     capex = _fmp_series(cf_df, ["capitalExpenditure", "investmentsInPropertyPlantAndEquipment"], years, default=np.nan)
-    recompras = _fmp_series(cf_df, ["commonStockRepurchased", "repurchasesOfStock"], years, default=0.0)
+    # Recompra/dividendo ausente != recompra/dividendo cero: si ambas columnas
+    # candidatas faltan en el estado, el dato queda NaN (no se asume "no
+    # recompró"/"no repartió dividendo"), para no inflar artificialmente
+    # buyback yield / FCF yield + buyback yield en la capa de presentación.
+    recompras = _fmp_series(cf_df, ["commonStockRepurchased", "repurchasesOfStock"], years, default=np.nan)
     fco = _fmp_series(cf_df, ["operatingCashFlow", "netCashProvidedByOperatingActivities"], years, default=np.nan)
-    dividendos = _fmp_series(cf_df, ["dividendsPaid", "commonDividendsPaid"], years, default=0.0)
+    dividendos = _fmp_series(cf_df, ["dividendsPaid", "commonDividendsPaid"], years, default=np.nan)
     depreciacion = _fmp_series(cf_df, ["depreciationAndAmortization"], years, default=np.nan).abs()
 
     if _is_fmp_statement(is_df):
