@@ -178,8 +178,22 @@ def _safe_ratio(
     numerator: pd.Series,
     denominator: pd.Series,
     multiplier: float = 1.0,
+    *,
+    positive_denominator: bool = False,
 ) -> pd.Series:
-    return (numerator / denominator.replace(0, np.nan) * multiplier).replace(
+    """Divide neutralizando denominadores no interpretables.
+
+    Por defecto solo neutraliza el cero exacto (comportamiento histórico).
+    Con ``positive_denominator=True`` también neutraliza denominadores
+    negativos: usarlo en ratios donde un denominador <= 0 (p. ej. patrimonio
+    negativo o capital invertido negativo) no tiene una lectura financiera
+    válida con la fórmula estándar y debe devolver NaN en vez de una cifra
+    con signo espurio.
+    """
+    denom = denominator.replace(0, np.nan)
+    if positive_denominator:
+        denom = denom.where(denom > 0, np.nan)
+    return (numerator / denom * multiplier).replace(
         [np.inf, -np.inf],
         np.nan,
     )

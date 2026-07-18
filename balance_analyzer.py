@@ -22,11 +22,43 @@ def _is_fmp_balance(df: pd.DataFrame | None) -> bool:
     return bool(known_columns & set(df.columns))
 
 
+def _patrimonio_negativo_flags(patrimonio: pd.Series) -> list[str]:
+    """Flag de riesgo si el patrimonio neto es <= 0 en el año más reciente con dato.
+
+    Con patrimonio <= 0, ROE / Deuda-Capital / ROIC no tienen una lectura
+    financiera válida con la fórmula estándar (p. ej. neto negativo entre
+    patrimonio negativo da un ROE positivo espurio), así que esos ratios se
+    devuelven como NaN para ese año; este flag hace visible el motivo.
+    """
+    serie = pd.to_numeric(patrimonio, errors="coerce").dropna().sort_index()
+    if serie.empty:
+        return []
+    ultimo_año, ultimo_valor = serie.index[-1], serie.iloc[-1]
+    if ultimo_valor <= 0:
+        return [
+            f"🚨 Patrimonio neto negativo o nulo en {ultimo_año} "
+            f"({ultimo_valor:,.0f}): ROE, Deuda/Capital y ROIC no son interpretables "
+            "con la fórmula estándar ese año (se muestran como n/d)."
+        ]
+    return []
+
+
 def analizar_balance(
     bs_df: pd.DataFrame | None,
     is_df: pd.DataFrame | None = None,
-) -> dict[str, pd.DataFrame] | None:
-    """Analiza balance con columnas FMP y conserva fallback legacy."""
+) -> dict[str, pd.DataFrame | list[str]] | None:
+    """Analiza balance con columnas FMP y conserva fallback legacy.
+
+    Devuelve ``{"ratios": DataFrame, "flags": list[str]}``. ``flags`` recoge
+    alertas estructurales (p. ej. patrimonio negativo) que no encajan como
+    columna numérica del DataFrame de ratios.
+
+    Nota sobre la tasa fiscal usada para NOPAT/ROIC: cuando no se puede
+    derivar de tax_expense/EBT (EBT <= 0, datos ausentes o fuera de rango
+    plausible) se usa 21% (tipo federal estatutario US) como proxy estimado
+    solo para el cálculo interno de NOPAT. No es la tasa efectiva real de la
+    empresa y no debe presentarse como tal en la UI.
+    """
     if bs_df is None or bs_df.empty:
         return None
 
@@ -43,23 +75,27 @@ def analizar_balance(
     deuda_total = _fmp_series(bs_df, ["totalDebt"], years, default=np.nan)
     if deuda_total.isna().all():
         deuda_total = (
-            _fmp_series(bs_df, ["shortTermDebt"], years, default=0.0).fillna(0.0)
-            + _fmp_series(bs_df, ["longTermDebt"], years, default=0.0).fillna(0.0)
+            _fmp_series(bs_df, ["shortTermDebt"], years, default=np.nan)
+            + _fmp_series(bs_df, ["longTermDebt"], years, default=np.nan)
         )
 
-    deuda_largo = _fmp_series(bs_df, ["longTermDebt"], years, default=0.0).fillna(0.0)
+    deuda_largo = _fmp_series(bs_df, ["longTermDebt"], years, default=np.nan)
     caja_total = _fmp_series(bs_df, ["cashAndShortTermInvestments"], years, default=np.nan)
     if caja_total.isna().all():
+        # Solo caja + inversiones a corto plazo (líquidas). No se suman
+        # longTermInvestments automáticamente: no hay garantía de que sean
+        # líquidas, y sumarlas infla la "Caja Neta" con activos que pueden no
+        # estar disponibles para cubrir deuda a corto plazo.
         caja_total = (
-            _fmp_series(bs_df, ["cashAndCashEquivalents"], years, default=0.0).fillna(0.0)
-            + _fmp_series(bs_df, ["shortTermInvestments"], years, default=0.0).fillna(0.0)
-            + _fmp_series(bs_df, ["longTermInvestments"], years, default=0.0).fillna(0.0)
+            _fmp_series(bs_df, ["cashAndCashEquivalents"], years, default=np.nan)
+            + _fmp_series(bs_df, ["shortTermInvestments"], years, default=np.nan)
         )
 
     ganancias_retenidas = _fmp_series(bs_df, ["retainedEarnings"], years)
     ppe = _fmp_series(bs_df, ["propertyPlantEquipmentNet"], years)
 
     df_bal_ratios = pd.DataFrame(index=years)
+    flags: list[str] = _patrimonio_negativo_flags(patrimonio)
 
     if is_df is not None and _is_fmp_statement(is_df):
         beneficio_neto = _fmp_series(is_df, ["netIncome"], years)
@@ -71,31 +107,38 @@ def analizar_balance(
         equity_avg = _average_balance_series(patrimonio)
         activos_avg = _average_balance_series(activos)
 
-        df_bal_ratios["ROE %"] = _safe_ratio(beneficio_neto, equity_avg, multiplier=100)
+        df_bal_ratios["ROE %"] = _safe_ratio(beneficio_neto, equity_avg, multiplier=100, positive_denominator=True)
         df_bal_ratios["DuPont: Margen Neto %"] = _safe_ratio(beneficio_neto, ventas, multiplier=100)
         df_bal_ratios["DuPont: Rotación Activos"] = _safe_ratio(ventas, activos_avg)
-        df_bal_ratios["DuPont: Apalancamiento"] = _safe_ratio(activos_avg, equity_avg)
+        df_bal_ratios["DuPont: Apalancamiento"] = _safe_ratio(activos_avg, equity_avg, positive_denominator=True)
 
         tax_rate = (tax_expense / ebt.replace(0, np.nan)).replace([np.inf, -np.inf], np.nan)
         tax_rate = tax_rate.clip(lower=0.0, upper=0.35).fillna(0.21)
         nopat = op_income * (1 - tax_rate)
-        capital_invertido = patrimonio.fillna(0.0) + deuda_total.fillna(0.0) - caja_total.fillna(0.0)
-        capital_invertido = capital_invertido.where(capital_invertido > 0, patrimonio + deuda_total)
+
+        # Capital invertido = Deuda financiera + Patrimonio - Caja (fórmula única,
+        # sin rama alternativa). Si el resultado no es positivo, ROIC no es
+        # interpretable -> NaN, en vez de recalcularse con una definición distinta.
+        capital_invertido = patrimonio + deuda_total - caja_total
+        capital_invertido = capital_invertido.where(capital_invertido > 0, np.nan)
         capital_invertido_avg = _average_balance_series(capital_invertido)
 
-        df_bal_ratios["ROIC %"] = _safe_ratio(nopat, capital_invertido_avg, multiplier=100)
+        df_bal_ratios["ROIC %"] = _safe_ratio(nopat, capital_invertido_avg, multiplier=100, positive_denominator=True)
         df_bal_ratios["Años para pagar Deuda LP"] = _safe_ratio(deuda_largo, beneficio_neto)
         df_bal_ratios["Carga PP&E (PP&E/Benef.)"] = _safe_ratio(ppe, beneficio_neto)
 
-    df_bal_ratios["Deuda / Capital"] = _safe_ratio(deuda_total, patrimonio)
-    df_bal_ratios["Caja Neta (B USD)"] = (caja_total.fillna(0.0) - deuda_total.fillna(0.0)) / 1e9
+    df_bal_ratios["Deuda / Capital"] = _safe_ratio(deuda_total, patrimonio, positive_denominator=True)
+    df_bal_ratios["Caja Neta (B USD)"] = (caja_total - deuda_total) / 1e9
     df_bal_ratios["Crecimiento Gan. Retenidas %"] = (
         ganancias_retenidas.sort_index().diff()
         / ganancias_retenidas.sort_index().shift(1).abs().replace(0, np.nan)
         * 100
     )
 
-    return {"ratios": df_bal_ratios.replace([np.inf, -np.inf], np.nan).round(2)}
+    return {
+        "ratios": df_bal_ratios.replace([np.inf, -np.inf], np.nan).round(2),
+        "flags": flags,
+    }
 
 
 def _average_balance_series(series: pd.Series) -> pd.Series:
@@ -107,7 +150,7 @@ def _average_balance_series(series: pd.Series) -> pd.Series:
 def _analizar_balance_legacy(
     bs_df: pd.DataFrame,
     is_df: pd.DataFrame | None = None,
-) -> dict[str, pd.DataFrame] | None:
+) -> dict[str, pd.DataFrame | list[str]] | None:
     cols_bs = sorted([c for c in bs_df.columns if str(c).isdigit() and len(str(c)) == 4])
     if not cols_bs:
         return None
@@ -129,6 +172,9 @@ def _analizar_balance_legacy(
     deuda_total += extraer_dato_robusto(bs_df, ["LongTermDebtCurrent", "Current portion of long-term debt"], cols_bs).fillna(0)
     deuda_total += extraer_dato_robusto(bs_df, ["ShortTermBorrowings", "Short-term debt"], cols_bs).fillna(0)
 
+    # Solo caja + inversiones a corto plazo (líquidas), igual que la ruta FMP
+    # (ver nota en analizar_balance): no se suman valores a largo plazo /
+    # noncurrent sin verificar liquidez.
     caja_total = extraer_dato_robusto(
         bs_df,
         ["CashAndCashEquivalentsAtCarryingValue", "Cash and cash equivalents"],
@@ -137,11 +183,6 @@ def _analizar_balance_legacy(
     caja_total += extraer_dato_robusto(
         bs_df,
         ["MarketableSecuritiesCurrent", "ShortTermInvestments", "Short-term marketable securities"],
-        cols_bs,
-    ).fillna(0)
-    caja_total += extraer_dato_robusto(
-        bs_df,
-        ["MarketableSecuritiesNoncurrent", "Long-term marketable securities"],
         cols_bs,
     ).fillna(0)
 
@@ -157,6 +198,7 @@ def _analizar_balance_legacy(
     )
 
     df_bal_ratios = pd.DataFrame(index=cols_bs)
+    flags: list[str] = _patrimonio_negativo_flags(patrimonio)
 
     if is_df is not None:
         cols_is = [c for c in is_df.columns if str(c).isdigit() and len(str(c)) == 4]
@@ -168,19 +210,26 @@ def _analizar_balance_legacy(
 
         equity_avg = _average_balance_series(patrimonio)
         activos_avg = _average_balance_series(activos)
+        # Tasa fiscal: mismo proxy estimado que la ruta FMP (ver docstring de
+        # analizar_balance); solo para NOPAT interno, no para mostrar en UI.
         tax_rate = (tax_expense / ebt.replace(0, np.nan)).replace([np.inf, -np.inf], np.nan).clip(0, 0.35).fillna(0.21)
         nopat = op_income * (1 - tax_rate)
-        capital_invertido_avg = _average_balance_series(patrimonio.fillna(0.0) + deuda_total.fillna(0.0))
 
-        df_bal_ratios["ROE %"] = _safe_ratio(beneficio_neto, equity_avg, multiplier=100)
+        # Misma fórmula única que la ruta FMP: Deuda + Patrimonio - Caja,
+        # guardada a NaN si el resultado no es positivo.
+        capital_invertido = patrimonio + deuda_total - caja_total
+        capital_invertido = capital_invertido.where(capital_invertido > 0, np.nan)
+        capital_invertido_avg = _average_balance_series(capital_invertido)
+
+        df_bal_ratios["ROE %"] = _safe_ratio(beneficio_neto, equity_avg, multiplier=100, positive_denominator=True)
         df_bal_ratios["DuPont: Margen Neto %"] = _safe_ratio(beneficio_neto, ventas, multiplier=100)
         df_bal_ratios["DuPont: Rotación Activos"] = _safe_ratio(ventas, activos_avg)
-        df_bal_ratios["DuPont: Apalancamiento"] = _safe_ratio(activos_avg, equity_avg)
-        df_bal_ratios["ROIC %"] = _safe_ratio(nopat, capital_invertido_avg, multiplier=100)
+        df_bal_ratios["DuPont: Apalancamiento"] = _safe_ratio(activos_avg, equity_avg, positive_denominator=True)
+        df_bal_ratios["ROIC %"] = _safe_ratio(nopat, capital_invertido_avg, multiplier=100, positive_denominator=True)
         df_bal_ratios["Años para pagar Deuda LP"] = _safe_ratio(deuda_largo, beneficio_neto)
         df_bal_ratios["Carga PP&E (PP&E/Benef.)"] = _safe_ratio(ppe, beneficio_neto)
 
-    df_bal_ratios["Deuda / Capital"] = _safe_ratio(deuda_total, patrimonio)
+    df_bal_ratios["Deuda / Capital"] = _safe_ratio(deuda_total, patrimonio, positive_denominator=True)
     df_bal_ratios["Caja Neta (B USD)"] = (caja_total - deuda_total) / 1e9
     df_bal_ratios["Crecimiento Gan. Retenidas %"] = (
         ganancias_retenidas.sort_index().diff()
@@ -188,4 +237,7 @@ def _analizar_balance_legacy(
         * 100
     )
 
-    return {"ratios": df_bal_ratios.replace([np.inf, -np.inf], np.nan).round(2)}
+    return {
+        "ratios": df_bal_ratios.replace([np.inf, -np.inf], np.nan).round(2),
+        "flags": flags,
+    }

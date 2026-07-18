@@ -37,7 +37,7 @@ def analizar_flujo_efectivo(
     if not years:
         return None
 
-    capex = _fmp_series(cf_df, ["capitalExpenditure", "investmentsInPropertyPlantAndEquipment"], years, default=0.0)
+    capex = _fmp_series(cf_df, ["capitalExpenditure", "investmentsInPropertyPlantAndEquipment"], years, default=np.nan)
     recompras = _fmp_series(cf_df, ["commonStockRepurchased", "repurchasesOfStock"], years, default=0.0)
     fco = _fmp_series(cf_df, ["operatingCashFlow", "netCashProvidedByOperatingActivities"], years, default=np.nan)
     dividendos = _fmp_series(cf_df, ["dividendsPaid", "commonDividendsPaid"], years, default=0.0)
@@ -59,7 +59,7 @@ def analizar_flujo_efectivo(
     capex_abs = capex.abs()
 
     df_cf_ratios = pd.DataFrame(index=years)
-    df_cf_ratios["CAPEX % sobre Beneficio"] = _safe_ratio(capex_abs, beneficio_neto, multiplier=100).fillna(0)
+    df_cf_ratios["CAPEX % sobre Beneficio"] = _safe_ratio(capex_abs, beneficio_neto, multiplier=100)
     df_cf_ratios["Recompras (B USD)"] = recompras.abs() / 1e9
     df_cf_ratios["Free Cash Flow (B USD)"] = fcf / 1e9
     df_cf_ratios["CFO (B USD)"] = fco / 1e9
@@ -124,7 +124,7 @@ def _analizar_flujo_efectivo_legacy(
 
     capex_abs = capex.abs()
     df_cf_ratios = pd.DataFrame(index=cols_cf)
-    df_cf_ratios["CAPEX % sobre Beneficio"] = _safe_ratio(capex_abs, beneficio_neto, multiplier=100).fillna(0)
+    df_cf_ratios["CAPEX % sobre Beneficio"] = _safe_ratio(capex_abs, beneficio_neto, multiplier=100)
     df_cf_ratios["Recompras (B USD)"] = recompras.abs() / 1e9
     df_cf_ratios["Free Cash Flow (B USD)"] = (fco - capex_abs) / 1e9
     df_cf_ratios["CFO (B USD)"] = fco / 1e9

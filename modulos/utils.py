@@ -241,31 +241,34 @@ def obtener_datos_directiva(ticker):
 def escanear_vulnerabilidades(res_is, res_bs, res_cf):
     """Escanea los estados financieros en busca de Red Flags críticas."""
     alertas = []
-    
+
     def get_last(df, col):
         if df is not None and col in df.columns:
             s = df[col].dropna()
             return s.iloc[-1] if not s.empty else None
         return None
 
+    # 0. Flags estructurales calculados por balance_analyzer (p. ej. patrimonio negativo)
+    alertas.extend(res_bs.get("flags", []) if isinstance(res_bs, dict) else [])
+
     # 1. Riesgo de Quiebra (Deuda)
     deuda_cap = get_last(res_bs["ratios"], "Deuda / Capital")
-    if deuda_cap and deuda_cap > DEBT_EQUITY_WARNING:
+    if deuda_cap is not None and deuda_cap > DEBT_EQUITY_WARNING:
         alertas.append(f"🚨 **Apalancamiento Peligroso:** Deuda altísima ({deuda_cap:.2f}x el capital). Muy vulnerable a subidas de tipos de interés.")
 
     # 2. Hemorragia de Efectivo
     fcf = get_last(res_cf["ratios"], "Free Cash Flow (B USD)")
-    if fcf and fcf < 0:
+    if fcf is not None and fcf < 0:
         alertas.append(f"🔥 **Quema de Caja:** El Free Cash Flow es negativo (${fcf:.2f}B). La empresa está perdiendo dinero real y podría necesitar emitir acciones o más deuda.")
 
     # 3. Rentabilidad Basura (Márgenes)
     margen_neto = get_last(res_is["ratios"], "Margen Neto %")
-    if margen_neto and margen_neto < 5:
+    if margen_neto is not None and margen_neto < 5:
         alertas.append(f"⚠️ **Márgenes Críticos:** El margen neto es solo del {margen_neto:.1f}%. La empresa no tiene poder de fijación de precios (Moat débil).")
 
     # 4. Destrucción de Valor (ROIC)
     roic = get_last(res_bs["ratios"], "ROIC %")
-    if roic and roic < 7:
+    if roic is not None and roic < 7:
         alertas.append(f"📉 **Destrucción de Capital:** El ROIC ({roic:.1f}%) es menor que el coste de capital promedio. Crecer destruye valor para el accionista.")
 
     return alertas
@@ -329,14 +332,14 @@ def calcular_score_buffett(df_is, df_bs, df_cf):
     buybacks = get_last(df_cf, "Recompras (B USD)")
 
     # 1. Poder de Precios (25 pts)
-    if mb and mb > 40: score += 10
-    elif mb and mb > 20: score += 5
-    if mn and mn > 20: score += 15
-    elif mn and mn > 10: score += 7
+    if mb is not None and mb > 40: score += 10
+    elif mb is not None and mb > 20: score += 5
+    if mn is not None and mn > 20: score += 15
+    elif mn is not None and mn > 10: score += 7
 
     # 2. Eficiencia (30 pts)
-    if roe and roe > 15: score += 15
-    if roic and roic > 15: score += 15
+    if roe is not None and roe > 15: score += 15
+    if roic is not None and roic > 15: score += 15
 
     # 3. Solidez (25 pts)
     if deuda is not None and deuda < 0.8: score += 15
@@ -345,7 +348,7 @@ def calcular_score_buffett(df_is, df_bs, df_cf):
     elif capex is not None and capex < 50: score += 5
 
     # 4. Trato al Accionista (20 pts)
-    if fcf and fcf > 0: score += 10
-    if buybacks and buybacks > 0: score += 10
+    if fcf is not None and fcf > 0: score += 10
+    if buybacks is not None and buybacks > 0: score += 10
 
     return score
