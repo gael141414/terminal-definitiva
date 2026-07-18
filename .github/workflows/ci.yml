@@ -63,6 +63,10 @@ jobs:
             scripts/run_healthcheck.py \
             scripts/run_smoke_tests.py
 
+      - name: Run pytest
+        run: |
+          python -m pytest tests/ -v
+
       - name: Run healthcheck
         run: |
           python scripts/run_healthcheck.py
