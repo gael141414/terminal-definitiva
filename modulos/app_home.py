@@ -11,6 +11,8 @@ import plotly.graph_objects as go
 from modulos.app_assets import asset_to_data_uri, strip_visual_prefix
 from modulos.app_navigation import TOOL_UI_ICONS
 from modulos.tool_catalog import TOOL_CATALOG
+from modulos.tool_consolidation import get_navigation_groups_ordered
+from modulos.ui_components import render_navigation_groups_grid
 from modulos.market_widgets import (
     analizar_rotacion_sectores,
     obtener_market_snapshot,
@@ -20,39 +22,29 @@ from modulos.market_widgets import (
 
 
 def render_module_showcase(limit: int = 9) -> None:
-    """Muestra módulos principales en la home como tarjetas de producto."""
-    destacados = TOOL_CATALOG[:limit]
+    """Muestra la navegación consolidada en 6 grupos (mockup 1a: hub + rejilla de grupos).
 
-    cards = ""
-    for tool in destacados:
-        label_original = tool["label"]
-        label = strip_visual_prefix(label_original)
-        icon = TOOL_UI_ICONS.get(label_original, "grid")
-        bloque = strip_visual_prefix(tool["bloque"])
-        desc = tool["descripcion"]
-        input_mode = tool["input_mode"]
-
-        if input_mode == "company":
-            mode_label = "Empresa"
-        elif input_mode == "standalone":
-            mode_label = "Autónomo"
-        elif input_mode == "etf":
-            mode_label = "ETF / Fondo"
-        else:
-            mode_label = "Módulo"
-
-        # HTML Compactado sin saltos de línea para evitar el Bug de Streamlit
-        cards += f"<article class='vq-module-card'><div class='vq-module-icon'><i class='bi bi-{html.escape(icon)}'></i></div><div class='vq-module-eyebrow'>{html.escape(bloque)} · {html.escape(mode_label)}</div><div class='vq-module-title'>{html.escape(label)}</div><div class='vq-module-desc'>{html.escape(desc)}</div></article>"
+    Sustituye el listado plano de las primeras ``limit`` herramientas del
+    catálogo por la rejilla de grupos de modulos.tool_consolidation, que sí
+    refleja la reorganización en Market Terminal / Discovery Engine /
+    Historical Lab / Portfolio & Risk / Automatización & Watchlist +
+    Utilidades & Post-MVP (oculta salvo modo «Completo»). ``limit`` se
+    mantiene en la firma por compatibilidad pero ya no aplica: la rejilla
+    siempre muestra los grupos completos, no un subconjunto de herramientas.
+    """
+    total_tools = len(TOOL_CATALOG)
+    total_groups = len(get_navigation_groups_ordered())
 
     st.markdown(
-        "<div class='vq-section-title'><i class='bi bi-grid-1x2'></i> Módulos principales</div>",
+        "<div class='vq-section-title'><i class='bi bi-grid-1x2'></i> Herramientas especializadas</div>",
         unsafe_allow_html=True,
     )
-
     st.markdown(
-        f"<div class='vq-module-grid'>{cards}</div>",
+        f"<div style='font-size:12px; color:#5b6a80; margin:-8px 0 12px;'>"
+        f"{total_tools} herramientas · {total_groups} grupos · Research Core es la puerta de entrada principal</div>",
         unsafe_allow_html=True,
     )
+    render_navigation_groups_grid()
 
 
 
@@ -160,6 +152,8 @@ f"<div>TSE (Tokyo): <strong style='color:#eef4ff;'>{status_tok}</strong></div>"
 f"</div>",
         unsafe_allow_html=True
     )
+
+    render_module_showcase()
 
     # 2. GRID DE MERCADO (Con VIX y US 10Y integrados)
     snapshot = obtener_market_snapshot()

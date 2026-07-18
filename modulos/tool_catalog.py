@@ -71,6 +71,22 @@ NAVIGATION_MODES = {
 _NAVIGATION_MODE_ORDER = ("mvp", "consolidated", "complete")
 
 
+# Emoji por grupo de navegación consolidado — usado para derivar "bloque" (el
+# campo que ya consume la navegación existente en app.py/app_navigation.py) a
+# partir de una única fuente de verdad: modulos.tool_consolidation. Antes
+# "bloque" era un campo manual e independiente de consolidation_group; con la
+# reagrupación del mockup, ambos deben coincidir siempre.
+_GROUP_EMOJI = {
+    "research_core": "🧩",
+    "market_terminal": "📊",
+    "discovery_engine": "🔎",
+    "historical_lab": "⏳",
+    "portfolio_risk": "⚖️",
+    "automation_watchlist": "🤖",
+    "utilities_postmvp": "🧰",
+}
+
+
 def _enrich_tool(tool: dict[str, object]) -> dict[str, object]:
     """Añade metadatos de consolidación a una herramienta del catálogo."""
 
@@ -78,9 +94,11 @@ def _enrich_tool(tool: dict[str, object]) -> dict[str, object]:
     metadata = get_tool_consolidation(str(tool["label"]))
     group_key = str(metadata.get("group", "unassigned"))
     group = CONSOLIDATION_GROUPS.get(group_key)
+    bloque = f"{_GROUP_EMOJI.get(group_key, '🧩')} {group.name}" if group else str(tool.get("bloque", "Sin asignar"))
 
     enriched.update(
         {
+            "bloque": bloque,
             "consolidation_group": group_key,
             "consolidation_name": group.name if group else "Sin asignar",
             "consolidation_status": metadata.get("status", "merge"),

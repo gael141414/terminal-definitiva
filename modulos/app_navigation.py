@@ -13,12 +13,13 @@ from modulos.app_assets import strip_visual_prefix
 
 
 BLOQUE_UI = {
-    "📌 Núcleo Empresa": ("Empresa", "bar-chart-line"),
-    "📈 Mercado y Timing": ("Mercado", "graph-up-arrow"),
-    "🛡️ Riesgo y Defensa": ("Riesgo", "shield-lock"),
-    "🔎 Descubrimiento": ("Descubrimiento", "search"),
-    "💼 Cartera y Decisión": ("Cartera", "briefcase"),
-    "🧠 IA y Mentoría": ("IA", "cpu"),
+    "🧩 Research Core": ("Research Core", "diagram-3"),
+    "📊 Market Terminal": ("Market", "graph-up-arrow"),
+    "🔎 Discovery Engine": ("Discovery", "search"),
+    "⏳ Historical Lab": ("Lab", "hourglass-split"),
+    "⚖️ Portfolio & Risk": ("Portfolio", "shield-lock"),
+    "🤖 Automatización & Watchlist": ("Watchlist", "list-check"),
+    "🧰 Utilidades & Post-MVP": ("Utilidades", "tools"),
 }
 
 
