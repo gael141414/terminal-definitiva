@@ -9,6 +9,7 @@ import pandas as pd
 import streamlit as st
 import yfinance as yf
 
+from modulos.config import DEBT_EQUITY_RED_FLAG
 from modulos.yahoo_resilience import safe_yfinance_fetch, safe_yfinance_info
 
 try:
@@ -490,7 +491,7 @@ def _risk_forensic_component(r_is: pd.DataFrame, r_bs: pd.DataFrame, r_cf: pd.Da
     negatives: list[str] = []
     red_flags: list[str] = []
 
-    if _is_valid(debt_to_capital) and debt_to_capital > 1.5:
+    if _is_valid(debt_to_capital) and debt_to_capital > DEBT_EQUITY_RED_FLAG:
         red_flags.append(f"Deuda/Capital elevada ({debt_to_capital:.2f}x).")
         penalty += 6
     if _is_valid(fcf) and fcf < 0:

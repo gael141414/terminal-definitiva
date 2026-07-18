@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 from datetime import datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import streamlit as st
 import pandas as pd
@@ -132,12 +133,12 @@ f"""<section class="vq-home-hero" style="--home-bg: {bg_style};">
     # 1. RELOJES DE MERCADO (Market Status Bar)
     ahora_utc = datetime.now(timezone.utc)
     
-    # NYSE: EDT (UTC-4) en mayo. Abierto: lunes a viernes de 09:30 a 16:00 local.
-    ny_time = ahora_utc - timedelta(hours=4)
+    # NYSE: hora local de Nueva York (EST/EDT, con cambio de horario automático). Abierto: lunes a viernes de 09:30 a 16:00 local.
+    ny_time = ahora_utc.astimezone(ZoneInfo("America/New_York"))
     ny_open = (0 <= ny_time.weekday() <= 4) and (time(9, 30) <= ny_time.time() <= time(16, 0))
-    
-    # LSE: BST (UTC+1) en mayo. Abierto: lunes a viernes de 08:00 a 16:30 local.
-    lon_time = ahora_utc + timedelta(hours=1)
+
+    # LSE: hora local de Londres (GMT/BST, con cambio de horario automático). Abierto: lunes a viernes de 08:00 a 16:30 local.
+    lon_time = ahora_utc.astimezone(ZoneInfo("Europe/London"))
     lon_open = (0 <= lon_time.weekday() <= 4) and (time(8, 0) <= lon_time.time() <= time(16, 30))
     
     # TSE: JST (UTC+9). Abierto: lunes a viernes de 09:00-11:30 y 12:30-15:00 local.

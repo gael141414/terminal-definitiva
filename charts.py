@@ -8,6 +8,7 @@ from plotly.subplots import make_subplots
 import yfinance as yf
 from roboadvisor_engine import PortfolioOptimizer
 
+from modulos.config import DEBT_EQUITY_RED_FLAG
 from modulos.yahoo_resilience import safe_yfinance_fetch
 
 # ---------------- VALUEQUANT GLOBAL PLOTLY THEME ---------------- #
@@ -1362,8 +1363,8 @@ def plot_termometro_deuda(deuda_capital):
             'bar': {'color': "black"},
             'steps': [
                 {'range': [0, 0.8], 'color': VQ_GREEN},   # Verde: Aprobado por Buffett
-                {'range': [0.8, 1.5], 'color': VQ_AMBER}, # Naranja: Precaución
-                {'range': [1.5, max(3, deuda_capital + 0.5)], 'color': VQ_RED} # Rojo: Peligro
+                {'range': [0.8, DEBT_EQUITY_RED_FLAG], 'color': VQ_AMBER}, # Naranja: Precaución
+                {'range': [DEBT_EQUITY_RED_FLAG, max(3, deuda_capital + 0.5)], 'color': VQ_RED} # Rojo: Peligro
             ],
             'threshold': {
                 'line': {'color': "red", 'width': 4},

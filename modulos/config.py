@@ -105,3 +105,12 @@ def get_config() -> AppConfig:
 
 
 CONFIG = get_config()
+
+
+# --- Umbrales de negocio compartidos -----------------------------------
+# Antes coexistían 1.2 y 1.5 como el mismo tipo de umbral duplicado en varios
+# archivos (algunos como aviso temprano, otros como red flag más grave) sin
+# una única fuente de verdad. Warning = merece atención; Red flag = nivel de
+# apalancamiento que el modelo considera peligroso.
+DEBT_EQUITY_WARNING = 1.2
+DEBT_EQUITY_RED_FLAG = 1.5

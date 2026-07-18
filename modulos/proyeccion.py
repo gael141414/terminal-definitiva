@@ -8,6 +8,7 @@ import plotly.graph_objects as go
 import streamlit as st
 import yfinance as yf
 
+from modulos.config import DEBT_EQUITY_RED_FLAG
 from modulos.fmp_api import extraer_datos_fundamentales_fmp, obtener_cotizacion_fmp
 from modulos.utils import analizar_sentimiento_noticias
 from modulos.yahoo_resilience import safe_yfinance_fetch, safe_yfinance_info
@@ -146,7 +147,7 @@ def _construir_modelo(ticker: str, precio_actual: float) -> dict[str, object]:
 
     if fcf_margin_ref < 0:
         riesgos.append("Free cash flow negativo: vigilar runway de caja y posible dilucion.")
-    if isfinite(debt_equity) and debt_equity > 1.5:
+    if isfinite(debt_equity) and debt_equity > DEBT_EQUITY_RED_FLAG:
         riesgos.append("Apalancamiento elevado frente al perfil de crecimiento.")
     if isfinite(pe) and pe > 60:
         riesgos.append("Multiplo exigente: sensible a revisiones de beneficios.")

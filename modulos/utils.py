@@ -5,6 +5,7 @@ from textblob import TextBlob
 import pandas as pd
 import requests
 import xml.etree.ElementTree as ET
+from modulos.config import DEBT_EQUITY_RED_FLAG, DEBT_EQUITY_WARNING
 from modulos.fmp_api import extraer_datos_fundamentales_fmp
 from modulos.yahoo_resilience import safe_yfinance_fetch, safe_yfinance_info
 
@@ -249,23 +250,23 @@ def escanear_vulnerabilidades(res_is, res_bs, res_cf):
 
     # 1. Riesgo de Quiebra (Deuda)
     deuda_cap = get_last(res_bs["ratios"], "Deuda / Capital")
-    if deuda_cap and deuda_cap > 1.2:
-        alertas.append(f"🚨 **Apalancamiento Peligroso:** Deuda altísima ({deuda_cap:.2f}x el capital).")
+    if deuda_cap and deuda_cap > DEBT_EQUITY_WARNING:
+        alertas.append(f"🚨 **Apalancamiento Peligroso:** Deuda altísima ({deuda_cap:.2f}x el capital). Muy vulnerable a subidas de tipos de interés.")
 
     # 2. Hemorragia de Efectivo
     fcf = get_last(res_cf["ratios"], "Free Cash Flow (B USD)")
     if fcf and fcf < 0:
-        alertas.append(f"🔥 **Quema de Caja:** El Free Cash Flow es negativo (${fcf:.2f}B).")
+        alertas.append(f"🔥 **Quema de Caja:** El Free Cash Flow es negativo (${fcf:.2f}B). La empresa está perdiendo dinero real y podría necesitar emitir acciones o más deuda.")
 
     # 3. Rentabilidad Basura (Márgenes)
     margen_neto = get_last(res_is["ratios"], "Margen Neto %")
     if margen_neto and margen_neto < 5:
-        alertas.append(f"⚠️ **Márgenes Críticos:** El margen neto es solo del {margen_neto:.1f}%.")
+        alertas.append(f"⚠️ **Márgenes Críticos:** El margen neto es solo del {margen_neto:.1f}%. La empresa no tiene poder de fijación de precios (Moat débil).")
 
     # 4. Destrucción de Valor (ROIC)
     roic = get_last(res_bs["ratios"], "ROIC %")
     if roic and roic < 7:
-        alertas.append(f"📉 **Destrucción de Capital:** El ROIC ({roic:.1f}%) es menor que el coste de capital promedio.")
+        alertas.append(f"📉 **Destrucción de Capital:** El ROIC ({roic:.1f}%) es menor que el coste de capital promedio. Crecer destruye valor para el accionista.")
 
     return alertas
 
@@ -339,7 +340,7 @@ def calcular_score_buffett(df_is, df_bs, df_cf):
 
     # 3. Solidez (25 pts)
     if deuda is not None and deuda < 0.8: score += 15
-    elif deuda is not None and deuda < 1.5: score += 7
+    elif deuda is not None and deuda < DEBT_EQUITY_RED_FLAG: score += 7
     if capex is not None and capex < 25: score += 10
     elif capex is not None and capex < 50: score += 5
 
