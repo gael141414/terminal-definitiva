@@ -100,10 +100,14 @@ def ejecutar_resumen_ejecutivo(ticker_input, is_df, bs_df, cf_df, res_is, res_bs
     renderizar_grafico_tradingview(ticker_input)
 
     # ======== VEREDICTO ========
-    if res_val and precio_mercado:
-        v_justo = res_val.get('dcf_value') or res_val.get('epv_value') or res_val.get('graham_value', 0)
-        margen_seguridad = ((precio_mercado - v_justo) / v_justo) * 100 if v_justo > 0 else 0
-        estado_precio = "Infravalorada (Descuento)" if margen_seguridad < 0 else "Sobrevalorada (Prima)"
+    # Convención unificada de margen de seguridad: (fair_value - price) / price
+    # (misma que modulos/scoring_engine.py y modulos/investment_thesis.py/Tesis/
+    # Watchlist ya usaban). Antes aquí era (price - fair_value) / fair_value:
+    # signo y denominador contrarios al resto de la app.
+    v_justo = res_val.get('dcf_value') or res_val.get('epv_value') or res_val.get('graham_value') if res_val else None
+    if res_val and precio_mercado and v_justo:
+        margen_seguridad = ((v_justo - precio_mercado) / precio_mercado) * 100
+        estado_precio = "Infravalorada (Descuento)" if margen_seguridad > 0 else "Sobrevalorada (Prima)"
     else:
         estado_precio = "Datos insuficientes"
     

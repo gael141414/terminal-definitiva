@@ -725,26 +725,29 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
         p_actual_seguro = precio_actual if isinstance(precio_actual, (int, float)) else 0
         
         # 1. Graham
+        # Convención unificada: (fair_value - price) / price (positivo = barata/
+        # infravalorada). Antes era (price - fair_value) / fair_value: signo y
+        # denominador contrarios al resto de la app (scoring_engine, Tesis, Watchlist).
         v_graham = res_val.get('graham_value', 0) if res_val else 0
         if p_actual_seguro > 0 and isinstance(v_graham, (int, float)) and v_graham > 0:
-            margen_graham = ((p_actual_seguro - v_graham) / v_graham) * 100
+            margen_graham = ((v_graham - p_actual_seguro) / p_actual_seguro) * 100
         else:
             margen_graham = 0
-            
-        color_g = "inverse" if margen_graham > 0 else "normal"
-        estado_g = "Cara" if margen_graham > 0 else "Barata"
+
+        color_g = "normal" if margen_graham > 0 else "inverse"
+        estado_g = "Barata" if margen_graham > 0 else "Cara"
         col_m1.metric("Benjamin Graham (Value)", f"${v_graham:.2f}", f"{estado_g} ({margen_graham:+.1f}%)", delta_color=color_g)
         col_m1.caption("Graham Number clásico: EPS y valor contable por acción. En negocios asset-light suele ser un suelo muy conservador.")
-        
-        # 2. Peter Lynch
+
+        # 2. Peter Lynch (misma convención unificada que Graham arriba)
         v_lynch = res_val.get('lynch_value', 0) if res_val else 0
         if p_actual_seguro > 0 and isinstance(v_lynch, (int, float)) and v_lynch > 0:
-            margen_lynch = ((p_actual_seguro - v_lynch) / v_lynch) * 100
+            margen_lynch = ((v_lynch - p_actual_seguro) / p_actual_seguro) * 100
         else:
             margen_lynch = 0
-            
-        color_l = "inverse" if margen_lynch > 0 else "normal"
-        estado_l = "Cara" if margen_lynch > 0 else "Barata"
+
+        color_l = "normal" if margen_lynch > 0 else "inverse"
+        estado_l = "Barata" if margen_lynch > 0 else "Cara"
         col_m2.metric("Peter Lynch (Crecimiento)", f"${v_lynch:.2f}", f"{estado_l} ({margen_lynch:+.1f}%)", delta_color=color_l)
         lynch_pe = res_val.get('lynch_pe', 0)
         col_m2.caption(f"PEG=1 sobre crecimiento normalizado. PER justo usado: {lynch_pe:.1f}x.")
@@ -788,9 +791,10 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
     c1, c2, c3 = st.columns(3)
 
     if precio_actual and v_dcf > 0:
-        descuento_dcf = ((precio_actual - v_dcf) / v_dcf) * 100
-        estado_valor = "Sobrevalorada" if descuento_dcf > 0 else "Infravalorada"
-        color_valor = "inverse" if descuento_dcf > 0 else "normal"
+        # Convención unificada: (fair_value - price) / price (positivo = infravalorada).
+        descuento_dcf = ((v_dcf - precio_actual) / precio_actual) * 100
+        estado_valor = "Infravalorada" if descuento_dcf > 0 else "Sobrevalorada"
+        color_valor = "normal" if descuento_dcf > 0 else "inverse"
         c1.metric("Precio de Mercado Hoy", f"${precio_actual:.2f}", f"{estado_valor} ({descuento_dcf:+.1f}%)", delta_color=color_valor)
     else:
         c1.metric("Precio de Mercado", "No disp.")

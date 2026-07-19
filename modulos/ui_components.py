@@ -262,3 +262,53 @@ def render_kpi_card(
         """,
         unsafe_allow_html=True,
     )
+
+
+def pillar_semantic_color(score: float | None) -> str:
+    """Color semántico por score (mockup 1c: col = s>=75 verde : s>=60 cian : s>=45 ámbar : rojo)."""
+    if score is None:
+        return "#5b6a80"
+    if score >= 75:
+        return "#3ddc97"
+    if score >= 60:
+        return "#37c6e6"
+    if score >= 45:
+        return "#f5b04c"
+    return "#f36c6c"
+
+
+def render_pillar_card(name: str, weight_pct: float, score: float | None, *, detail: str = "") -> None:
+    """Tarjeta de pilar del ValueQuant Score (mockup 1c, tier 3: rejilla 4x2).
+
+    Hermana de render_kpi_card (misma paleta y radios) pero con estructura
+    propia: badge de peso + barra de progreso, que no encaja en los 5 estados
+    estándar de KPI (esto no es un "KPI con estado", es la descomposición de
+    un score compuesto).
+    """
+    color = pillar_semantic_color(score)
+    score_display = f"{score:.0f}" if score is not None else "n/d"
+    pct = max(0.0, min(100.0, score)) if score is not None else 0.0
+
+    st.markdown(
+        f"""
+        <div style="background:rgba(18,25,38,0.92); border:1px solid rgba(147,164,187,0.1); border-radius:11px;
+                    padding:15px 18px; display:flex; flex-direction:column; gap:9px; height:100%;">
+            <div style="display:flex; align-items:baseline; gap:8px; min-height:32px;">
+                <span style="font-size:11px; font-weight:600; letter-spacing:0.06em; color:#93a4bb;
+                            text-transform:uppercase; line-height:1.35;">{html.escape(str(name))}</span>
+                <span style="margin-left:auto; font-family:'JetBrains Mono',monospace; font-size:10.5px; color:#4f8cff;
+                            background:rgba(79,140,255,0.1); border:1px solid rgba(79,140,255,0.25); padding:1px 7px;
+                            border-radius:99px; flex:none;">{weight_pct:.0f}%</span>
+            </div>
+            <div style="display:flex; align-items:baseline; gap:6px;">
+                <span style="font-family:'JetBrains Mono',monospace; font-size:24px; font-weight:800;
+                            color:{color};">{html.escape(score_display)}</span>
+                <span style="font-size:10.5px; color:#5b6a80;">/100{(' · ' + html.escape(detail)) if detail else ''}</span>
+            </div>
+            <div style="height:5px; border-radius:99px; background:rgba(147,164,187,0.12); overflow:hidden;">
+                <div style="height:100%; width:{pct:.0f}%; background:{color}; border-radius:99px;"></div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
