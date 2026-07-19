@@ -140,6 +140,50 @@ def _is_missing(value: object) -> bool:
     return False
 
 
+def kpi_status_from_thresholds(
+    value: float | None,
+    *,
+    warning: float,
+    danger: float,
+    higher_is_worse: bool = True,
+) -> str:
+    """Clasifica un valor en normal/advertencia/riesgo a partir de dos umbrales.
+
+    Ejemplo con los umbrales ya centralizados en modulos/config.py — el mismo
+    par de niveles ámbar/rojo que ya usan escanear_vulnerabilidades y
+    calcular_score_buffett para Deuda/Capital (higher_is_worse=True es el
+    sentido por defecto: cuanto más alto, peor)::
+
+        from modulos.config import DEBT_EQUITY_WARNING, DEBT_EQUITY_RED_FLAG
+        status = kpi_status_from_thresholds(
+            deuda_capital, warning=DEBT_EQUITY_WARNING, danger=DEBT_EQUITY_RED_FLAG,
+        )
+
+    Con ``higher_is_worse=False`` se invierte el sentido (p. ej. un ratio de
+    cobertura o un margen donde los valores BAJOS son el problema).
+
+    ``value`` None/NaN devuelve directamente ``"no_disponible"`` para que el
+    resultado se pueda pasar tal cual como ``status=`` de ``render_kpi_card``
+    sin que cada call site repita el chequeo de ausencia — aunque
+    ``render_kpi_card`` ya fuerza ese estado igualmente si ``value`` llega
+    vacío, así que esto es solo para que el status ya venga "correcto" antes
+    de decidir el texto del detalle.
+    """
+    if _is_missing(value):
+        return "no_disponible"
+    if higher_is_worse:
+        if value > danger:
+            return "riesgo"
+        if value > warning:
+            return "advertencia"
+        return "normal"
+    if value < danger:
+        return "riesgo"
+    if value < warning:
+        return "advertencia"
+    return "normal"
+
+
 def render_kpi_card(
     label: str,
     value: object,

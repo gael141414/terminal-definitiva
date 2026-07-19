@@ -82,6 +82,7 @@ from cashflow_analyzer import analizar_flujo_efectivo
 from valuator import calcular_crecimiento_implicito_dcf, calcular_dcf_fcf_por_accion, valorar_empresa
 from modulos.utils import obtener_valoracion_sectorial, cargar_datos, calcular_score_buffett
 from modulos.scoring_engine import render_valuequant_score_card
+from modulos.ui_components import render_kpi_card
 from charts import (
     plot_tsr_vs_sp500, 
     plot_dashboard_interactivo, 
@@ -283,29 +284,50 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
     st.markdown("#### 🔬 Análisis DuPont: Desmontando el ROE")
     st.caption("Charlie Munger dice: 'Un ROE alto es inútil si se logra a base de deudas'. Aquí vemos de dónde viene realmente el ROE del último año.")
     
-    # Función escudo para evitar el IndexError si la columna entera son NaNs
+    # Función escudo: un dato ausente sigue siendo None (no un 0.0 que se
+    # confunda con un valor real) para que render_kpi_card lo muestre como
+    # "n/d" en vez de un 0% o 0x engañoso.
     def get_safe_last_val(df, col):
         if col in df.columns:
             s = df[col].dropna()
             if not s.empty:
                 return s.iloc[-1]
-        return 0.0
+        return None
 
     # Extraemos el último año usando nuestra función escudo
     dupont_margen = get_safe_last_val(res_bs["ratios"], "DuPont: Margen Neto %")
     dupont_rotacion = get_safe_last_val(res_bs["ratios"], "DuPont: Rotación Activos")
     dupont_apalan = get_safe_last_val(res_bs["ratios"], "DuPont: Apalancamiento")
     roe_ultimo = get_safe_last_val(res_bs["ratios"], "ROE %")
-    
+
     c_dp1, c_dp2, c_dp3, c_dp4 = st.columns(4)
-    c_dp1.metric("1. Margen Neto (Eficiencia)", f"{dupont_margen:.1f}%")
-    c_dp2.metric("2. Rotación Activos (Volumen)", f"{dupont_rotacion:.2f}x")
-    
-    estado_apalan = "Riesgo si > 3.0x" if dupont_apalan > 3.0 else "Sano"
-    color_apalan = "inverse" if dupont_apalan > 3.0 else "normal"
-    c_dp3.metric("3. Apalancamiento (Deuda)", f"{dupont_apalan:.2f}x", estado_apalan, delta_color=color_apalan)
-    
-    c_dp4.metric("= ROE Total", f"{roe_ultimo:.1f}%")
+    with c_dp1:
+        render_kpi_card(
+            "1. Margen Neto (Eficiencia)",
+            f"{dupont_margen:.1f}%" if dupont_margen is not None else None,
+        )
+    with c_dp2:
+        render_kpi_card(
+            "2. Rotación Activos (Volumen)",
+            f"{dupont_rotacion:.2f}x" if dupont_rotacion is not None else None,
+        )
+    with c_dp3:
+        # "DuPont: Apalancamiento" es Activos/Patrimonio (multiplicador), una
+        # magnitud distinta de Deuda/Capital: no reutiliza DEBT_EQUITY_WARNING/
+        # RED_FLAG de modulos/config.py (una empresa sin deuda ya tiene
+        # Apalancamiento=1.0x, no 0x), mantiene su propio umbral histórico (3.0x).
+        apalan_riesgo = dupont_apalan is not None and dupont_apalan > 3.0
+        render_kpi_card(
+            "3. Apalancamiento (Deuda)",
+            f"{dupont_apalan:.2f}x" if dupont_apalan is not None else None,
+            status="riesgo" if apalan_riesgo else "normal",
+            detail="Riesgo si supera 3.0x." if dupont_apalan is not None else "",
+        )
+    with c_dp4:
+        render_kpi_card(
+            "= ROE Total",
+            f"{roe_ultimo:.1f}%" if roe_ultimo is not None else None,
+        )
 
     st.write("")
     if dupont_apalan > 3.0:
