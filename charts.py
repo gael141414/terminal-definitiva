@@ -504,13 +504,21 @@ def plot_calidad_beneficios(ticker):
         return None
 
 def plot_auditoria_forense(ticker, precio_actual, acciones_actuales):
-    """Calcula el Altman Z-Score y escanea las Banderas Rojas de liquidez"""
+    """Calcula el Altman Z-Score y escanea las Banderas Rojas de liquidez.
+
+    Devuelve siempre una 3-tupla ``(fig, alertas, z_score)`` en las tres
+    ramas (éxito, datos insuficientes, error inesperado) — nunca omite un
+    elemento. En fallo: ``fig=None``, ``alertas`` es una lista de un único
+    string con el motivo (nunca un string suelto: el llamador siempre itera
+    ``alertas`` de la misma forma sea éxito o fallo) y ``z_score=None``
+    (nunca ``0``, que se leería como un Z-Score real en zona de peligro).
+    """
     try:
         bs = _cached_ticker_attr(ticker, "balance_sheet")
         is_stmt = _cached_ticker_attr(ticker, "financials")
         
         if bs.empty or is_stmt.empty:
-            return None, "Datos insuficientes en Yahoo Finance para la auditoría."
+            return None, ["Datos insuficientes en Yahoo Finance para la auditoría."], None
 
         # Extraer los datos más recientes (columna 0)
         def get_safe(df, keys):
@@ -565,7 +573,7 @@ def plot_auditoria_forense(ticker, precio_actual, acciones_actuales):
                 red_flags.append(f"🟡 **Deuda Pesada:** La cobertura de intereses es de {interest_coverage:.1f}x. Aceptable, pero vulnerable si suben los tipos de interés.")
 
         # Bandera 3: Dividendos Tóxicos (Payout Ratio)
-        divs = ticker_yf.dividends
+        divs = _cached_dividends(ticker)
         if not divs.empty and net_income > 0:
             div_anual = divs.groupby(divs.index.year).sum().iloc[-1]
             payout_ratio = (div_anual * acciones_actuales) / net_income
@@ -596,7 +604,7 @@ def plot_auditoria_forense(ticker, precio_actual, acciones_actuales):
         
         return _apply_vq_layout(fig), red_flags, z_score
     except Exception as e:
-        return None, [f"Error al calcular la auditoría forense: {e}"], 0
+        return None, [f"Error al calcular la auditoría forense: {e}"], None
 
 def plot_flujo_opciones(ticker):
     """Analiza el mercado de derivados (Open Interest) para calcular el Put/Call Ratio Institucional"""

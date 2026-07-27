@@ -136,6 +136,12 @@ def ejecutar_auditoria_forense(ticker_input, is_df, bs_df, cf_df, res_val, res_b
                     else:
                         for alerta in alertas_forenses:
                             st.markdown(alerta)
+            else:
+                # plot_auditoria_forense no pudo calcular el Z-Score (datos de
+                # Yahoo insuficientes o un error interno) — alertas_forenses
+                # trae el motivo real en vez de dejarlo caer en silencio.
+                mensaje = alertas_forenses[0] if alertas_forenses else "No se pudo calcular el Z-Score para esta empresa."
+                st.info(mensaje)
     else:
         st.info("Faltan datos de precio o acciones en circulación para calcular el Z-Score.")
 
