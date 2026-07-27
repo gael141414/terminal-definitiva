@@ -4,7 +4,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
-from charts import plot_beneish_m_score, plot_auditoria_forense
+from charts import plot_beneish_m_score, plot_auditoria_forense, plot_termometro_deuda
 from modulos.data_provider_errors import (
     INSUFFICIENT_COVERAGE,
     INVALID_TICKER,
