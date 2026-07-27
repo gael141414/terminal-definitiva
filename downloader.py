@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import time
 
 import httpx
@@ -20,6 +21,10 @@ from modulos.data_provider_errors import (
 logger = logging.getLogger(__name__)
 
 set_identity(CONFIG.sec_edgar_identity)
+
+# Columnas de periodo de edgartools: "2024-09-28 (FY)" en income/cashflow
+# (estados de duración), "2024-09-28" sin sufijo en balance (snapshot puntual).
+_PERIOD_COLUMN_PATTERN = re.compile(r"^(\d{4}-\d{2}-\d{2})(?:\s*\((\w+)\))?$")
 
 
 def _classify_edgar_error(exc: Exception, *, context: str) -> DataProviderError:
@@ -125,18 +130,39 @@ def obtener_estados_financieros(ticker, años=10, usar_cache=True):
         # 🛠️ LA MAGIA: ALINEACIÓN POR 'CONCEPT'
         def consolidar_y_limpiar(lista_dfs):
             if not lista_dfs: return None
-            
+
             dfs_alineados = []
             for df in lista_dfs:
                 if 'concept' in df.columns:
                     df = df.drop_duplicates(subset=['concept'])
                     df = df.set_index('concept') # Anclamos por etiqueta
                 dfs_alineados.append(df)
-                
+
             # Pandas ahora unirá la fila de "NetIncome" de 2025 con la de 2018 correctamente
             df_final = pd.concat(dfs_alineados, axis=1)
             df_final = df_final.reset_index()
-            
+
+            # edgartools nombra cada columna de periodo con la fecha exacta de
+            # cierre ("2024-09-28 (FY)" en income/cashflow, "2024-09-28" sin
+            # sufijo en balance, que es un snapshot puntual). Se captura esa
+            # fecha ANTES de truncar la columna a solo el año (más abajo),
+            # porque a partir de ahí se pierde: sin ella, el motor de
+            # comparación SEC↔FMP no puede distinguir "2023" del 10-K de 2024
+            # de un eventual "2023" reexpresado (restatement) en el 10-K de
+            # 2025 — solo vería la misma etiqueta de año en ambos casos.
+            period_end_dates: dict[str, str] = {}
+            fiscal_period_type: dict[str, str] = {}
+            for c in df_final.columns:
+                match = _PERIOD_COLUMN_PATTERN.match(str(c))
+                if not match:
+                    continue
+                year_label = match.group(1)[:4]
+                if year_label in period_end_dates:
+                    continue  # ya capturada desde un filing más reciente (mismo criterio que el dedup de abajo)
+                period_end_dates[year_label] = match.group(1)
+                if match.group(2):
+                    fiscal_period_type[year_label] = match.group(2)
+
             cols_limpias = []
             for c in df_final.columns:
                 c_str = str(c)
@@ -144,15 +170,23 @@ def obtener_estados_financieros(ticker, años=10, usar_cache=True):
                     cols_limpias.append(c_str.lower())
                 elif c_str.startswith('20') and len(c_str) >= 4:
                     cols_limpias.append(c_str[:4])
-                else: 
+                else:
                     cols_limpias.append(c_str)
-                    
+
             df_final.columns = cols_limpias
             df_final = df_final.loc[:, ~df_final.columns.duplicated(keep='first')]
-            
+
             metadata = [c for c in df_final.columns if not c.isdigit()]
             years = sorted([c for c in df_final.columns if c.isdigit()])
-            return df_final[metadata + years]
+            resultado = df_final[metadata + years]
+            # df.attrs no sobrevive un roundtrip por CSV (el cache en disco de
+            # cache_datos/*.csv no lo tendrá hasta que se refresque): es una
+            # limitación conocida, no un olvido — afecta solo al flujo con
+            # usar_cache=True sobre un cache ya existente.
+            resultado.attrs["period_end_dates"] = period_end_dates
+            if fiscal_period_type:
+                resultado.attrs["fiscal_period_type"] = fiscal_period_type
+            return resultado
 
         df_resultados = consolidar_y_limpiar(lista_is)
         df_balance = consolidar_y_limpiar(lista_bs)
