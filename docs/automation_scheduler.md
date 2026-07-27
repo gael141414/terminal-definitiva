@@ -145,6 +145,72 @@ Desde la app:
 💼 Cartera y Decisión → ⚙️ Centro de Automatización → Historial
 ```
 
+## Validación cruzada SEC↔FMP (nocturna)
+
+Job independiente del briefing: recalcula los ratios de la watchlist a
+partir de los 10-K reales en SEC EDGAR y los contrasta con FMP (Sub-fases
+0-3 del bloque SEC↔FMP). También cron local, por el mismo motivo que el
+briefing: necesita `data/watchlist.json` real, que no existe en un checkout
+de CI.
+
+Ejecución manual:
+
+```bash
+python scripts/run_sec_validation.py
+```
+
+Con aviso a Telegram si aparecen discrepancias nuevas desde la corrida
+anterior (nunca se envía sin `--yes`):
+
+```bash
+python scripts/run_sec_validation.py --send-telegram --yes
+```
+
+Ajustar tope de tickers/noche, pausa entre tickers y años de histórico:
+
+```bash
+python scripts/run_sec_validation.py --max-tickers 20 --pause-seconds 2 --years 5
+```
+
+Dispone de:
+
+- `modulos/sec_validation_runner.py`: motor de ejecución local (selección de
+  tickers, comparación, persistencia inmediata por ticker, notificación).
+- `modulos/sec_validation_store.py`: persistencia (`data/sec_validation_history.json`
+  + campo compacto `last_sec_validation` en `data/watchlist.json`).
+- `scripts/run_sec_validation.py`: entrada por terminal.
+- `scripts/valuequant_sec_validation.example.sh`: plantilla de cron.
+
+Plantilla de cron (copiar fuera del patrón `*.local.sh`, igual que el
+briefing):
+
+```bash
+cp scripts/valuequant_sec_validation.example.sh scripts/valuequant_sec_validation.local.sh
+chmod +x scripts/valuequant_sec_validation.local.sh
+```
+
+```cron
+0 2 * * * /home/gael/Escritorio/terminal-limpia/scripts/valuequant_sec_validation.local.sh >> /home/gael/Escritorio/terminal-limpia/logs/cron_sec_validation.log 2>&1
+```
+
+Selección de tickers: rotación "el más antiguo sin verificar primero" — un
+ticker nunca comprobado siempre entra antes que uno ya comprobado, así que
+con un tope de 40/noche una watchlist más grande se cubre en varias noches
+sin intervención manual.
+
+Verificación posterior:
+
+```bash
+cat data/sec_validation_history.json | python -m json.tool | head -40
+```
+
+Desde la app:
+
+```text
+💼 Cartera y Decisión → ⚙️ Centro de Automatización → Historial
+(evento event_type = sec_validation_run)
+```
+
 ## Reglas de seguridad
 
 - No subas `.env` ni `.streamlit/secrets.toml`.
