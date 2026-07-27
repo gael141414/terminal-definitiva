@@ -731,15 +731,23 @@ def plot_proyeccion_dividendos(ticker, precio_compra, anios_proyeccion=20):
         return None, f"Error calculando la proyección de dividendos: {e}"
 
 def plot_beneish_m_score(ticker):
-    """Calcula el Beneish M-Score cruzando datos contables de los últimos 2 años para detectar manipulación"""
+    """Calcula el Beneish M-Score cruzando datos contables de los últimos 2 años para detectar manipulación.
+
+    Devuelve siempre una 3-tupla ``(fig, diagnostico, detalles)`` en las tres
+    ramas (éxito, datos insuficientes, error inesperado) — nunca omite un
+    elemento. En fallo: ``fig=None``, ``diagnostico`` es el string de motivo
+    (se usa tal cual como texto, nunca se itera), ``detalles=[]`` (nunca se
+    omite: el llamador solo lo consume dentro de ``if fig:``, pero mantiene
+    el contrato uniforme para que el desempaquetado nunca falle).
+    """
     try:
         bs = _cached_ticker_attr(ticker, "balance_sheet")
         is_stmt = _cached_ticker_attr(ticker, "financials")
         cf = _cached_ticker_attr(ticker, "cashflow")
-        
+
         # Si no tenemos al menos 2 años de datos, no podemos calcular la evolución temporal
         if bs.empty or is_stmt.empty or len(bs.columns) < 2 or len(is_stmt.columns) < 2:
-            return None, "Datos históricos insuficientes para el análisis de manipulación (M-Score)."
+            return None, "Datos históricos insuficientes para el análisis de manipulación (M-Score).", []
 
         def get_safe_2y(df, keys):
             """Extrae el valor del año actual (0) y del año anterior (1) de forma segura"""
