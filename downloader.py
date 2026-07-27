@@ -10,6 +10,7 @@ from edgar.httprequests import TooManyRequestsError
 
 from modulos.config import CONFIG
 from modulos.data_provider_errors import (
+    PROVIDER_ERROR,
     DataProviderError,
     DataTimeoutError,
     InvalidTickerError,
@@ -65,9 +66,29 @@ def _fetch_filings(empresa, form: str, años: int, *, context: str):
 
 
 def obtener_estados_financieros(ticker, años=10, usar_cache=True):
+    """Contrato histórico: 3-tupla de DataFrames (o ``None, None, None`` si
+    falla), sin exponer la causa. Usado por screener.py y
+    telegram_valuequant_bot.py — no cambia con la Sub-fase 2."""
+    df_is, df_bs, df_cf, _codigo = _obtener_estados_financieros_impl(ticker, años, usar_cache)
+    return df_is, df_bs, df_cf
+
+
+def obtener_estados_financieros_con_diagnostico(ticker, años=10, usar_cache=True):
+    """Como ``obtener_estados_financieros``, pero además expone el código de
+    fallo tipado (``modulos.data_provider_errors``, o ``None`` si tuvo éxito)
+    cuando la consulta no devuelve datos, para que una capa de presentación
+    (Modo Auditoría en Auditoría Forense) pueda mostrar un mensaje distinto
+    según la causa real (rate limit / ticker inválido / timeout / sin datos /
+    error genérico) en vez de un "no se pudo" uniforme. Nunca lanza — mismo
+    contrato sin excepciones que ``obtener_estados_financieros``, con un
+    elemento extra."""
+    return _obtener_estados_financieros_impl(ticker, años, usar_cache)
+
+
+def _obtener_estados_financieros_impl(ticker, años=10, usar_cache=True):
     if not os.path.exists("cache_datos"):
         os.makedirs("cache_datos")
-        
+
     rutas_cache = {
         "is": f"cache_datos/{ticker}_is.csv",
         "bs": f"cache_datos/{ticker}_bs.csv",
@@ -76,9 +97,10 @@ def obtener_estados_financieros(ticker, años=10, usar_cache=True):
 
     if usar_cache and all(os.path.exists(ruta) for ruta in rutas_cache.values()):
         try:
-            return (pd.read_csv(rutas_cache["is"], index_col=0), 
-                    pd.read_csv(rutas_cache["bs"], index_col=0), 
-                    pd.read_csv(rutas_cache["cf"], index_col=0))
+            return (pd.read_csv(rutas_cache["is"], index_col=0),
+                    pd.read_csv(rutas_cache["bs"], index_col=0),
+                    pd.read_csv(rutas_cache["cf"], index_col=0),
+                    None)
         except Exception: pass
 
     context = f"sec_edgar:{ticker}"
@@ -196,12 +218,12 @@ def obtener_estados_financieros(ticker, años=10, usar_cache=True):
             df_resultados.to_csv(rutas_cache["is"])
             df_balance.to_csv(rutas_cache["bs"])
             df_caja.to_csv(rutas_cache["cf"])
-            
-        return df_resultados, df_balance, df_caja
+
+        return df_resultados, df_balance, df_caja, None
 
     except DataProviderError as exc:
         logger.warning("SEC EDGAR %s", exc)
-        return None, None, None
+        return None, None, None, exc.code
     except Exception as exc:
         logger.error("SEC EDGAR error inesperado en %s: %s", context, type(exc).__name__)
-        return None, None, None
+        return None, None, None, PROVIDER_ERROR

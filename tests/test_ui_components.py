@@ -20,6 +20,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from modulos import ui_components
 from modulos.config import DEBT_EQUITY_RED_FLAG, DEBT_EQUITY_WARNING
+from modulos.sec_fmp_cross_validation import MetricComparison
 
 
 @pytest.fixture
@@ -192,3 +193,94 @@ def test_fundamental_dupont_ya_no_usa_get_safe_last_val_con_default_cero():
     shield_body = source[start:end]
     assert "return None" in shield_body
     assert "return 0.0" not in shield_body
+
+
+# ---------------------------------------------------------------------------
+# Tabla de verificación cruzada SEC↔FMP (Sub-fase 2, Modo Auditoría)
+# ---------------------------------------------------------------------------
+
+
+def _comp(classification, *, diff_pct=None, metric="Margen Bruto %", year="2024",
+          fmp_value=46.21, sec_value=46.21, note="", period_verified=False):
+    return MetricComparison(
+        metric=metric, year=year, fmp_value=fmp_value, sec_value=sec_value,
+        diff_pct=diff_pct, classification=classification,
+        period_verified=period_verified, note=note,
+    )
+
+
+def test_status_coincide_es_favorable():
+    assert ui_components.cross_validation_row_status(_comp("coincide")) == "favorable"
+
+
+def test_status_no_comparable_es_no_disponible_nunca_riesgo():
+    comp = _comp("no_comparable", diff_pct=None, sec_value=None, note="concepto no encontrado en SEC")
+    assert ui_components.cross_validation_row_status(comp) == "no_disponible"
+
+
+def test_status_periodo_no_alineado_es_informativo_no_riesgo_ni_advertencia():
+    comp = _comp("periodo_no_alineado", diff_pct=25.0, note="posible restatement")
+    assert ui_components.cross_validation_row_status(comp) == "informativo"
+
+
+def test_status_discrepancia_leve_es_advertencia():
+    comp = _comp("discrepancia", diff_pct=5.0)  # por debajo del corte de 10%
+    assert ui_components.cross_validation_row_status(comp) == "advertencia"
+
+
+def test_status_discrepancia_severa_es_riesgo():
+    comp = _comp("discrepancia", diff_pct=35.0)  # por encima del corte de 10%
+    assert ui_components.cross_validation_row_status(comp) == "riesgo"
+
+
+def test_status_discrepancia_negativa_severa_tambien_es_riesgo():
+    comp = _comp("discrepancia", diff_pct=-35.0)
+    assert ui_components.cross_validation_row_status(comp) == "riesgo"
+
+
+def test_status_discrepancia_sin_diff_pct_no_escala_a_riesgo_sin_evidencia():
+    comp = _comp("discrepancia", diff_pct=None)  # caso FMP=0 (ver _diff_pct)
+    assert ui_components.cross_validation_row_status(comp) == "advertencia"
+
+
+def test_cross_validation_dataframe_columnas_y_valores_ausentes_como_nd():
+    comparaciones = [
+        _comp("coincide", metric="Margen Bruto %", diff_pct=0.19),
+        _comp("no_comparable", metric="Intereses % (s/OpInc)", sec_value=None, diff_pct=None,
+              note="concepto no encontrado en SEC"),
+    ]
+    df = ui_components.cross_validation_dataframe(comparaciones)
+
+    assert list(df.columns) == ["Métrica", "Año", "FMP", "SEC", "Diferencia %", "Estado", "Nota", "_status"]
+    assert len(df) == 2
+
+    fila_no_comparable = df[df["Métrica"] == "Intereses % (s/OpInc)"].iloc[0]
+    assert fila_no_comparable["SEC"] == "n/d"  # nunca "0.00"
+    assert fila_no_comparable["Diferencia %"] == "n/d"
+    assert fila_no_comparable["_status"] == "no_disponible"
+    assert "SEC" in fila_no_comparable["Nota"]
+
+
+def test_cross_validation_dataframe_no_pierde_filas_con_distintas_clasificaciones():
+    comparaciones = [
+        _comp("coincide"),
+        _comp("discrepancia", diff_pct=35.0, metric="Margen Neto %"),
+        _comp("periodo_no_alineado", diff_pct=12.0, metric="ROE %", note="posible restatement"),
+    ]
+    df = ui_components.cross_validation_dataframe(comparaciones)
+    assert set(df["_status"]) == {"favorable", "riesgo", "informativo"}
+
+
+def test_render_cross_validation_table_vacio_muestra_info(monkeypatch):
+    calls: list[str] = []
+    monkeypatch.setattr(ui_components.st, "info", lambda msg: calls.append(msg))
+    ui_components.render_cross_validation_table([])
+    assert len(calls) == 1
+    assert "SEC EDGAR" in calls[0]
+
+
+def test_render_cross_validation_table_no_vacio_no_llama_a_info(monkeypatch):
+    monkeypatch.setattr(ui_components.st, "info", lambda msg: (_ for _ in ()).throw(AssertionError("no debería llamarse")))
+    monkeypatch.setattr(ui_components.st, "caption", lambda *a, **k: None)
+    monkeypatch.setattr(ui_components.st, "dataframe", lambda *a, **k: None)
+    ui_components.render_cross_validation_table([_comp("coincide")])

@@ -1,6 +1,9 @@
 import html
+
+import pandas as pd
 import streamlit as st
 
+from modulos.sec_fmp_cross_validation import DISCREPANCY, MATCH, NOT_COMPARABLE, PERIOD_MISALIGNED
 from modulos.tool_catalog import obtener_herramientas_por_grupo_consolidado
 from modulos.tool_consolidation import CONSOLIDATION_GROUPS, get_navigation_groups_ordered
 
@@ -311,4 +314,137 @@ def render_pillar_card(name: str, weight_pct: float, score: float | None, *, det
         </div>
         """,
         unsafe_allow_html=True,
+    )
+
+
+# --- Tabla de verificación cruzada SEC↔FMP (Sub-fase 2, Modo Auditoría) -----
+# Hermana de render_kpi_card (misma paleta de 5 colores) pero con estructura
+# de tabla, no de tarjeta suelta: aquí lo relevante es comparar muchas filas
+# (métrica × año) a la vez, algo que una rejilla de tarjetas haría demasiado
+# larga para una lista que puede superar las 30-40 filas.
+
+# ±10% relativo como corte discrepancia leve/grave: el cruce empírico ya
+# hecho (Sub-fases 0 y 1) muestra que FMP y SEC coinciden casi exactos para
+# una empresa bien cubierta como Apple, así que una diferencia por encima de
+# la banda de tolerancia (±2%, ver modulos/sec_fmp_cross_validation.py) pero
+# todavía moderada (hasta ±10%) es más probable que sea categorización de
+# partidas o redondeo agresivo que un error real de datos; por encima de
+# ±10% ya es difícil de explicar por ruido y merece la señal roja de RIESGO.
+CROSS_VALIDATION_SEVERE_DISCREPANCY_PCT = 10.0
+
+_CROSS_VALIDATION_STATUS_LABELS = {
+    "favorable": "✅ Coincide",
+    "advertencia": "⚠️ Discrepancia",
+    "riesgo": "🔴 Discrepancia",
+    "no_disponible": "⬜ No comparable",
+    "informativo": "🔵 Periodo no alineado",
+}
+
+_CROSS_VALIDATION_ROW_COLORS = {
+    _CROSS_VALIDATION_STATUS_LABELS["favorable"]: "rgba(61,220,151,0.12)",
+    _CROSS_VALIDATION_STATUS_LABELS["advertencia"]: "rgba(245,176,76,0.12)",
+    _CROSS_VALIDATION_STATUS_LABELS["riesgo"]: "rgba(243,108,108,0.12)",
+    _CROSS_VALIDATION_STATUS_LABELS["no_disponible"]: "rgba(147,164,187,0.10)",
+    _CROSS_VALIDATION_STATUS_LABELS["informativo"]: "rgba(55,198,230,0.14)",
+}
+
+
+def cross_validation_row_status(comparison) -> str:
+    """Traduce una ``MetricComparison`` (modulos.sec_fmp_cross_validation) al
+    vocabulario de color ya usado por render_kpi_card.
+
+    - ``coincide`` -> ``favorable`` (verde).
+    - ``no_comparable`` -> ``no_disponible`` (gris): un dato ausente en un
+      lado NUNCA se muestra como discrepancia (ni como "0% de diferencia" ni
+      como "100% de discrepancia") — mismo principio de "nunca cero
+      artificial" que en los guards financieros.
+    - ``periodo_no_alineado`` -> ``informativo`` (cian, distinto de rojo/ámbar
+      a propósito): las fechas de fin de periodo no coinciden, así que
+      cualquier diferencia de valor no es de fiar como discrepancia real —
+      mezclarlo visualmente con una discrepancia real haría parecer un
+      problema de datos algo que puede ser solo un restatement o un cambio
+      de año fiscal.
+    - ``discrepancia`` -> ``riesgo`` si la diferencia relativa supera
+      ``CROSS_VALIDATION_SEVERE_DISCREPANCY_PCT``, ``advertencia`` si no.
+    """
+    if comparison.classification == MATCH:
+        return "favorable"
+    if comparison.classification == NOT_COMPARABLE:
+        return "no_disponible"
+    if comparison.classification == PERIOD_MISALIGNED:
+        return "informativo"
+    # DISCREPANCY: diff_pct casi siempre presente aquí (solo es None cuando
+    # FMP=0, ver _diff_pct) — sin él no se puede juzgar severidad, así que se
+    # trata como advertencia (nunca se escala a riesgo sin evidencia numérica).
+    diff = comparison.diff_pct
+    if diff is not None and abs(diff) > CROSS_VALIDATION_SEVERE_DISCREPANCY_PCT:
+        return "riesgo"
+    return "advertencia"
+
+
+def _formatear_valor_cross_validation(value: float | None) -> str:
+    return "n/d" if value is None else f"{value:,.2f}"
+
+
+def _formatear_diff_cross_validation(value: float | None) -> str:
+    return "n/d" if value is None else f"{value:+.2f}%"
+
+
+def cross_validation_dataframe(comparisons: list) -> pd.DataFrame:
+    """Prepara el DataFrame de presentación a partir de la lista de
+    ``MetricComparison`` que devuelve ``comparar_estados_financieros``.
+
+    Función pura (sin Streamlit) para que la lógica de qué se le pasa al
+    componente de tabla sea testeable de forma aislada. Incluye la columna
+    ``_status`` (no se muestra en pantalla) para que los tests puedan
+    verificar la clasificación visual sin parsear el texto del badge.
+    """
+    filas = []
+    for comp in comparisons:
+        status = cross_validation_row_status(comp)
+        filas.append({
+            "Métrica": comp.metric,
+            "Año": comp.year,
+            "FMP": _formatear_valor_cross_validation(comp.fmp_value),
+            "SEC": _formatear_valor_cross_validation(comp.sec_value),
+            "Diferencia %": _formatear_diff_cross_validation(comp.diff_pct),
+            "Estado": _CROSS_VALIDATION_STATUS_LABELS[status],
+            "Nota": comp.note,
+            "_status": status,
+        })
+    return pd.DataFrame(
+        filas,
+        columns=["Métrica", "Año", "FMP", "SEC", "Diferencia %", "Estado", "Nota", "_status"],
+    )
+
+
+def _style_cross_validation_row(row: pd.Series) -> list[str]:
+    color = _CROSS_VALIDATION_ROW_COLORS.get(row.get("Estado", ""), "")
+    return [f"background-color: {color}" if color else ""] * len(row)
+
+
+def render_cross_validation_table(comparisons: list) -> None:
+    """Tabla de verificación cruzada SEC↔FMP (Modo Auditoría, Auditoría
+    Forense). Una fila por métrica/año comparado, coloreada por estado."""
+    if not comparisons:
+        st.info("SEC EDGAR no tiene métricas comparables con FMP para esta empresa en el rango de años consultado.")
+        return
+
+    df = cross_validation_dataframe(comparisons)
+
+    orden_resumen = ["favorable", "riesgo", "advertencia", "informativo", "no_disponible"]
+    conteos = df["_status"].value_counts()
+    resumen = " · ".join(
+        f"{_CROSS_VALIDATION_STATUS_LABELS[status]}: {conteos[status]}"
+        for status in orden_resumen
+        if status in conteos.index
+    )
+    if resumen:
+        st.caption(resumen)
+
+    visible_cols = ["Métrica", "Año", "FMP", "SEC", "Diferencia %", "Estado", "Nota"]
+    st.dataframe(
+        df[visible_cols].style.apply(_style_cross_validation_row, axis=1),
+        use_container_width=True,
+        hide_index=True,
     )
