@@ -3,7 +3,13 @@ import html
 import pandas as pd
 import streamlit as st
 
-from modulos.sec_fmp_cross_validation import DISCREPANCY, MATCH, NOT_COMPARABLE, PERIOD_MISALIGNED
+from modulos.sec_fmp_cross_validation import (
+    DISCREPANCY,
+    MATCH,
+    NOT_COMPARABLE,
+    PERIOD_MISALIGNED,
+    SEVERE_DISCREPANCY_PCT,
+)
 from modulos.tool_catalog import obtener_herramientas_por_grupo_consolidado
 from modulos.tool_consolidation import CONSOLIDATION_GROUPS, get_navigation_groups_ordered
 
@@ -323,15 +329,6 @@ def render_pillar_card(name: str, weight_pct: float, score: float | None, *, det
 # (métrica × año) a la vez, algo que una rejilla de tarjetas haría demasiado
 # larga para una lista que puede superar las 30-40 filas.
 
-# ±10% relativo como corte discrepancia leve/grave: el cruce empírico ya
-# hecho (Sub-fases 0 y 1) muestra que FMP y SEC coinciden casi exactos para
-# una empresa bien cubierta como Apple, así que una diferencia por encima de
-# la banda de tolerancia (±2%, ver modulos/sec_fmp_cross_validation.py) pero
-# todavía moderada (hasta ±10%) es más probable que sea categorización de
-# partidas o redondeo agresivo que un error real de datos; por encima de
-# ±10% ya es difícil de explicar por ruido y merece la señal roja de RIESGO.
-CROSS_VALIDATION_SEVERE_DISCREPANCY_PCT = 10.0
-
 _CROSS_VALIDATION_STATUS_LABELS = {
     "favorable": "✅ Coincide",
     "advertencia": "⚠️ Discrepancia",
@@ -365,7 +362,7 @@ def cross_validation_row_status(comparison) -> str:
       problema de datos algo que puede ser solo un restatement o un cambio
       de año fiscal.
     - ``discrepancia`` -> ``riesgo`` si la diferencia relativa supera
-      ``CROSS_VALIDATION_SEVERE_DISCREPANCY_PCT``, ``advertencia`` si no.
+      ``SEVERE_DISCREPANCY_PCT``, ``advertencia`` si no.
     """
     if comparison.classification == MATCH:
         return "favorable"
@@ -377,7 +374,7 @@ def cross_validation_row_status(comparison) -> str:
     # FMP=0, ver _diff_pct) — sin él no se puede juzgar severidad, así que se
     # trata como advertencia (nunca se escala a riesgo sin evidencia numérica).
     diff = comparison.diff_pct
-    if diff is not None and abs(diff) > CROSS_VALIDATION_SEVERE_DISCREPANCY_PCT:
+    if diff is not None and abs(diff) > SEVERE_DISCREPANCY_PCT:
         return "riesgo"
     return "advertencia"
 
@@ -447,4 +444,110 @@ def render_cross_validation_table(comparisons: list) -> None:
         df[visible_cols].style.apply(_style_cross_validation_row, axis=1),
         use_container_width=True,
         hide_index=True,
+    )
+
+
+# --- Resumen SEC en Watchlist y Modo Auditoría (Sub-fase 3c) ----------------
+# Consume modulos.sec_validation_store.sec_validation_summary(ticker) — el
+# resumen compacto que persiste el job nocturno (Sub-fase 3b). Reutiliza el
+# mismo vocabulario de color que la tabla de verificación cruzada (favorable/
+# riesgo/advertencia/informativo) más un quinto estado, "sin_verificar", que
+# NUNCA se confunde con "favorable": un ticker que jamás ha tenido una corrida
+# correcta (ni el job nocturno ni Modo Auditoría en vivo) no es lo mismo que
+# uno que se verificó y coincide — mismo principio de "nunca cero artificial"
+# que en los guards financieros, aplicado aquí a "ausencia de verificación"
+# en vez de a un valor numérico.
+
+_SEC_WATCHLIST_STATUS_LABELS = {
+    "favorable": "✅ Coincide",
+    "advertencia": "🟡 {n} discrepancia(s)",
+    "riesgo": "🔴 {n} discrepancia(s)",
+    "informativo": "🔵 Periodo no alineado",
+    "sin_verificar": "⚪ Sin verificar",
+}
+
+
+def sec_validation_watchlist_status(summary: dict) -> str:
+    """Traduce el resumen compacto (``last_sec_validation`` en watchlist.json,
+    vía ``sec_validation_summary``) al estado visual de la columna "SEC" en
+    Watchlist.
+
+    ``sin_verificar`` cubre tanto "nunca se intentó" como "se intentó pero
+    nunca tuvo éxito" — en ambos casos no hay ningún resultado real que
+    mostrar, así que es deliberadamente el mismo estado (gris), distinto de
+    los otros cuatro que sí reflejan un resultado real.
+    """
+
+    if not summary or not summary.get("last_successful_check_at"):
+        return "sin_verificar"
+
+    discrepancy_count = int(summary.get("discrepancy_count") or 0)
+    period_misaligned_count = int(summary.get("period_misaligned_count") or 0)
+
+    if discrepancy_count > 0:
+        worst = summary.get("worst_diff_pct")
+        if worst is not None and abs(worst) > SEVERE_DISCREPANCY_PCT:
+            return "riesgo"
+        return "advertencia"
+    if period_misaligned_count > 0:
+        return "informativo"
+    return "favorable"
+
+
+def sec_validation_watchlist_label(summary: dict) -> str:
+    """Texto de la columna "SEC" en Watchlist (mismo patrón que Bucket Score
+    en modulos/watchlist.py: emoji + texto corto, sin estilo de celda)."""
+
+    status = sec_validation_watchlist_status(summary)
+    template = _SEC_WATCHLIST_STATUS_LABELS[status]
+    if status in ("advertencia", "riesgo"):
+        return template.format(n=int(summary.get("discrepancy_count") or 0))
+    return template
+
+
+def format_last_sec_validation_caption(summary: dict) -> str:
+    """Caption sobre el toggle "Verificar contra SEC EDGAR" (Modo Auditoría,
+    Auditoría Forense) resumiendo la última corrida del job nocturno sin
+    disparar el fetch en vivo — ese toggle sigue funcionando exactamente
+    igual, esto es solo información adicional.
+
+    Distingue explícitamente tres situaciones que nunca deben confundirse:
+    nunca intentado, intentado pero sin éxito nunca (se ve el código de
+    fallo, no un resultado inventado), y con éxito (se ve el resultado real,
+    con una nota aparte si el intento MÁS RECIENTE falló después de ese
+    último éxito — para no aparentar más frescura de la que hay).
+    """
+
+    if not summary or not summary.get("last_attempt_at"):
+        return "Nunca verificado por el job nocturno — usa el interruptor para verificar en vivo ahora."
+
+    if not summary.get("last_successful_check_at"):
+        codigo = summary.get("last_attempt_status_code") or "desconocido"
+        return (
+            f"El job nocturno lo intentó el {summary.get('last_attempt_at')} pero falló ({codigo}); "
+            "nunca se completó una verificación correcta — usa el interruptor para verificar en vivo."
+        )
+
+    discrepancias = int(summary.get("discrepancy_count") or 0)
+    periodo_no_alineado = int(summary.get("period_misaligned_count") or 0)
+    if discrepancias == 0 and periodo_no_alineado == 0:
+        detalle = "sin discrepancias"
+    else:
+        partes = []
+        if discrepancias:
+            partes.append(f"{discrepancias} discrepancia(s)")
+        if periodo_no_alineado:
+            partes.append(f"{periodo_no_alineado} con periodo no alineado")
+        detalle = " y ".join(partes)
+
+    aviso_fallo = ""
+    if summary.get("last_attempt_status_code"):
+        aviso_fallo = (
+            f" (aviso: el intento más reciente, {summary.get('last_attempt_at')}, falló — "
+            "esto es lo último que se pudo verificar con éxito)"
+        )
+
+    return (
+        f"Última validación nocturna: {summary.get('last_successful_check_at')}, {detalle}{aviso_fallo} "
+        "— pulsa el interruptor para re-verificar en vivo."
     )

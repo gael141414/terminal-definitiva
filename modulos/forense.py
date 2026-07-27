@@ -15,7 +15,8 @@ from modulos.data_provider_errors import (
     TIMEOUT,
 )
 from modulos.sec_fmp_cross_validation import comparar_estados_financieros
-from modulos.ui_components import render_cross_validation_table
+from modulos.sec_validation_store import sec_validation_summary
+from modulos.ui_components import format_last_sec_validation_caption, render_cross_validation_table
 from modulos.utils import analizar_sentimiento_noticias
 
 logger = logging.getLogger(__name__)
@@ -214,5 +215,6 @@ def ejecutar_auditoria_forense(ticker_input, is_df, bs_df, cf_df, res_val, res_b
         "reales presentados en SEC EDGAR y los contrasta con los de FMP. Opcional: la consulta "
         "a SEC EDGAR tarda varios segundos y no se ejecuta salvo que la actives."
     )
+    st.caption(format_last_sec_validation_caption(sec_validation_summary(ticker_input)))
     if st.toggle("Verificar contra SEC EDGAR", key=f"modo_auditoria_sec_{ticker_input}"):
         _renderizar_verificacion_sec(ticker_input, is_df, bs_df, cf_df)

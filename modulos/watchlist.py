@@ -8,6 +8,8 @@ import streamlit as st
 from modulos.watchlist_alerts import alert_summary, build_watchlist_alerts
 from modulos.analysis_store import score_evolution_summary, score_history_for_ticker
 from modulos.quotes import fetch_quotes_with_fallback
+from modulos.sec_validation_store import sec_validation_summary
+from modulos.ui_components import sec_validation_watchlist_label
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -236,6 +238,7 @@ def _build_watchlist_row(
         "Ajuste Calidad": quality_adjusted,
         "Quality Gate": analysis.get("score_quality_gate_reason") or "-",
         "Red Flags": red_flags_count,
+        "SEC": sec_validation_watchlist_label(sec_validation_summary(ticker)),
         "Margen Seguridad": analysis.get("margin_of_safety"),
         "Régimen Valoración": analysis.get("valuation_regime", "-"),
         "Comparador": analysis.get("competitor", "-"),

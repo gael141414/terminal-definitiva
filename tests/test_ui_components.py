@@ -284,3 +284,107 @@ def test_render_cross_validation_table_no_vacio_no_llama_a_info(monkeypatch):
     monkeypatch.setattr(ui_components.st, "caption", lambda *a, **k: None)
     monkeypatch.setattr(ui_components.st, "dataframe", lambda *a, **k: None)
     ui_components.render_cross_validation_table([_comp("coincide")])
+
+
+# ---------------------------------------------------------------------------
+# Resumen SEC en Watchlist y Modo Auditoría (Sub-fase 3c)
+# ---------------------------------------------------------------------------
+
+
+def test_sec_watchlist_status_nunca_verificado_summary_vacio():
+    assert ui_components.sec_validation_watchlist_status({}) == "sin_verificar"
+
+
+def test_sec_watchlist_status_intento_fallido_nunca_tuvo_exito():
+    summary = {"last_attempt_at": "2026-07-27T02:00:00+00:00", "last_attempt_status_code": "rate_limited"}
+    assert ui_components.sec_validation_watchlist_status(summary) == "sin_verificar"
+
+
+def test_sec_watchlist_status_exito_sin_discrepancias_es_favorable():
+    summary = {"last_successful_check_at": "2026-07-27T02:00:00+00:00", "discrepancy_count": 0, "period_misaligned_count": 0}
+    assert ui_components.sec_validation_watchlist_status(summary) == "favorable"
+
+
+def test_sec_watchlist_status_discrepancia_leve_es_advertencia():
+    summary = {"last_successful_check_at": "2026-07-27T02:00:00+00:00", "discrepancy_count": 2, "worst_diff_pct": 5.0}
+    assert ui_components.sec_validation_watchlist_status(summary) == "advertencia"
+
+
+def test_sec_watchlist_status_discrepancia_severa_es_riesgo():
+    summary = {"last_successful_check_at": "2026-07-27T02:00:00+00:00", "discrepancy_count": 3, "worst_diff_pct": 22.0}
+    assert ui_components.sec_validation_watchlist_status(summary) == "riesgo"
+
+
+def test_sec_watchlist_status_periodo_no_alineado_es_informativo():
+    summary = {"last_successful_check_at": "2026-07-27T02:00:00+00:00", "discrepancy_count": 0, "period_misaligned_count": 1}
+    assert ui_components.sec_validation_watchlist_status(summary) == "informativo"
+
+
+def test_sec_watchlist_label_incluye_conteo_en_discrepancia():
+    summary = {"last_successful_check_at": "2026-07-27T02:00:00+00:00", "discrepancy_count": 3, "worst_diff_pct": 22.0}
+    assert ui_components.sec_validation_watchlist_label(summary) == "🔴 3 discrepancia(s)"
+
+
+def test_sec_watchlist_label_sin_verificar_no_se_confunde_con_coincide():
+    label_sin_verificar = ui_components.sec_validation_watchlist_label({})
+    label_coincide = ui_components.sec_validation_watchlist_label(
+        {"last_successful_check_at": "x", "discrepancy_count": 0, "period_misaligned_count": 0}
+    )
+    assert label_sin_verificar != label_coincide
+    assert "Sin verificar" in label_sin_verificar
+    assert "Coincide" in label_coincide
+
+
+def test_caption_nunca_intentado():
+    texto = ui_components.format_last_sec_validation_caption({})
+    assert "Nunca verificado" in texto
+
+
+def test_caption_intento_fallido_sin_exito_previo_muestra_codigo():
+    summary = {"last_attempt_at": "2026-07-27T02:00:00+00:00", "last_attempt_status_code": "invalid_ticker"}
+    texto = ui_components.format_last_sec_validation_caption(summary)
+    assert "invalid_ticker" in texto
+    assert "nunca se completó" in texto.lower()
+
+
+def test_caption_exito_sin_discrepancias():
+    summary = {
+        "last_attempt_at": "2026-07-27T02:00:00+00:00",
+        "last_attempt_status_code": None,
+        "last_successful_check_at": "2026-07-27T02:00:00+00:00",
+        "discrepancy_count": 0,
+        "period_misaligned_count": 0,
+    }
+    texto = ui_components.format_last_sec_validation_caption(summary)
+    assert "2026-07-27T02:00:00+00:00" in texto
+    assert "sin discrepancias" in texto
+
+
+def test_caption_exito_con_discrepancias():
+    summary = {
+        "last_attempt_at": "2026-07-27T02:00:00+00:00",
+        "last_attempt_status_code": None,
+        "last_successful_check_at": "2026-07-27T02:00:00+00:00",
+        "discrepancy_count": 2,
+        "period_misaligned_count": 1,
+    }
+    texto = ui_components.format_last_sec_validation_caption(summary)
+    assert "2 discrepancia(s)" in texto
+    assert "1 con periodo no alineado" in texto
+
+
+def test_caption_avisa_si_el_intento_mas_reciente_fallo_tras_un_exito_previo():
+    """No debe aparentar mas frescura de la que hay: si hubo un exito pero el
+    intento MAS RECIENTE fallo, el caption debe decirlo, no solo mostrar el
+    resultado antiguo como si fuera de ahora mismo."""
+    summary = {
+        "last_successful_check_at": "2026-07-20T02:00:00+00:00",
+        "discrepancy_count": 1,
+        "period_misaligned_count": 0,
+        "last_attempt_at": "2026-07-27T02:00:00+00:00",
+        "last_attempt_status_code": "timeout",
+    }
+    texto = ui_components.format_last_sec_validation_caption(summary)
+    assert "2026-07-20T02:00:00+00:00" in texto
+    assert "falló" in texto
+    assert "2026-07-27T02:00:00+00:00" in texto

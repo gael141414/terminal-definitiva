@@ -82,6 +82,19 @@ ALL_CLASSIFICATIONS = {MATCH, DISCREPANCY, NOT_COMPARABLE, PERIOD_MISALIGNED}
 DEFAULT_TOLERANCE_PCT = 2.0
 DEFAULT_PERIOD_TOLERANCE_DAYS = 20
 
+# ±10% relativo como corte discrepancia leve/grave — usado tanto por la
+# presentación (modulos/ui_components.py, tabla de Modo Auditoría y columna
+# "SEC" de Watchlist) como por la severidad de alertas (modulos/watchlist_alerts.py):
+# vive aquí, en el módulo de dominio, no en una capa de presentación, para que
+# ambos consumidores compartan una única fuente de verdad. El cruce empírico ya
+# hecho (Sub-fases 0 y 1) muestra que FMP y SEC coinciden casi exactos para una
+# empresa bien cubierta como Apple, así que una diferencia por encima de la
+# banda de tolerancia (±2%) pero todavía moderada (hasta ±10%) es más probable
+# que sea categorización de partidas o redondeo agresivo que un error real de
+# datos; por encima de ±10% ya es difícil de explicar por ruido y merece la
+# señal de severidad alta.
+SEVERE_DISCREPANCY_PCT = 10.0
+
 
 @dataclass(frozen=True)
 class MetricComparison:
