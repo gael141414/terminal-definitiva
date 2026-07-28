@@ -18,10 +18,10 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
-from balance_analyzer import analizar_balance
-from cashflow_analyzer import analizar_flujo_efectivo
-from income_analyzer import analizar_cuenta_resultados
-from valuator import valorar_empresa
+from financials.balance_analyzer import analizar_balance
+from financials.cashflow_analyzer import analizar_flujo_efectivo
+from financials.income_analyzer import analizar_cuenta_resultados
+from financials.valuator import valorar_empresa
 from modulos.investment_thesis import build_investment_thesis
 from modulos.scoring_engine import calcular_valuequant_score
 from modulos.utils import calcular_score_buffett, cargar_datos

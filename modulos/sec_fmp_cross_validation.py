@@ -68,9 +68,9 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from balance_analyzer import analizar_balance
-from cashflow_analyzer import analizar_flujo_efectivo
-from income_analyzer import _statement_index_as_years, analizar_cuenta_resultados
+from financials.balance_analyzer import analizar_balance
+from financials.cashflow_analyzer import analizar_flujo_efectivo
+from financials.income_analyzer import _statement_index_as_years, analizar_cuenta_resultados
 
 MATCH = "coincide"
 DISCREPANCY = "discrepancia"

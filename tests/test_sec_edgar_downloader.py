@@ -39,11 +39,11 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 import downloader
-from balance_analyzer import analizar_balance
-from cashflow_analyzer import analizar_flujo_efectivo
+from financials.balance_analyzer import analizar_balance
+from financials.cashflow_analyzer import analizar_flujo_efectivo
 from edgar import CompanyNotFoundError
 from edgar.httprequests import TooManyRequestsError
-from income_analyzer import analizar_cuenta_resultados, extraer_dato_robusto
+from financials.income_analyzer import analizar_cuenta_resultados, extraer_dato_robusto
 
 FIXTURES = PROJECT_ROOT / "tests" / "fixtures" / "sec_edgar"
 

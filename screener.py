@@ -4,9 +4,9 @@ import requests
 import yfinance as yf
 
 from downloader import obtener_estados_financieros
-from income_analyzer import analizar_cuenta_resultados
-from balance_analyzer import analizar_balance
-from cashflow_analyzer import analizar_flujo_efectivo
+from financials.income_analyzer import analizar_cuenta_resultados
+from financials.balance_analyzer import analizar_balance
+from financials.cashflow_analyzer import analizar_flujo_efectivo
 from modulos.utils import calcular_score_buffett
 from modulos.yahoo_resilience import safe_yfinance_info
 

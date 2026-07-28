@@ -3,8 +3,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from balance_analyzer import _tasa_fiscal_efectiva
-from income_analyzer import _fmp_series, _is_fmp_statement, _safe_ratio, _years_from_statement, extraer_dato_robusto
+from financials.balance_analyzer import _tasa_fiscal_efectiva
+from financials.income_analyzer import _fmp_series, _is_fmp_statement, _safe_ratio, _years_from_statement, extraer_dato_robusto
 from modulos.fmp_api import obtener_cotizacion_fmp
 
 

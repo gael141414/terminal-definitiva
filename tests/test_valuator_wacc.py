@@ -25,7 +25,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from valuator import _calcular_wacc, _last_valid_allow_zero, valorar_empresa
+from financials.valuator import _calcular_wacc, _last_valid_allow_zero, valorar_empresa
 
 
 # ---------------------------------------------------------------------------
@@ -155,7 +155,7 @@ def _fmp_frames_con_deuda():
 
 
 def test_valorar_empresa_fmp_expone_wacc_y_lo_usa_para_dcf(monkeypatch):
-    import valuator
+    import financials.valuator as valuator
 
     monkeypatch.setattr(valuator, "obtener_cotizacion_fmp", lambda ticker: 70.0)
 
@@ -170,7 +170,7 @@ def test_valorar_empresa_fmp_expone_wacc_y_lo_usa_para_dcf(monkeypatch):
     assert res["total_debt"] == pytest.approx(15e9)
 
     # dcf_value debe coincidir con calcular_dcf_fcf_por_accion usando wacc, no CAPM.
-    from valuator import calcular_dcf_fcf_por_accion
+    from financials.valuator import calcular_dcf_fcf_por_accion
 
     esperado = calcular_dcf_fcf_por_accion(
         res["fcf_per_share"], res["crecimiento_sostenible"], res["wacc"], res["terminal_growth"],

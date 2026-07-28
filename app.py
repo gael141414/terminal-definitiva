@@ -9,10 +9,10 @@ st.set_page_config(
 
 import html
 
-from income_analyzer import analizar_cuenta_resultados
-from balance_analyzer import analizar_balance
-from cashflow_analyzer import analizar_flujo_efectivo
-from valuator import valorar_empresa
+from financials.income_analyzer import analizar_cuenta_resultados
+from financials.balance_analyzer import analizar_balance
+from financials.cashflow_analyzer import analizar_flujo_efectivo
+from financials.valuator import valorar_empresa
 from modulos.config import CONFIG
 from modulos.app_assets import asset_to_data_uri, strip_visual_prefix
 from modulos.app_theme import inject_terminal_theme

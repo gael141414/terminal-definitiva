@@ -76,10 +76,10 @@ def _style_vq_dataframe(df: pd.DataFrame, *, color_func=None, hide_index: bool =
     return styler
 
 # Importamos tus analizadores matemáticos personalizados (que tienes en archivos separados)
-from income_analyzer import analizar_cuenta_resultados
-from balance_analyzer import analizar_balance
-from cashflow_analyzer import analizar_flujo_efectivo
-from valuator import calcular_crecimiento_implicito_dcf, calcular_dcf_fcf_por_accion, valorar_empresa
+from financials.income_analyzer import analizar_cuenta_resultados
+from financials.balance_analyzer import analizar_balance
+from financials.cashflow_analyzer import analizar_flujo_efectivo
+from financials.valuator import calcular_crecimiento_implicito_dcf, calcular_dcf_fcf_por_accion, valorar_empresa
 from modulos.utils import obtener_valoracion_sectorial, cargar_datos, calcular_score_buffett
 from modulos.scoring_engine import render_valuequant_score_card
 from modulos.ui_components import render_kpi_card

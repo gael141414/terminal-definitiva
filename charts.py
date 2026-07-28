@@ -1327,7 +1327,7 @@ def plot_football_field(ticker, precio_actual, res_val):
         if low_52 is None: low_52 = precio_actual * 0.8
         if high_52 is None: high_52 = precio_actual * 1.2
         
-        from valuator import calcular_dcf_fcf_por_accion
+        from financials.valuator import calcular_dcf_fcf_por_accion
 
         fcf_ps = res_val.get('fcf_per_share') or res_val.get('eps_actual', 0)
         terminal_g = res_val.get('terminal_growth', 0.025)

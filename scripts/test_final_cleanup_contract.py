@@ -25,7 +25,7 @@ def run_contract_checks() -> list[str]:
     screener = _read("screener.py")
     assert_true(screener.count('if __name__ == "__main__":') == 1, "screener.py debe tener un único bloque main")
     assert_true("import os" not in screener, "screener.py no debe conservar import os no usado")
-    assert_true("from valuator import valorar_empresa" not in screener, "screener.py no debe conservar valorar_empresa no usado")
+    assert_true("from financials.valuator import valorar_empresa" not in screener, "screener.py no debe conservar valorar_empresa no usado")
     checks.append("screener cleanup")
 
     for required in [

@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from income_analyzer import (
+from financials.income_analyzer import (
     _fmp_series,
     _is_fmp_statement,
     _safe_ratio,
