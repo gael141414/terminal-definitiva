@@ -4,8 +4,13 @@ Verifica contra el mockup docs/design/research_core_navegacion_kpi.html
 (sección 1a) y la nota de conteo documentada en modulos/tool_consolidation.py:
 Research Core no es una de las 6 tarjetas de grupo (es la puerta de entrada
 jerárquicamente superior), y las 34 herramientas restantes se reparten en
-Market Terminal (5), Discovery Engine (8), Historical Lab (4), Portfolio &
-Risk (6), Automatización & Watchlist (7) y Utilidades & Post-MVP (4).
+Market Terminal (5), Discovery Engine (8), Historical Lab (3), Portfolio &
+Risk (6), Automatización & Watchlist (7) y Utilidades & Post-MVP (5).
+
+Historical Lab pasó de 4 a 3 y Utilidades & Post-MVP de 4 a 5 en la Fase 7:
+"Predictor de Techos/Suelos" se renombró a "Extremos de Volatilidad (Z-Score)"
+(su texto original prometía una probabilidad de reversión sin backtest real
+detrás) y se trasladó ahí, con el mismo status oculto que sus vecinos.
 """
 
 from __future__ import annotations
@@ -30,10 +35,10 @@ from modulos.tool_router import COMPANY_TOOL_ROUTES, INDEPENDENT_TOOL_ROUTES
 EXPECTED_GROUP_COUNTS = {
     "market_terminal": 5,
     "discovery_engine": 8,
-    "historical_lab": 4,
+    "historical_lab": 3,  # Predictor de Techos/Suelos se trasladó a utilities_postmvp (Fase 7)
     "portfolio_risk": 6,
     "automation_watchlist": 7,
-    "utilities_postmvp": 4,  # mockup pedía 5; ver nota de conteo en tool_consolidation.py
+    "utilities_postmvp": 5,  # +1 tras el traslado anterior; mockup original pedía 5 aquí
 }
 
 
@@ -65,6 +70,11 @@ def test_conteo_por_grupo_coincide_con_lo_documentado():
 
 
 def test_utilidades_postmvp_oculto_salvo_modo_completo():
+    """Oculto por defecto en Consolidado, con una excepción desde la Fase 7:
+    el Chatbot Inversor se promovió a status="merge" (era, de los cuatro
+    módulos históricamente post-MVP, el que tenía más sustancia real: corpus
+    RAG real + LLM configurado) — sigue agrupado aquí visualmente, pero ya
+    es visible en Consolidado, a diferencia de sus vecinos."""
     mvp_labels = {str(t["label"]) for t in obtener_catalogo_por_modo("mvp")}
     consolidated_labels = {str(t["label"]) for t in obtener_catalogo_por_modo("consolidated")}
     complete_labels = {str(t["label"]) for t in obtener_catalogo_por_modo("complete")}
@@ -72,10 +82,14 @@ def test_utilidades_postmvp_oculto_salvo_modo_completo():
     utilities_labels = {
         label for label, meta in TOOL_CONSOLIDATION.items() if meta["group"] == "utilities_postmvp"
     }
-    assert len(utilities_labels) == 4
+    assert len(utilities_labels) == 5
+
+    promoted_label = "🤖 Chatbot Inversor"
+    still_hidden_labels = utilities_labels - {promoted_label}
 
     assert not (utilities_labels & mvp_labels), "Utilidades & Post-MVP no debe verse en modo MVP"
-    assert not (utilities_labels & consolidated_labels), "Utilidades & Post-MVP no debe verse en modo Consolidado"
+    assert not (still_hidden_labels & consolidated_labels), "Utilidades & Post-MVP (salvo el Chatbot promovido) no debe verse en modo Consolidado"
+    assert promoted_label in consolidated_labels, "El Chatbot Inversor debe verse en modo Consolidado tras su promoción (Fase 7)"
     assert utilities_labels <= complete_labels, "Utilidades & Post-MVP debe verse completo en modo Completo"
 
 
@@ -100,7 +114,7 @@ def test_no_hay_funcionalidad_eliminada_respecto_al_catalogo_original():
         "🧭 Mapa del Producto", "🧩 Research Core", "📊 Resumen Ejecutivo", "🔎 Análisis Fundamental",
         "🧠 Auditoría Forense", "🔮 Proyección IA y Catalizadores", "🎓 Visor de Gurús (Estrategias)",
         "📈 Técnico y Opciones", "🧮 Opciones Avanzadas (BSM)", "🌍 Radar Macro y Sectores",
-        "🕰️ Reloj Económico (Regímenes)", "🚰 Monitor de Liquidez (FED)", "🔭 Predictor de Techos/Suelos",
+        "🕰️ Reloj Económico (Regímenes)", "🚰 Monitor de Liquidez (FED)", "📊 Extremos de Volatilidad (Z-Score)",
         "🦢 Test Cisnes Negros (Crisis)", "🛡️ Radar de Coberturas (Hedging)", "⏳ Máquina del Tiempo (Backtest)",
         "🧪 Backtesting Estrategias", "⛏️ Minero de Small Caps", "🚀 Radar Multibaggers (Small/Mid Caps)",
         "🕵️‍♂️ Rastreador de Insiders (SEC)", "🕵️ Alt Data & Congreso", "🩻 Radiografía de ETFs (X-Ray)",

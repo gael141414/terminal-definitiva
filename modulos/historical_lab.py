@@ -1,8 +1,10 @@
 """Historical Lab: validación histórica de estrategias y score.
 
 Grupo de navegación consolidado (docs/design/research_core_navegacion_kpi.html,
-sección 1a): backtesting, máquina del tiempo, stress test de crisis y predictor
-de techos/suelos. Las herramientas siguen siendo módulos propios enrutados por
+sección 1a): backtesting, máquina del tiempo y stress test de crisis (el
+antiguo "Predictor de Techos/Suelos" se renombró a "Extremos de Volatilidad
+(Z-Score)" y pasó a Utilidades & Post-MVP en la Fase 7). Las herramientas
+siguen siendo módulos propios enrutados por
 modulos.tool_router; este módulo expone la tarjeta de grupo que usa la home
 (modulos.app_home) y sirve de punto de referencia único para el target_module
 declarado en modulos.tool_consolidation.

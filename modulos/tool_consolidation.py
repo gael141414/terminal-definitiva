@@ -122,11 +122,12 @@ TOOL_CONSOLIDATION: dict[str, dict[str, str | int | bool]] = {
     "🩻 Radiografía de ETFs (X-Ray)": {"group": "discovery_engine", "status": "merge", "order": 70, "visible_in_mvp": False},
     "🔮 Proyección IA y Catalizadores": {"group": "discovery_engine", "status": "merge", "order": 80, "visible_in_mvp": True},
 
-    # Historical Lab (4)
+    # Historical Lab (3 — Predictor de Techos/Suelos se renombró y pasó a
+    # Utilidades & Post-MVP, ver Fase 7: su texto prometía una probabilidad de
+    # reversión que no estaba respaldada por ningún backtest real)
     "⏳ Máquina del Tiempo (Backtest)": {"group": "historical_lab", "status": "merge", "order": 10, "visible_in_mvp": True},
     "🧪 Backtesting Estrategias": {"group": "historical_lab", "status": "core", "order": 20, "visible_in_mvp": True},
     "🦢 Test Cisnes Negros (Crisis)": {"group": "historical_lab", "status": "merge", "order": 30, "visible_in_mvp": False},
-    "🔭 Predictor de Techos/Suelos": {"group": "historical_lab", "status": "merge", "order": 40, "visible_in_mvp": False},
 
     # Portfolio & Risk (6)
     "📚 Análisis Guardados": {"group": "portfolio_risk", "status": "core", "order": 10, "visible_in_mvp": True},
@@ -145,11 +146,17 @@ TOOL_CONSOLIDATION: dict[str, dict[str, str | int | bool]] = {
     "🔎 Análisis Fundamental": {"group": "automation_watchlist", "status": "merge", "order": 50, "visible_in_mvp": True},
     "🧠 Earnings Call NLP": {"group": "automation_watchlist", "status": "merge", "order": 60, "visible_in_mvp": True},
 
-    # Utilidades & Post-MVP (4 — el mockup pedía 5; ver nota de conteo en el docstring del módulo)
+    # Utilidades & Post-MVP (5 — el mockup pedía 5 para este grupo; ver nota de
+    # conteo original en el docstring del módulo. Chatbot Inversor se promovió
+    # de vuelta a "merge" en la Fase 7 — sigue agrupado aquí visualmente, pero
+    # ya es visible en modo Consolidado: es el módulo con más sustancia real
+    # de los cuatro históricamente "post-MVP" (corpus RAG real + LLM
+    # configurado), no tenía sentido mantenerlo tan escondido como los demás.
     "🧭 Mapa del Producto": {"group": "utilities_postmvp", "status": "utility", "order": 10, "visible_in_mvp": False},
     "🎓 Visor de Gurús (Estrategias)": {"group": "utilities_postmvp", "status": "assistant", "order": 20, "visible_in_mvp": False},
-    "🤖 Chatbot Inversor": {"group": "utilities_postmvp", "status": "assistant", "order": 30, "visible_in_mvp": False},
+    "🤖 Chatbot Inversor": {"group": "utilities_postmvp", "status": "merge", "order": 30, "visible_in_mvp": False},
     "💡 Consejos y Mentoría": {"group": "utilities_postmvp", "status": "assistant", "order": 40, "visible_in_mvp": False},
+    "📊 Extremos de Volatilidad (Z-Score)": {"group": "utilities_postmvp", "status": "assistant", "order": 50, "visible_in_mvp": False},
 }
 
 

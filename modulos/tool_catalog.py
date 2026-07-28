@@ -21,7 +21,7 @@ _RAW_TOOL_CATALOG = [
     {"label": "🌍 Radar Macro y Sectores", "bloque": "📈 Mercado y Timing", "input_mode": "company", "descripcion": "Rotación sectorial y comparación con el mercado.", "strategic_group": "market"},
     {"label": "🕰️ Reloj Económico (Regímenes)", "bloque": "📈 Mercado y Timing", "input_mode": "standalone", "descripcion": "Lectura del ciclo económico por regímenes.", "strategic_group": "market"},
     {"label": "🚰 Monitor de Liquidez (FED)", "bloque": "📈 Mercado y Timing", "input_mode": "standalone", "descripcion": "Condiciones de liquidez, tipos y presión monetaria.", "strategic_group": "market"},
-    {"label": "🔭 Predictor de Techos/Suelos", "bloque": "📈 Mercado y Timing", "input_mode": "company", "descripcion": "Indicadores cuantitativos de exceso o agotamiento.", "strategic_group": "market"},
+    {"label": "📊 Extremos de Volatilidad (Z-Score)", "bloque": "📈 Mercado y Timing", "input_mode": "company", "descripcion": "Desviación estadística del precio frente a su media de 200 sesiones.", "strategic_group": "market"},
     {"label": "🦢 Test Cisnes Negros (Crisis)", "bloque": "🛡️ Riesgo y Defensa", "input_mode": "company", "descripcion": "Stress test ante escenarios extremos.", "strategic_group": "risk"},
     {"label": "🛡️ Radar de Coberturas (Hedging)", "bloque": "🛡️ Riesgo y Defensa", "input_mode": "company", "descripcion": "Ideas de cobertura y protección de posiciones.", "strategic_group": "risk"},
     {"label": "⏳ Máquina del Tiempo (Backtest)", "bloque": "🛡️ Riesgo y Defensa", "input_mode": "company", "descripcion": "Simulación histórica para evaluar robustez.", "strategic_group": "lab"},

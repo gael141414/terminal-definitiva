@@ -59,7 +59,7 @@ COMPANY_TOOL_ROUTES: dict[str, tuple[str, str]] = {
     "📈 Técnico y Opciones": ("modulos.tecnico", "ejecutar_tecnico_y_opciones"),
     "🧮 Opciones Avanzadas (BSM)": ("modulos.derivados", "render_derivados"),
     "🧠 Auditoría Forense": ("modulos.forense", "ejecutar_auditoria_forense"),
-    "🔭 Predictor de Techos/Suelos": ("modulos.predictor", "ejecutar_predictor_techos_suelos"),
+    "📊 Extremos de Volatilidad (Z-Score)": ("modulos.predictor", "ejecutar_predictor_techos_suelos"),
     "🔮 Proyección IA y Catalizadores": ("modulos.proyeccion", "ejecutar_proyeccion"),
     "⏳ Máquina del Tiempo (Backtest)": ("modulos.backtest", "ejecutar_maquina_del_tiempo"),
     "🧪 Backtesting Estrategias": ("modulos.backtester", "render_backtesting_engine"),

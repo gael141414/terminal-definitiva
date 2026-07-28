@@ -38,7 +38,7 @@ def calcular_z_score(ticker):
         return None
 
 def ejecutar_predictor_techos_suelos(ticker_input):
-    st.markdown(f"### 🔭 Predictor de Ciclos Extremos: {ticker_input}")
+    st.markdown(f"### 📊 Extremos de Volatilidad (Z-Score): {ticker_input}")
     
     with st.spinner("Calculando zonas de probabilidad estadística..."):
         df = calcular_z_score(ticker_input)
@@ -67,9 +67,19 @@ def ejecutar_predictor_techos_suelos(ticker_input):
             
             with c3:
                 if color_msg == "error":
-                    st.error("Probabilidad de reversión a la baja: >95%")
+                    st.error(
+                        "Desviación estadística inusual: el precio está por encima de +2σ de su media "
+                        "de 200 sesiones, fuera del rango donde se concentra ~95% de los movimientos "
+                        "históricos recientes. Esto no es una probabilidad de reversión — solo indica que "
+                        "el nivel actual es estadísticamente atípico."
+                    )
                 elif color_msg == "success":
-                    st.success("Probabilidad de rebote al alza: >95%")
+                    st.success(
+                        "Desviación estadística inusual: el precio está por debajo de -2σ de su media "
+                        "de 200 sesiones, fuera del rango donde se concentra ~95% de los movimientos "
+                        "históricos recientes. Esto no es una probabilidad de rebote — solo indica que "
+                        "el nivel actual es estadísticamente atípico."
+                    )
                 else:
                     st.info("El precio oscila dentro de su volatilidad normal.")
 

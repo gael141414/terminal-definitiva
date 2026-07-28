@@ -34,7 +34,7 @@ TOOL_UI_ICONS = {
     "🌍 Radar Macro y Sectores": "globe2",
     "🕰️ Reloj Económico (Regímenes)": "clock-history",
     "🚰 Monitor de Liquidez (FED)": "bank",
-    "🔭 Predictor de Techos/Suelos": "bullseye",
+    "📊 Extremos de Volatilidad (Z-Score)": "activity",
     "🦢 Test Cisnes Negros (Crisis)": "exclamation-triangle",
     "🛡️ Radar de Coberturas (Hedging)": "shield-check",
     "⏳ Máquina del Tiempo (Backtest)": "hourglass-split",
