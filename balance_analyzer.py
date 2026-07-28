@@ -12,6 +12,22 @@ from income_analyzer import (
 )
 
 
+def _tasa_fiscal_efectiva(tax_expense: pd.Series, ebt: pd.Series) -> pd.Series:
+    """Tasa fiscal efectiva estimada: ``tax_expense / EBT``, acotada a
+    [0%, 35%] con fallback al 21% (tipo federal estatutario US) cuando no es
+    derivable (EBT<=0, datos ausentes o fuera de rango plausible).
+
+    Es un proxy interno para NOPAT/ROIC (y, desde la Fase 7, para el término
+    ``(1-T)`` del WACC en valuator.py) — no es la tasa efectiva real
+    reportada por la empresa y no debe presentarse como tal en la UI. Vive
+    aquí (no duplicada) porque es la misma fórmula que ya usaban ambas ramas
+    de ``analizar_balance``; valuator.py la reutiliza importándola en vez de
+    reimplementarla.
+    """
+    tax_rate = (tax_expense / ebt.replace(0, np.nan)).replace([np.inf, -np.inf], np.nan)
+    return tax_rate.clip(lower=0.0, upper=0.35).fillna(0.21)
+
+
 def _is_fmp_balance(df: pd.DataFrame | None) -> bool:
     if df is None or df.empty:
         return False
@@ -112,8 +128,7 @@ def analizar_balance(
         df_bal_ratios["DuPont: Rotación Activos"] = _safe_ratio(ventas, activos_avg)
         df_bal_ratios["DuPont: Apalancamiento"] = _safe_ratio(activos_avg, equity_avg, positive_denominator=True)
 
-        tax_rate = (tax_expense / ebt.replace(0, np.nan)).replace([np.inf, -np.inf], np.nan)
-        tax_rate = tax_rate.clip(lower=0.0, upper=0.35).fillna(0.21)
+        tax_rate = _tasa_fiscal_efectiva(tax_expense, ebt)
         nopat = op_income * (1 - tax_rate)
 
         # Capital invertido = Deuda financiera + Patrimonio - Caja (fórmula única,
@@ -212,7 +227,7 @@ def _analizar_balance_legacy(
         activos_avg = _average_balance_series(activos)
         # Tasa fiscal: mismo proxy estimado que la ruta FMP (ver docstring de
         # analizar_balance); solo para NOPAT interno, no para mostrar en UI.
-        tax_rate = (tax_expense / ebt.replace(0, np.nan)).replace([np.inf, -np.inf], np.nan).clip(0, 0.35).fillna(0.21)
+        tax_rate = _tasa_fiscal_efectiva(tax_expense, ebt)
         nopat = op_income * (1 - tax_rate)
 
         # Misma fórmula única que la ruta FMP: Deuda + Patrimonio - Caja,

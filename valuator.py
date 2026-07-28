@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from balance_analyzer import _tasa_fiscal_efectiva
 from income_analyzer import _fmp_series, _is_fmp_statement, _safe_ratio, _years_from_statement, extraer_dato_robusto
 from modulos.fmp_api import obtener_cotizacion_fmp
 
@@ -52,6 +53,16 @@ def _valorar_empresa_fmp(
         else pd.Series(np.nan, index=years, dtype=float)
     )
     equity = _fmp_series(bs_df, ["totalStockholdersEquity", "totalEquity"], years)
+    total_debt = _fmp_series(bs_df, ["totalDebt"], years, default=np.nan)
+    if total_debt.isna().all():
+        total_debt = (
+            _fmp_series(bs_df, ["shortTermDebt"], years, default=np.nan)
+            + _fmp_series(bs_df, ["longTermDebt"], years, default=np.nan)
+        )
+    interest_expense = _fmp_series(is_df, ["interestExpense", "interestAndDebtExpense"], years, default=np.nan).abs()
+    tax_expense = _fmp_series(is_df, ["incomeTaxExpense"], years, default=np.nan)
+    ebt = _fmp_series(is_df, ["incomeBeforeTax"], years, default=np.nan)
+    tax_rate_series = _tasa_fiscal_efectiva(tax_expense, ebt)
     shares = _first_available_series(
         [
             _fmp_series(is_df, ["weightedAverageShsOutDil", "weightedAverageShsOut"], years),
@@ -147,6 +158,21 @@ def _valorar_empresa_fmp(
     beta = 1.0
     tasa_descuento_capm = max(tasa_libre_riesgo + beta * 0.055, 0.07)
 
+    market_cap_para_wacc = market_cap if market_cap else (
+        (precio_actual * acciones_actuales) if precio_actual and acciones_actuales else None
+    )
+    total_debt_actual = _last_valid_allow_zero(total_debt)
+    interest_expense_actual = _last_valid_allow_zero(interest_expense)
+    tax_rate_actual = _last_valid_allow_zero(tax_rate_series)
+    tax_rate_actual = tax_rate_actual if tax_rate_actual is not None else 0.21
+    wacc, wacc_nota = _calcular_wacc(
+        market_cap=market_cap_para_wacc,
+        total_debt=total_debt_actual,
+        interest_expense=interest_expense_actual,
+        tax_rate=tax_rate_actual,
+        costo_capital_propio=tasa_descuento_capm,
+    )
+
     g_estimado = _crecimiento_normalizado(
         market_cap=market_cap,
         revenue_cagr=revenue_cagr,
@@ -162,8 +188,8 @@ def _valorar_empresa_fmp(
     lynch_pe = float(np.clip(g_pct + div_yield_pct, 5.0, 25.0))
     lynch_value = eps_current * lynch_pe if eps_current > 0 else 0
     owner_earnings_ps = fcf_per_share_current if fcf_per_share_current and fcf_per_share_current > 0 else eps_current
-    epv_value = owner_earnings_ps / tasa_descuento_capm if owner_earnings_ps > 0 else 0
-    dcf_value = calcular_dcf_fcf_por_accion(owner_earnings_ps, g_estimado, tasa_descuento_capm, terminal_growth)
+    epv_value = owner_earnings_ps / wacc if owner_earnings_ps > 0 else 0
+    dcf_value = calcular_dcf_fcf_por_accion(owner_earnings_ps, g_estimado, wacc, terminal_growth)
     precio_seguridad_25 = dcf_value * 0.75 if dcf_value else 0
 
     return {
@@ -185,7 +211,10 @@ def _valorar_empresa_fmp(
         "beta": beta,
         "crecimiento_sostenible": g_estimado,
         "terminal_growth": terminal_growth,
-        "tasa_descuento_capm": tasa_descuento_capm,
+        "tasa_descuento_capm": tasa_descuento_capm,  # rE (CAPM puro) — se conserva, ya no es la tasa usada para descontar
+        "wacc": float(wacc),
+        "wacc_nota": wacc_nota,
+        "total_debt": float(total_debt_actual) if total_debt_actual is not None else None,
         "graham_value": float(graham_value),
         "lynch_value": float(lynch_value),
         "lynch_pe": lynch_pe,
@@ -271,6 +300,15 @@ def _valorar_empresa_legacy(
     owner_earnings_ps = fcf_per_share_current if fcf_per_share_current and fcf_per_share_current > 0 else eps_current
     dcf_value = calcular_dcf_fcf_por_accion(owner_earnings_ps, g_estimado, tasa_descuento_capm, terminal_growth)
     lynch_pe = float(np.clip(g_pct, 5.0, 25.0))
+    # Ruta SEC/XBRL ("_legacy"): no tiene los campos normalizados de deuda e
+    # impuestos que sí expone FMP (totalDebt/interestExpense/incomeTaxExpense),
+    # así que no se calcula un WACC real aquí (fuera de alcance de esta tarea:
+    # requeriría su propia extracción por concepto XBRL). "wacc" se expone
+    # igual, alias de tasa_descuento_capm (CAPM puro), para que los llamadores
+    # (fundamental.py, app_pdf_export.py) no caigan en un valor por defecto
+    # inventado si alguna vez reciben un res_val de esta ruta.
+    wacc = tasa_descuento_capm
+    wacc_nota = "Ruta SEC/XBRL: WACC = CAPM de equity (sin extracción de deuda/impuestos en esta ruta todavía)."
 
     return {
         "año_inicio": int(str(eps.index[0])[:4]),
@@ -290,6 +328,8 @@ def _valorar_empresa_legacy(
         "crecimiento_sostenible": g_estimado,
         "terminal_growth": terminal_growth,
         "tasa_descuento_capm": tasa_descuento_capm,
+        "wacc": wacc,
+        "wacc_nota": wacc_nota,
         "graham_value": float(_graham_number(eps_current, bvps, None)),
         "lynch_value": float(eps_current * lynch_pe) if eps_current > 0 else 0,
         "lynch_pe": lynch_pe,
@@ -397,6 +437,80 @@ def _crecimiento_normalizado(
             cap = 0.12
 
     return float(np.clip(crecimiento, 0.0, cap))
+
+
+def _last_valid_allow_zero(series: pd.Series | None) -> float | None:
+    """Como ``_last_valid``, pero conserva un 0 real en vez de convertirlo en
+    None. ``_last_valid`` trata 0 como "sin dato" a propósito para precio/EPS
+    (no pueden ser 0 de forma realista) — pero deuda total o interés pagado
+    sí pueden ser genuinamente 0 (empresa sin deuda), y eso es un dato válido
+    y significativo para el WACC, no una ausencia."""
+    if series is None:
+        return None
+    clean = pd.to_numeric(series, errors="coerce").replace([np.inf, -np.inf], np.nan).dropna()
+    if clean.empty:
+        return None
+    return float(clean.iloc[-1])
+
+
+def _calcular_wacc(
+    *,
+    market_cap: float | None,
+    total_debt: float | None,
+    interest_expense: float | None,
+    tax_rate: float,
+    costo_capital_propio: float,
+) -> tuple[float, str]:
+    """WACC = E/V·rE + D/V·rD·(1-T), reutilizando datos que ya se extraen en
+    otros sitios del proyecto (no se reinventa nada: E ya se usa en el Z-Score
+    y el football field, D ya se usa en balance_analyzer.py para Deuda/Capital,
+    T ya se calculaba en balance_analyzer.py para NOPAT/ROIC).
+
+    rD (coste de deuda) se aproxima como ``interestExpense / totalDebt`` — no
+    hay un yield de bonos real disponible en este proyecto, así que es un
+    coste de deuda efectivo implícito, no una tasa de mercado.
+
+    Si hay deuda (D>0) pero falta ``interestExpense`` (dato ausente, no un
+    cero real — FMP no siempre lo desglosa), NO se asume rD=0%: eso infla el
+    WACC hacia abajo de forma artificial, exactamente el mismo problema que
+    "nunca cero artificial" en los guards financieros. En su lugar se usa un
+    proxy documentado (60% del coste de capital propio — la deuda corporativa
+    investment-grade suele costar bastante menos que el equity; 60% es una
+    aproximación conservadora estándar, no un dato de mercado real) y se
+    devuelve una nota explicándolo.
+
+    Sin ``market_cap`` no hay forma de ponderar E/D, así que se devuelve el
+    CAPM puro (100% equity) con una nota — degradación explícita, no un
+    WACC inventado sin base.
+
+    Devuelve ``(wacc, nota)``; ``nota`` es ``""`` si no hizo falta ningún
+    proxy ni degradación.
+    """
+    if market_cap is None or market_cap <= 0:
+        return costo_capital_propio, (
+            "market_cap no disponible: WACC = CAPM de equity (no se pudo ponderar estructura de capital)."
+        )
+
+    equity = float(market_cap)
+    deuda = float(total_debt) if total_debt and total_debt > 0 else 0.0
+
+    if deuda <= 0:
+        return costo_capital_propio, ""  # empresa sin deuda: WACC = coste de capital propio, sin aproximar nada
+
+    valor_total = equity + deuda
+    if interest_expense is not None and interest_expense > 0:
+        costo_deuda = interest_expense / deuda
+        costo_deuda = min(costo_deuda, 0.25)  # tope defensivo ante datos corruptos/atípicos
+        nota = ""
+    else:
+        costo_deuda = costo_capital_propio * 0.6
+        nota = (
+            "interestExpense no disponible con deuda>0: coste de deuda estimado como proxy "
+            "(60% del coste de capital propio), no es un dato real de mercado."
+        )
+
+    wacc = (equity / valor_total) * costo_capital_propio + (deuda / valor_total) * costo_deuda * (1 - tax_rate)
+    return float(wacc), nota
 
 
 def _graham_number(eps: float | None, bvps: float | None, graham_metric: float | None) -> float:

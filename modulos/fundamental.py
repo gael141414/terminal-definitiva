@@ -772,8 +772,11 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
         cagr_usr = st.slider("Crecimiento Anual FCF/acción %", min_value=-5.0, max_value=20.0, value=float(g_sugerido), step=0.5)
         
     with col_slider2:
-        wacc_sugerido = res_val.get('tasa_descuento_capm', 0.10) * 100
-        tasa_desc_usr = st.slider("Tasa de Descuento (CAPM) %", min_value=5.0, max_value=20.0, value=float(wacc_sugerido), step=0.5)
+        wacc_real_sugerido = res_val.get('wacc', 0.10) * 100
+        tasa_desc_usr = st.slider("Tasa de Descuento (WACC) %", min_value=5.0, max_value=20.0, value=float(wacc_real_sugerido), step=0.5)
+        wacc_nota = res_val.get('wacc_nota') or ""
+        if wacc_nota:
+            st.caption(f"ℹ️ {wacc_nota}")
         
     with col_slider3:
         margen_seguridad_usr = st.slider("Margen de Seguridad %", min_value=0, max_value=50, value=25, step=5)
