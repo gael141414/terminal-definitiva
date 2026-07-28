@@ -60,7 +60,7 @@ COMPANY_TOOL_ROUTES: dict[str, tuple[str, str]] = {
     "🧮 Opciones Avanzadas (BSM)": ("modulos.derivados", "render_derivados"),
     "🧠 Auditoría Forense": ("modulos.forense", "ejecutar_auditoria_forense"),
     "📊 Extremos de Volatilidad (Z-Score)": ("modulos.predictor", "ejecutar_predictor_techos_suelos"),
-    "🔮 Proyección IA y Catalizadores": ("modulos.proyeccion", "ejecutar_proyeccion"),
+    "🔮 Proyección Cuantitativa y Catalizadores": ("modulos.proyeccion", "ejecutar_proyeccion"),
     "⏳ Máquina del Tiempo (Backtest)": ("modulos.backtest", "ejecutar_maquina_del_tiempo"),
     "🧪 Backtesting Estrategias": ("modulos.backtester", "render_backtesting_engine"),
     "🧠 Earnings Call NLP": ("modulos.nlp_analyzer", "render_nlp_dashboard"),

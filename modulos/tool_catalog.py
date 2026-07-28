@@ -14,7 +14,7 @@ _RAW_TOOL_CATALOG = [
     {"label": "📊 Resumen Ejecutivo", "bloque": "📌 Núcleo Empresa", "input_mode": "company", "descripcion": "Vista de mando con precio, score, riesgos y gráfico institucional.", "strategic_group": "research"},
     {"label": "🔎 Análisis Fundamental", "bloque": "📌 Núcleo Empresa", "input_mode": "company", "descripcion": "Estados financieros, ratios, valoración y comparador.", "strategic_group": "research"},
     {"label": "🧠 Auditoría Forense", "bloque": "📌 Núcleo Empresa", "input_mode": "company", "descripcion": "Banderas rojas contables y calidad de beneficios.", "strategic_group": "research"},
-    {"label": "🔮 Proyección IA y Catalizadores", "bloque": "📌 Núcleo Empresa", "input_mode": "company", "descripcion": "Escenarios futuros, catalizadores y narrativa de crecimiento.", "strategic_group": "research"},
+    {"label": "🔮 Proyección Cuantitativa y Catalizadores", "bloque": "📌 Núcleo Empresa", "input_mode": "company", "descripcion": "Escenarios futuros, catalizadores y narrativa de crecimiento.", "strategic_group": "research"},
     {"label": "🎓 Visor de Gurús (Estrategias)", "bloque": "📌 Núcleo Empresa", "input_mode": "company", "descripcion": "Lectura de la empresa con marcos de inversión value.", "strategic_group": "assistant"},
     {"label": "📈 Técnico y Opciones", "bloque": "📈 Mercado y Timing", "input_mode": "company", "descripcion": "Tendencia, volumen, opciones y contexto técnico.", "strategic_group": "market"},
     {"label": "🧮 Opciones Avanzadas (BSM)", "bloque": "📈 Mercado y Timing", "input_mode": "company", "descripcion": "Black-Scholes, griegas y volatility smile.", "strategic_group": "market"},

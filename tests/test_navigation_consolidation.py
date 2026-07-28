@@ -112,7 +112,7 @@ def test_no_hay_funcionalidad_eliminada_respecto_al_catalogo_original():
     """Ninguna de las 35 etiquetas originales desapareció al reagrupar."""
     original_labels = {
         "🧭 Mapa del Producto", "🧩 Research Core", "📊 Resumen Ejecutivo", "🔎 Análisis Fundamental",
-        "🧠 Auditoría Forense", "🔮 Proyección IA y Catalizadores", "🎓 Visor de Gurús (Estrategias)",
+        "🧠 Auditoría Forense", "🔮 Proyección Cuantitativa y Catalizadores", "🎓 Visor de Gurús (Estrategias)",
         "📈 Técnico y Opciones", "🧮 Opciones Avanzadas (BSM)", "🌍 Radar Macro y Sectores",
         "🕰️ Reloj Económico (Regímenes)", "🚰 Monitor de Liquidez (FED)", "📊 Extremos de Volatilidad (Z-Score)",
         "🦢 Test Cisnes Negros (Crisis)", "🛡️ Radar de Coberturas (Hedging)", "⏳ Máquina del Tiempo (Backtest)",

@@ -120,7 +120,7 @@ TOOL_CONSOLIDATION: dict[str, dict[str, str | int | bool]] = {
     "🕵️‍♂️ Rastreador de Insiders (SEC)": {"group": "discovery_engine", "status": "merge", "order": 50, "visible_in_mvp": True},
     "🕵️ Alt Data & Congreso": {"group": "discovery_engine", "status": "merge", "order": 60, "visible_in_mvp": False},
     "🩻 Radiografía de ETFs (X-Ray)": {"group": "discovery_engine", "status": "merge", "order": 70, "visible_in_mvp": False},
-    "🔮 Proyección IA y Catalizadores": {"group": "discovery_engine", "status": "merge", "order": 80, "visible_in_mvp": True},
+    "🔮 Proyección Cuantitativa y Catalizadores": {"group": "discovery_engine", "status": "merge", "order": 80, "visible_in_mvp": True},
 
     # Historical Lab (3 — Predictor de Techos/Suelos se renombró y pasó a
     # Utilidades & Post-MVP, ver Fase 7: su texto prometía una probabilidad de

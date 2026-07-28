@@ -103,6 +103,12 @@ def ejecutar_radar_multibagger(ticker_input):
             st.markdown("---")
             st.markdown(f"### 🧬 Multibagger Score: {score}/100")
             st.progress(score / 100)
+            st.caption(
+                "Limitaciones: mide encaje cuantitativo con un patrón histórico de tamaño, "
+                "crecimiento, escalabilidad, alineación de insiders y liquidez — no predice si "
+                "esta empresa concreta multiplicará su valor. Sirve para priorizar candidatos a "
+                "investigar en profundidad, no como pronóstico de rentabilidad."
+            )
 
             # 3. Gráfico Radar Vectorial (Plotly)
             df_radar = pd.DataFrame(dict(

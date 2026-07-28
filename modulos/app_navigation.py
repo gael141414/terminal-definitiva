@@ -27,7 +27,7 @@ TOOL_UI_ICONS = {
     "📊 Resumen Ejecutivo": "speedometer2",
     "🔎 Análisis Fundamental": "clipboard-data",
     "🧠 Auditoría Forense": "fingerprint",
-    "🔮 Proyección IA y Catalizadores": "stars",
+    "🔮 Proyección Cuantitativa y Catalizadores": "stars",
     "🎓 Visor de Gurús (Estrategias)": "mortarboard",
     "📈 Técnico y Opciones": "graph-up",
     "🧮 Opciones Avanzadas (BSM)": "calculator",
