@@ -181,6 +181,63 @@ def test_dataframes_vacios_o_none_no_generan_comparaciones():
 
 
 # ---------------------------------------------------------------------------
+# Fase 8: fmp_source/sec_source ("real"/"estimado"), poblados desde el dict
+# "estimado" que ya devuelven los analizadores
+# ---------------------------------------------------------------------------
+
+
+def test_source_default_real_sin_dict_estimado():
+    """Sin fmp_estimado/sec_estimado (comportamiento previo a la Fase 8):
+    ambos lados quedan "real" -- no rompe ninguna llamada existente."""
+    fmp = _ratios_df({"Margen Bruto %": [46.21]}, ["2024"])
+    sec = _ratios_df({"Margen Bruto %": [46.30]}, ["2024"])
+    resultado = comparar_metricas(fmp, sec)
+    assert resultado[0].fmp_source == "real"
+    assert resultado[0].sec_source == "real"
+
+
+def test_source_estimado_se_toma_del_dict_por_metrica_y_anio():
+    fmp = _ratios_df({"Margen Bruto %": [46.21, 40.0]}, ["2023", "2024"])
+    sec = _ratios_df({"Margen Bruto %": [46.30, 40.10]}, ["2023", "2024"])
+    fmp_estimado = {"Margen Bruto %": pd.Series({"2023": False, "2024": True})}
+
+    resultado = comparar_metricas(fmp, sec, fmp_estimado=fmp_estimado)
+    por_anio = {r.year: r for r in resultado}
+
+    assert por_anio["2023"].fmp_source == "real"
+    assert por_anio["2024"].fmp_source == "estimado"
+    # sec_estimado no se pasó: el lado SEC siempre es "real".
+    assert por_anio["2023"].sec_source == "real"
+    assert por_anio["2024"].sec_source == "real"
+
+
+def test_source_columna_sin_fallback_rastreado_es_siempre_real():
+    """Una métrica que no aparece como clave en el dict "estimado" (porque el
+    analizador no le rastrea ningún fallback) nunca se marca como estimado,
+    aunque el dict traiga entradas para OTRAS columnas."""
+    fmp = _ratios_df({"SG&A % (s/MB)": [14.4]}, ["2024"])
+    sec = _ratios_df({"SG&A % (s/MB)": [14.5]}, ["2024"])
+    fmp_estimado = {"Margen Bruto %": pd.Series({"2024": True})}  # otra columna
+
+    resultado = comparar_metricas(fmp, sec, fmp_estimado=fmp_estimado)
+    assert resultado[0].fmp_source == "real"
+
+
+def test_source_se_propaga_incluso_cuando_el_valor_no_es_comparable():
+    """fmp_source/sec_source no dependen de la clasificación: incluso una fila
+    no_comparable (valor ausente en un lado) debe conservar la etiqueta de
+    procedencia del lado que sí tiene dato."""
+    fmp = _ratios_df({"ROIC %": [12.0]}, ["2024"])
+    sec = _ratios_df({"ROIC %": [float("nan")]}, ["2024"])
+    fmp_estimado = {"ROIC %": pd.Series({"2024": True})}
+
+    resultado = comparar_metricas(fmp, sec, fmp_estimado=fmp_estimado)
+    assert resultado[0].classification == NOT_COMPARABLE
+    assert resultado[0].fmp_source == "estimado"
+    assert resultado[0].sec_source == "real"
+
+
+# ---------------------------------------------------------------------------
 # fmp_period_end_dates: deriva {año: fecha} de un DatetimeIndex real
 # ---------------------------------------------------------------------------
 
@@ -324,6 +381,35 @@ def test_e2e_discrepancia_fabricada_modificando_revenue_fmp():
     assert margen_bruto_2024.classification == DISCREPANCY
     assert abs(margen_bruto_2024.diff_pct) > 2.0
     assert "tolerancia" in margen_bruto_2024.note
+
+
+def test_e2e_source_real_para_margenes_estimado_para_deuda_sin_totaldebt_fmp():
+    """Extremo a extremo (Fase 8): _fmp_balance_df() (arriba) no trae
+    totalDebt/campos de caja -- dispara el fallback de _fmp_series en el lado
+    FMP para "Deuda / Capital"/"Caja Neta (B USD)"/"ROIC %" (confirmado con
+    analizar_balance directamente), mientras que Margen Bruto/Neto siguen
+    siendo datos reales reportados en ambos lados, sin ningún fallback."""
+    df_is_sec = _sec_fixture_con_attrs("AAPL_is.csv")
+    df_cf_sec = _sec_fixture_con_attrs("AAPL_cf.csv")
+    df_bs_sec = _sec_fixture_con_attrs("AAPL_bs.csv")
+
+    resultados = comparar_estados_financieros(
+        df_is_fmp=_fmp_income_df(), df_cf_fmp=_fmp_cashflow_df(), df_bs_fmp=_fmp_balance_df(),
+        df_is_sec=df_is_sec, df_cf_sec=df_cf_sec, df_bs_sec=df_bs_sec,
+    )
+    por_metrica_2024 = {r.metric: r for r in resultados if r.year == "2024"}
+
+    for metrica in ("Margen Bruto %", "Margen Neto %"):
+        assert por_metrica_2024[metrica].fmp_source == "real", metrica
+        assert por_metrica_2024[metrica].sec_source == "real", metrica
+
+    for metrica in ("Deuda / Capital", "ROIC %"):
+        comp = por_metrica_2024[metrica]
+        assert comp.fmp_source == "estimado", metrica
+        # El propio valor queda no_comparable (FMP no tiene totalDebt en este
+        # fixture): fmp_source se sigue propagando aunque la fila no sea
+        # una comparación de valores real.
+        assert comp.classification == NOT_COMPARABLE
 
 
 def test_e2e_sin_period_end_dates_degrada_a_alineacion_solo_por_anio():

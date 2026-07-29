@@ -64,7 +64,7 @@ def _valorar_empresa_fmp(
     interest_expense = _fmp_series(is_df, ["interestExpense", "interestAndDebtExpense"], years, default=np.nan).abs()
     tax_expense = _fmp_series(is_df, ["incomeTaxExpense"], years, default=np.nan)
     ebt = _fmp_series(is_df, ["incomeBeforeTax"], years, default=np.nan)
-    tax_rate_series = _tasa_fiscal_efectiva(tax_expense, ebt)
+    tax_rate_series, _tax_rate_es_proxy = _tasa_fiscal_efectiva(tax_expense, ebt)
     shares = _first_available_series(
         [
             _fmp_series(is_df, ["weightedAverageShsOutDil", "weightedAverageShsOut"], years),

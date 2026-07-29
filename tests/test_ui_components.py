@@ -201,11 +201,13 @@ def test_fundamental_dupont_ya_no_usa_get_safe_last_val_con_default_cero():
 
 
 def _comp(classification, *, diff_pct=None, metric="Margen Bruto %", year="2024",
-          fmp_value=46.21, sec_value=46.21, note="", period_verified=False):
+          fmp_value=46.21, sec_value=46.21, note="", period_verified=False,
+          fmp_source="real", sec_source="real"):
     return MetricComparison(
         metric=metric, year=year, fmp_value=fmp_value, sec_value=sec_value,
         diff_pct=diff_pct, classification=classification,
         period_verified=period_verified, note=note,
+        fmp_source=fmp_source, sec_source=sec_source,
     )
 
 
@@ -251,7 +253,9 @@ def test_cross_validation_dataframe_columnas_y_valores_ausentes_como_nd():
     ]
     df = ui_components.cross_validation_dataframe(comparaciones)
 
-    assert list(df.columns) == ["Métrica", "Año", "FMP", "SEC", "Diferencia %", "Estado", "Nota", "_status"]
+    assert list(df.columns) == [
+        "Métrica", "Año", "FMP", "Fuente FMP", "SEC", "Fuente SEC", "Diferencia %", "Estado", "Nota", "_status",
+    ]
     assert len(df) == 2
 
     fila_no_comparable = df[df["Métrica"] == "Intereses % (s/OpInc)"].iloc[0]
@@ -259,6 +263,31 @@ def test_cross_validation_dataframe_columnas_y_valores_ausentes_como_nd():
     assert fila_no_comparable["Diferencia %"] == "n/d"
     assert fila_no_comparable["_status"] == "no_disponible"
     assert "SEC" in fila_no_comparable["Nota"]
+
+
+def test_cross_validation_dataframe_fuente_real_es_blanco_estimado_marcado():
+    """Granularidad por campo (Fase 8): "real" no debe añadir ruido visual
+    (celda en blanco); "estimado" debe marcarse, sin usar un color nuevo que
+    compita con la clasificación coincide/discrepancia/riesgo (eso lo valida
+    aparte _style_cross_validation_row, que solo mira "Estado")."""
+    comparaciones = [
+        _comp("coincide", metric="Margen Bruto %", fmp_source="real", sec_source="real"),
+        _comp("coincide", metric="ROIC %", fmp_source="estimado", sec_source="real"),
+        _comp("coincide", metric="Free Cash Flow (B USD)", fmp_source="real", sec_source="estimado"),
+    ]
+    df = ui_components.cross_validation_dataframe(comparaciones)
+
+    fila_real = df[df["Métrica"] == "Margen Bruto %"].iloc[0]
+    assert fila_real["Fuente FMP"] == ""
+    assert fila_real["Fuente SEC"] == ""
+
+    fila_fmp_estimado = df[df["Métrica"] == "ROIC %"].iloc[0]
+    assert fila_fmp_estimado["Fuente FMP"] == "≈ estimado"
+    assert fila_fmp_estimado["Fuente SEC"] == ""
+
+    fila_sec_estimado = df[df["Métrica"] == "Free Cash Flow (B USD)"].iloc[0]
+    assert fila_sec_estimado["Fuente FMP"] == ""
+    assert fila_sec_estimado["Fuente SEC"] == "≈ estimado"
 
 
 def test_cross_validation_dataframe_no_pierde_filas_con_distintas_clasificaciones():

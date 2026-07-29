@@ -96,6 +96,10 @@ DEFAULT_PERIOD_TOLERANCE_DAYS = 20
 SEVERE_DISCREPANCY_PCT = 10.0
 
 
+SOURCE_REAL = "real"
+SOURCE_ESTIMADO = "estimado"
+
+
 @dataclass(frozen=True)
 class MetricComparison:
     """Resultado de comparar una métrica/año concretos entre FMP y SEC."""
@@ -110,6 +114,13 @@ class MetricComparison:
     fmp_period_end: str | None = None
     sec_period_end: str | None = None
     note: str = ""
+    # Granularidad por campo (Fase 8): "real" (dato reportado) o "estimado"
+    # (paso por un fallback/proxy conocido -- ver "estimado" en
+    # analizar_cuenta_resultados/analizar_balance/analizar_flujo_efectivo).
+    # Default "real": una métrica sin fallback rastreado no tiene forma de
+    # ser otra cosa.
+    fmp_source: str = SOURCE_REAL
+    sec_source: str = SOURCE_REAL
 
 
 def _to_float_or_none(value: object) -> float | None:
@@ -187,6 +198,8 @@ def _comparar_valor(
     period_verified: bool,
     period_note: str,
     tolerance_pct: float,
+    fmp_source: str = SOURCE_REAL,
+    sec_source: str = SOURCE_REAL,
 ) -> MetricComparison:
     fmp_val = _to_float_or_none(fmp_val_raw)
     sec_val = _to_float_or_none(sec_val_raw)
@@ -200,7 +213,7 @@ def _comparar_valor(
             metric=metric, year=year, fmp_value=fmp_val, sec_value=sec_val,
             diff_pct=None, classification=NOT_COMPARABLE,
             period_verified=period_verified, fmp_period_end=fmp_date, sec_period_end=sec_date,
-            note=nota,
+            note=nota, fmp_source=fmp_source, sec_source=sec_source,
         )
 
     if period_note:
@@ -210,7 +223,7 @@ def _comparar_valor(
             metric=metric, year=year, fmp_value=fmp_val, sec_value=sec_val,
             diff_pct=_diff_pct(fmp_val, sec_val), classification=PERIOD_MISALIGNED,
             period_verified=False, fmp_period_end=fmp_date, sec_period_end=sec_date,
-            note=period_note,
+            note=period_note, fmp_source=fmp_source, sec_source=sec_source,
         )
 
     diff = _diff_pct(fmp_val, sec_val)
@@ -221,7 +234,7 @@ def _comparar_valor(
             metric=metric, year=year, fmp_value=fmp_val, sec_value=sec_val,
             diff_pct=None, classification=MATCH if coincide else DISCREPANCY,
             period_verified=period_verified, fmp_period_end=fmp_date, sec_period_end=sec_date,
-            note=nota,
+            note=nota, fmp_source=fmp_source, sec_source=sec_source,
         )
 
     clasificacion = MATCH if abs(diff) <= tolerance_pct else DISCREPANCY
@@ -230,8 +243,25 @@ def _comparar_valor(
         metric=metric, year=year, fmp_value=fmp_val, sec_value=sec_val,
         diff_pct=diff, classification=clasificacion,
         period_verified=period_verified, fmp_period_end=fmp_date, sec_period_end=sec_date,
-        note=nota,
+        note=nota, fmp_source=fmp_source, sec_source=sec_source,
     )
+
+
+def _source_label(estimado: dict[str, pd.Series] | None, metric: str, year: str) -> str:
+    """Traduce el dict "estimado" de un analizador (Fase 8) a "real"/"estimado"
+    para una métrica/año concretos. Sin entrada para esa columna (fallback no
+    rastreado) o sin dato para ese año -> "real" (nunca se inventa un
+    "estimado" que el analizador no marcó explícitamente)."""
+    if not estimado:
+        return SOURCE_REAL
+    serie = estimado.get(metric)
+    if serie is None:
+        return SOURCE_REAL
+    try:
+        es_estimado = bool(serie.get(year, False))
+    except Exception:
+        return SOURCE_REAL
+    return SOURCE_ESTIMADO if es_estimado else SOURCE_REAL
 
 
 def comparar_metricas(
@@ -240,6 +270,8 @@ def comparar_metricas(
     *,
     fmp_period_end: dict[str, str] | None = None,
     sec_period_end: dict[str, str] | None = None,
+    fmp_estimado: dict[str, pd.Series] | None = None,
+    sec_estimado: dict[str, pd.Series] | None = None,
     tolerance_pct: float = DEFAULT_TOLERANCE_PCT,
     period_tolerance_days: int = DEFAULT_PERIOD_TOLERANCE_DAYS,
 ) -> list[MetricComparison]:
@@ -251,6 +283,10 @@ def comparar_metricas(
     nunca por posición — ``fmp_ratios``/``sec_ratios`` pueden tener distinto
     número de columnas o de años sin que eso rompa nada; simplemente no se
     genera comparación para lo que no comparten.
+
+    ``fmp_estimado``/``sec_estimado`` (Fase 8, opcionales): el dict
+    ``"estimado"`` que ya devuelven los analizadores, usado para poblar
+    ``fmp_source``/``sec_source`` de cada ``MetricComparison``.
     """
     if fmp_ratios is None or fmp_ratios.empty or sec_ratios is None or sec_ratios.empty:
         return []
@@ -271,6 +307,8 @@ def comparar_metricas(
                 metric, year,
                 fmp_ratios.loc[year, metric], sec_ratios.loc[year, metric],
                 fmp_date, sec_date, period_verified, period_note, tolerance_pct,
+                fmp_source=_source_label(fmp_estimado, metric, year),
+                sec_source=_source_label(sec_estimado, metric, year),
             ))
     return resultados
 
@@ -303,6 +341,7 @@ def comparar_estados_financieros(
             fmp_income["ratios"], sec_income["ratios"],
             fmp_period_end=fmp_period_end_dates(df_is_fmp),
             sec_period_end=(df_is_sec.attrs.get("period_end_dates") if df_is_sec is not None else None),
+            fmp_estimado=fmp_income.get("estimado"), sec_estimado=sec_income.get("estimado"),
             tolerance_pct=tolerance_pct, period_tolerance_days=period_tolerance_days,
         ))
 
@@ -313,6 +352,7 @@ def comparar_estados_financieros(
             fmp_balance["ratios"], sec_balance["ratios"],
             fmp_period_end=fmp_period_end_dates(df_bs_fmp),
             sec_period_end=(df_bs_sec.attrs.get("period_end_dates") if df_bs_sec is not None else None),
+            fmp_estimado=fmp_balance.get("estimado"), sec_estimado=sec_balance.get("estimado"),
             tolerance_pct=tolerance_pct, period_tolerance_days=period_tolerance_days,
         ))
 
@@ -323,6 +363,7 @@ def comparar_estados_financieros(
             fmp_cashflow["ratios"], sec_cashflow["ratios"],
             fmp_period_end=fmp_period_end_dates(df_cf_fmp),
             sec_period_end=(df_cf_sec.attrs.get("period_end_dates") if df_cf_sec is not None else None),
+            fmp_estimado=fmp_cashflow.get("estimado"), sec_estimado=sec_cashflow.get("estimado"),
             tolerance_pct=tolerance_pct, period_tolerance_days=period_tolerance_days,
         ))
 

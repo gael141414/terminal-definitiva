@@ -124,7 +124,7 @@ def _fmp_series(
 def analizar_cuenta_resultados(
     df: pd.DataFrame | None,
     cf_df: pd.DataFrame | None = None,
-) -> dict[str, pd.DataFrame] | None:
+) -> dict[str, pd.DataFrame | dict[str, pd.Series]] | None:
     """Analiza la cuenta de resultados usando columnas FMP normalizadas."""
     if df is None or df.empty:
         return None
@@ -137,11 +137,17 @@ def analizar_cuenta_resultados(
         return None
 
     ventas = _fmp_series(df, ["revenue"], years)
-    margen_bruto = _fmp_series(df, ["grossProfit"], years)
+    margen_bruto_reportado = _fmp_series(df, ["grossProfit"], years)
     # costOfRevenue ausente (no solo grossProfit) no debe tratarse como 0: eso
     # convertiría "ventas - cogs" en "ventas" (margen bruto del 100%, falso).
     cogs = _fmp_series(df, ["costOfRevenue"], years, default=np.nan)
-    margen_bruto = margen_bruto.fillna(ventas - cogs)
+    margen_bruto_calculado = ventas - cogs
+    # "estimado" (Fase 8): marca, por año, si grossProfit no venia reportado y
+    # el valor salio del fallback ventas-cogs -- solo cuando el fallback
+    # realmente aporto un numero (nunca marca como "estimado" un año que
+    # sigue NaN, eso ya es "ausente", no "calculado").
+    margen_bruto_estimado = margen_bruto_reportado.isna() & margen_bruto_calculado.notna()
+    margen_bruto = margen_bruto_reportado.fillna(margen_bruto_calculado)
 
     vga = _fmp_series(
         df,
@@ -173,7 +179,10 @@ def analizar_cuenta_resultados(
     df_ratios["Margen Neto %"] = _safe_ratio(beneficio_neto, ventas, multiplier=100)
     df_ratios["Crecimiento Benef. Neto %"] = beneficio_neto.sort_index().pct_change(fill_method=None) * 100
 
-    return {"ratios": df_ratios.replace([np.inf, -np.inf], np.nan).clip(-1000, 1000).round(2)}
+    return {
+        "ratios": df_ratios.replace([np.inf, -np.inf], np.nan).clip(-1000, 1000).round(2),
+        "estimado": {"Margen Bruto %": margen_bruto_estimado},
+    }
 
 
 def _safe_ratio(
@@ -204,7 +213,7 @@ def _safe_ratio(
 def _analizar_cuenta_resultados_legacy(
     df: pd.DataFrame,
     cf_df: pd.DataFrame | None = None,
-) -> dict[str, pd.DataFrame] | None:
+) -> dict[str, pd.DataFrame | dict[str, pd.Series]] | None:
     cols = sorted([c for c in df.columns if str(c).isdigit() and len(str(c)) == 4])
     if not cols:
         return None
@@ -225,10 +234,16 @@ def _analizar_cuenta_resultados_legacy(
         ["CostOfRevenue", "CostOfGoodsAndServicesSold", "CostOfGoodsSold", "CostOfServices", "Cost of sales", "Cost of revenues"],
         cols,
     )
-    if margen_bruto.isna().all() and not cogs.isna().all():
+    # A diferencia de la ruta FMP (donde el fallback es por año), aqui
+    # GrossProfit esta ausente/presente para TODO el estado a la vez (no hay
+    # columna "grossProfit" parcial por año) -- de ahi que la decision de
+    # "estimado" (Fase 8) se aplique por igual a todos los años.
+    margen_bruto_estimado_flag = bool(margen_bruto.isna().all() and not cogs.isna().all())
+    if margen_bruto_estimado_flag:
         # Mismo criterio que la ruta FMP: un año concreto sin cogs propaga NaN
         # en vez de asumir "ventas - 0 = ventas" (margen bruto del 100%, falso).
         margen_bruto = ventas - cogs
+    margen_bruto_estimado = pd.Series(margen_bruto_estimado_flag, index=cols)
 
     vga = extraer_dato_robusto(
         df,
@@ -269,4 +284,7 @@ def _analizar_cuenta_resultados_legacy(
     df_ratios["Margen Neto %"] = _safe_ratio(beneficio_neto, ventas, multiplier=100)
     df_ratios["Crecimiento Benef. Neto %"] = beneficio_neto[sorted(cols)].pct_change(fill_method=None) * 100
 
-    return {"ratios": df_ratios.replace([np.inf, -np.inf], np.nan).clip(-1000, 1000).round(2)}
+    return {
+        "ratios": df_ratios.replace([np.inf, -np.inf], np.nan).clip(-1000, 1000).round(2),
+        "estimado": {"Margen Bruto %": margen_bruto_estimado},
+    }

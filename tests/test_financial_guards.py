@@ -520,3 +520,183 @@ def test_recompras_ausente_habria_roto_el_patron_viejo_de_buyback_yield():
     dropped = recompras_series.dropna()
     ultimas_recompras = dropped.iloc[-1] if not dropped.empty else None
     assert ultimas_recompras is None
+
+
+# ---------------------------------------------------------------------------
+# Fase 8: granularidad "estimado" (real vs fallback/proxy) en los analizadores
+# ---------------------------------------------------------------------------
+
+
+def test_margen_bruto_estimado_fmp_marca_solo_los_anios_con_fallback():
+    is_df = pd.DataFrame(
+        {
+            "revenue": [100e9, 110e9],
+            "grossProfit": [40e9, np.nan],  # 2024 ausente -> fallback ventas-cogs
+            "costOfRevenue": [60e9, 66e9],
+            "netIncome": [10e9, 11e9],
+            "operatingIncome": [15e9, 16e9],
+        },
+        index=_idx([2023, 2024]),
+    )
+
+    resultado = analizar_cuenta_resultados(is_df, None)
+    estimado = resultado["estimado"]["Margen Bruto %"]
+
+    assert not bool(estimado.loc["2023"])  # grossProfit reportado directamente
+    assert bool(estimado.loc["2024"])  # salió de ventas - costOfRevenue
+    # El valor en sí sigue siendo correcto (100% real, aunque calculado):
+    assert resultado["ratios"].loc["2024", "Margen Bruto %"] == pytest.approx((110e9 - 66e9) / 110e9 * 100)
+
+
+def test_margen_bruto_estimado_legacy_aplica_a_todo_el_estado():
+    """A diferencia de FMP, GrossProfit en SEC/XBRL está ausente o presente
+    para TODO el estado a la vez (no hay columna parcial por año)."""
+    sin_grossprofit = pd.DataFrame(
+        {
+            "concept": ["Revenues", "CostOfRevenue", "NetIncomeLoss"],
+            "2023": [100e9, 60e9, 10e9],
+            "2024": [110e9, 66e9, 11e9],
+        }
+    )
+    resultado = analizar_cuenta_resultados(sin_grossprofit, None)
+    estimado = resultado["estimado"]["Margen Bruto %"]
+    assert bool(estimado.loc["2023"]) and bool(estimado.loc["2024"])
+
+    con_grossprofit = pd.DataFrame(
+        {
+            "concept": ["Revenues", "GrossProfit", "NetIncomeLoss"],
+            "2023": [100e9, 45e9, 10e9],
+            "2024": [110e9, 50e9, 11e9],
+        }
+    )
+    resultado2 = analizar_cuenta_resultados(con_grossprofit, None)
+    estimado2 = resultado2["estimado"]["Margen Bruto %"]
+    assert not bool(estimado2.loc["2023"]) and not bool(estimado2.loc["2024"])
+
+
+def test_fcf_estimado_fmp_marca_solo_los_anios_sin_freecashflow_reportado():
+    cf_df = pd.DataFrame(
+        {
+            "operatingCashFlow": [50e9, 55e9],
+            "capitalExpenditure": [-10e9, -12e9],
+            "freeCashFlow": [40e9, np.nan],  # 2024 ausente -> fallback fco+capex
+            "commonStockRepurchased": [5e9, 5e9],
+            "dividendsPaid": [3e9, 3e9],
+        },
+        index=_idx([2023, 2024]),
+    )
+    is_df = pd.DataFrame({"revenue": [100e9, 110e9], "netIncome": [20e9, 22e9]}, index=_idx([2023, 2024]))
+
+    resultado = analizar_flujo_efectivo(cf_df, is_df)
+    estimado = resultado["estimado"]["Free Cash Flow (B USD)"]
+
+    assert not bool(estimado.loc["2023"])
+    assert bool(estimado.loc["2024"])
+
+
+def test_fcf_estimado_legacy_siempre_true_sec_no_tiene_partida_reportada():
+    """SEC/XBRL no tiene una partida "Free Cash Flow" propia: siempre se
+    calcula como fco-capex, nunca es un dato reportado directamente."""
+    cf_df = pd.DataFrame(
+        {
+            "concept": ["NetCashProvidedByOperatingActivities", "PaymentsToAcquirePropertyPlantAndEquipment"],
+            "2024": [50e9, 10e9],
+        }
+    )
+    is_df = pd.DataFrame({"concept": ["NetIncomeLoss"], "2024": [20e9]})
+
+    resultado = analizar_flujo_efectivo(cf_df, is_df)
+    assert bool(resultado["estimado"]["Free Cash Flow (B USD)"].loc["2024"])
+
+
+def test_deuda_capital_estimado_fmp_cuando_totaldebt_ausente():
+    bs_df = pd.DataFrame(
+        {
+            "totalStockholdersEquity": [80e9],
+            # Sin "totalDebt": fuerza el fallback shortTermDebt + longTermDebt.
+            "shortTermDebt": [10e9],
+            "longTermDebt": [30e9],
+            "cashAndShortTermInvestments": [15e9],
+            "retainedEarnings": [40e9],
+        },
+        index=_idx([2024]),
+    )
+
+    resultado = analizar_balance(bs_df, None)
+
+    assert bool(resultado["estimado"]["Deuda / Capital"].loc["2024"])
+    assert bool(resultado["estimado"]["Caja Neta (B USD)"].loc["2024"])
+
+
+def test_deuda_capital_no_estimado_fmp_cuando_totaldebt_reportado():
+    bs_df = pd.DataFrame(
+        {
+            "totalStockholdersEquity": [80e9],
+            "totalDebt": [40e9],
+            "cashAndShortTermInvestments": [15e9],
+            "retainedEarnings": [40e9],
+        },
+        index=_idx([2024]),
+    )
+
+    resultado = analizar_balance(bs_df, None)
+
+    assert not bool(resultado["estimado"]["Deuda / Capital"].loc["2024"])
+    assert not bool(resultado["estimado"]["Caja Neta (B USD)"].loc["2024"])
+
+
+def test_deuda_capital_estimado_legacy_marca_solo_el_anio_con_commercialpaper_ausente():
+    """CommercialPaper es exactamente el caso ya documentado desde la Fase 7:
+    "columna ausente del estado" y "dato ausente" son indistinguibles con
+    extraer_dato_robusto -- esto no resuelve esa ambigüedad, solo la hace
+    visible marcando el año con al menos una sub-partida de deuda ausente."""
+    bs_df = pd.DataFrame(
+        {
+            "concept": [
+                "StockholdersEquity", "LongTermDebt", "CommercialPaper",
+                "LongTermDebtCurrent", "ShortTermBorrowings",
+                "CashAndCashEquivalentsAtCarryingValue", "ShortTermInvestments",
+            ],
+            "2023": [80e9, 20e9, 5e9, 2e9, 1e9, 15e9, 3e9],
+            "2024": [85e9, 22e9, np.nan, 2e9, 1e9, 16e9, 3e9],  # 2024 sin CommercialPaper reportado
+        }
+    )
+
+    resultado = analizar_balance(bs_df, None)
+    estimado = resultado["estimado"]["Deuda / Capital"]
+
+    assert not bool(estimado.loc["2023"])
+    assert bool(estimado.loc["2024"])
+    # Caja Neta = caja_total - deuda_total: hereda el "estimado" del lado de
+    # deuda en 2024 aunque sus propias sub-partidas de caja estén completas.
+    assert not bool(resultado["estimado"]["Caja Neta (B USD)"].loc["2023"])
+    assert bool(resultado["estimado"]["Caja Neta (B USD)"].loc["2024"])
+
+
+def test_roic_estimado_por_proxy_de_tasa_fiscal_cuando_ebt_no_derivable():
+    years = [2023, 2024]
+    bs_df = pd.DataFrame(
+        {
+            "totalStockholdersEquity": [80e9, 85e9],
+            "totalDebt": [20e9, 20e9],
+            "cashAndShortTermInvestments": [15e9, 15e9],
+            "retainedEarnings": [40e9, 42e9],
+        },
+        index=_idx(years),
+    )
+    is_df = pd.DataFrame(
+        {
+            "revenue": [200e9, 210e9],
+            "netIncome": [30e9, 32e9],
+            "operatingIncome": [40e9, 42e9],
+            "incomeTaxExpense": [8e9, 8e9],
+            "incomeBeforeTax": [40e9, -5e9],  # 2024: EBT negativo -> tasa no derivable -> proxy 21%
+        },
+        index=_idx(years),
+    )
+
+    resultado = analizar_balance(bs_df, is_df)
+    estimado = resultado["estimado"]["ROIC %"]
+
+    assert not bool(estimado.loc["2023"])
+    assert bool(estimado.loc["2024"])
