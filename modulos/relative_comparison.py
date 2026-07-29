@@ -230,7 +230,11 @@ def _build_competitor_valuequant(ticker: str, years: int = 5) -> CompetitorScore
                 ticker=symbol,
                 years=years,
                 data_available=False,
-                error="FMP no devolvió estados financieros completos para el competidor.",
+                error=(
+                    "FMP no devolvió estados financieros completos para este ticker (formato "
+                    "incorrecto o restricción del plan de FMP contratado — no se soluciona "
+                    "reintentando)."
+                ),
             )
 
         res_is = analizar_cuenta_resultados(is_df, cf_df)

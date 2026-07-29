@@ -292,7 +292,12 @@ else:
 
     if is_df is None or bs_df is None or cf_df is None:
         st.error(f"🚨 FMP no devolvió estados financieros completos para `{ticker_input}`.")
-        st.caption("Prueba primero con `AAPL`, `MSFT` o `GOOGL`. Algunos tickers con clases de acciones pueden requerir formato FMP, por ejemplo `BRK-B`.")
+        st.caption(
+            "Puede ser un ticker mal escrito o con formato distinto (algunas clases de acciones "
+            "usan guion, p. ej. `BRK-B`) — o que este símbolo no esté disponible con el plan de "
+            "FMP contratado, algo que no depende del ticker y que reintentar no soluciona. "
+            "El detalle exacto (código HTTP de cada endpoint) está en «Diagnóstico FMP» abajo."
+        )
         with st.expander("Diagnóstico FMP"):
             st.json(datos_fmp)
             with st.spinner("Probando endpoints FMP sin caché..."):
