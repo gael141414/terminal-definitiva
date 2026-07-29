@@ -6,6 +6,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from textblob import TextBlob
 from modulos.gemini_helper import aviso_gemini_no_configurado, obtener_modelo_gemini
+from modulos.yahoo_resilience import safe_yfinance_fetch
 
 # Importamos todos los gráficos necesarios para esta pestaña
 from charts import (
@@ -20,10 +21,13 @@ from charts import (
 def analizar_macro_avanzado():
     """Descarga commodities, ratios institucionales y noticias RSS en crudo"""
     def obtener_precio_seguro(ticker_symbol):
-        try:
-            data = yf.Ticker(ticker_symbol).history(period="5d")
-            if not data.empty: return float(data['Close'].iloc[-1])
-        except: pass
+        data, _status = safe_yfinance_fetch(
+            lambda: yf.Ticker(ticker_symbol).history(period="5d"),
+            empty_value=pd.DataFrame(),
+            context=f"macro:{ticker_symbol}",
+        )
+        if not data.empty:
+            return float(data['Close'].iloc[-1])
         return 0.0
 
     irx = obtener_precio_seguro('^IRX')       

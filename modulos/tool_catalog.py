@@ -14,14 +14,14 @@ _RAW_TOOL_CATALOG = [
     {"label": "📊 Resumen Ejecutivo", "bloque": "📌 Núcleo Empresa", "input_mode": "company", "descripcion": "Vista de mando con precio, score, riesgos y gráfico institucional.", "strategic_group": "research"},
     {"label": "🔎 Análisis Fundamental", "bloque": "📌 Núcleo Empresa", "input_mode": "company", "descripcion": "Estados financieros, ratios, valoración y comparador.", "strategic_group": "research"},
     {"label": "🧠 Auditoría Forense", "bloque": "📌 Núcleo Empresa", "input_mode": "company", "descripcion": "Banderas rojas contables y calidad de beneficios.", "strategic_group": "research"},
-    {"label": "🔮 Proyección IA y Catalizadores", "bloque": "📌 Núcleo Empresa", "input_mode": "company", "descripcion": "Escenarios futuros, catalizadores y narrativa de crecimiento.", "strategic_group": "research"},
+    {"label": "🔮 Proyección Cuantitativa y Catalizadores", "bloque": "📌 Núcleo Empresa", "input_mode": "company", "descripcion": "Escenarios futuros, catalizadores y narrativa de crecimiento.", "strategic_group": "research"},
     {"label": "🎓 Visor de Gurús (Estrategias)", "bloque": "📌 Núcleo Empresa", "input_mode": "company", "descripcion": "Lectura de la empresa con marcos de inversión value.", "strategic_group": "assistant"},
     {"label": "📈 Técnico y Opciones", "bloque": "📈 Mercado y Timing", "input_mode": "company", "descripcion": "Tendencia, volumen, opciones y contexto técnico.", "strategic_group": "market"},
     {"label": "🧮 Opciones Avanzadas (BSM)", "bloque": "📈 Mercado y Timing", "input_mode": "company", "descripcion": "Black-Scholes, griegas y volatility smile.", "strategic_group": "market"},
     {"label": "🌍 Radar Macro y Sectores", "bloque": "📈 Mercado y Timing", "input_mode": "company", "descripcion": "Rotación sectorial y comparación con el mercado.", "strategic_group": "market"},
     {"label": "🕰️ Reloj Económico (Regímenes)", "bloque": "📈 Mercado y Timing", "input_mode": "standalone", "descripcion": "Lectura del ciclo económico por regímenes.", "strategic_group": "market"},
     {"label": "🚰 Monitor de Liquidez (FED)", "bloque": "📈 Mercado y Timing", "input_mode": "standalone", "descripcion": "Condiciones de liquidez, tipos y presión monetaria.", "strategic_group": "market"},
-    {"label": "🔭 Predictor de Techos/Suelos", "bloque": "📈 Mercado y Timing", "input_mode": "company", "descripcion": "Indicadores cuantitativos de exceso o agotamiento.", "strategic_group": "market"},
+    {"label": "📊 Extremos de Volatilidad (Z-Score)", "bloque": "📈 Mercado y Timing", "input_mode": "company", "descripcion": "Desviación estadística del precio frente a su media de 200 sesiones.", "strategic_group": "market"},
     {"label": "🦢 Test Cisnes Negros (Crisis)", "bloque": "🛡️ Riesgo y Defensa", "input_mode": "company", "descripcion": "Stress test ante escenarios extremos.", "strategic_group": "risk"},
     {"label": "🛡️ Radar de Coberturas (Hedging)", "bloque": "🛡️ Riesgo y Defensa", "input_mode": "company", "descripcion": "Ideas de cobertura y protección de posiciones.", "strategic_group": "risk"},
     {"label": "⏳ Máquina del Tiempo (Backtest)", "bloque": "🛡️ Riesgo y Defensa", "input_mode": "company", "descripcion": "Simulación histórica para evaluar robustez.", "strategic_group": "lab"},
@@ -71,6 +71,22 @@ NAVIGATION_MODES = {
 _NAVIGATION_MODE_ORDER = ("mvp", "consolidated", "complete")
 
 
+# Emoji por grupo de navegación consolidado — usado para derivar "bloque" (el
+# campo que ya consume la navegación existente en app.py/app_navigation.py) a
+# partir de una única fuente de verdad: modulos.tool_consolidation. Antes
+# "bloque" era un campo manual e independiente de consolidation_group; con la
+# reagrupación del mockup, ambos deben coincidir siempre.
+_GROUP_EMOJI = {
+    "research_core": "🧩",
+    "market_terminal": "📊",
+    "discovery_engine": "🔎",
+    "historical_lab": "⏳",
+    "portfolio_risk": "⚖️",
+    "automation_watchlist": "🤖",
+    "utilities_postmvp": "🧰",
+}
+
+
 def _enrich_tool(tool: dict[str, object]) -> dict[str, object]:
     """Añade metadatos de consolidación a una herramienta del catálogo."""
 
@@ -78,9 +94,11 @@ def _enrich_tool(tool: dict[str, object]) -> dict[str, object]:
     metadata = get_tool_consolidation(str(tool["label"]))
     group_key = str(metadata.get("group", "unassigned"))
     group = CONSOLIDATION_GROUPS.get(group_key)
+    bloque = f"{_GROUP_EMOJI.get(group_key, '🧩')} {group.name}" if group else str(tool.get("bloque", "Sin asignar"))
 
     enriched.update(
         {
+            "bloque": bloque,
             "consolidation_group": group_key,
             "consolidation_name": group.name if group else "Sin asignar",
             "consolidation_status": metadata.get("status", "merge"),

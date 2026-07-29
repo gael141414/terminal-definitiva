@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 from datetime import datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import streamlit as st
 import pandas as pd
@@ -10,6 +11,8 @@ import plotly.graph_objects as go
 from modulos.app_assets import asset_to_data_uri, strip_visual_prefix
 from modulos.app_navigation import TOOL_UI_ICONS
 from modulos.tool_catalog import TOOL_CATALOG
+from modulos.tool_consolidation import get_navigation_groups_ordered
+from modulos.ui_components import render_navigation_groups_grid
 from modulos.market_widgets import (
     analizar_rotacion_sectores,
     obtener_market_snapshot,
@@ -19,39 +22,29 @@ from modulos.market_widgets import (
 
 
 def render_module_showcase(limit: int = 9) -> None:
-    """Muestra módulos principales en la home como tarjetas de producto."""
-    destacados = TOOL_CATALOG[:limit]
+    """Muestra la navegación consolidada en 6 grupos (mockup 1a: hub + rejilla de grupos).
 
-    cards = ""
-    for tool in destacados:
-        label_original = tool["label"]
-        label = strip_visual_prefix(label_original)
-        icon = TOOL_UI_ICONS.get(label_original, "grid")
-        bloque = strip_visual_prefix(tool["bloque"])
-        desc = tool["descripcion"]
-        input_mode = tool["input_mode"]
-
-        if input_mode == "company":
-            mode_label = "Empresa"
-        elif input_mode == "standalone":
-            mode_label = "Autónomo"
-        elif input_mode == "etf":
-            mode_label = "ETF / Fondo"
-        else:
-            mode_label = "Módulo"
-
-        # HTML Compactado sin saltos de línea para evitar el Bug de Streamlit
-        cards += f"<article class='vq-module-card'><div class='vq-module-icon'><i class='bi bi-{html.escape(icon)}'></i></div><div class='vq-module-eyebrow'>{html.escape(bloque)} · {html.escape(mode_label)}</div><div class='vq-module-title'>{html.escape(label)}</div><div class='vq-module-desc'>{html.escape(desc)}</div></article>"
+    Sustituye el listado plano de las primeras ``limit`` herramientas del
+    catálogo por la rejilla de grupos de modulos.tool_consolidation, que sí
+    refleja la reorganización en Market Terminal / Discovery Engine /
+    Historical Lab / Portfolio & Risk / Automatización & Watchlist +
+    Utilidades & Post-MVP (oculta salvo modo «Completo»). ``limit`` se
+    mantiene en la firma por compatibilidad pero ya no aplica: la rejilla
+    siempre muestra los grupos completos, no un subconjunto de herramientas.
+    """
+    total_tools = len(TOOL_CATALOG)
+    total_groups = len(get_navigation_groups_ordered())
 
     st.markdown(
-        "<div class='vq-section-title'><i class='bi bi-grid-1x2'></i> Módulos principales</div>",
+        "<div class='vq-section-title'><i class='bi bi-grid-1x2'></i> Herramientas especializadas</div>",
         unsafe_allow_html=True,
     )
-
     st.markdown(
-        f"<div class='vq-module-grid'>{cards}</div>",
+        f"<div style='font-size:12px; color:#5b6a80; margin:-8px 0 12px;'>"
+        f"{total_tools} herramientas · {total_groups} grupos · Research Core es la puerta de entrada principal</div>",
         unsafe_allow_html=True,
     )
+    render_navigation_groups_grid()
 
 
 
@@ -132,12 +125,12 @@ f"""<section class="vq-home-hero" style="--home-bg: {bg_style};">
     # 1. RELOJES DE MERCADO (Market Status Bar)
     ahora_utc = datetime.now(timezone.utc)
     
-    # NYSE: EDT (UTC-4) en mayo. Abierto: lunes a viernes de 09:30 a 16:00 local.
-    ny_time = ahora_utc - timedelta(hours=4)
+    # NYSE: hora local de Nueva York (EST/EDT, con cambio de horario automático). Abierto: lunes a viernes de 09:30 a 16:00 local.
+    ny_time = ahora_utc.astimezone(ZoneInfo("America/New_York"))
     ny_open = (0 <= ny_time.weekday() <= 4) and (time(9, 30) <= ny_time.time() <= time(16, 0))
-    
-    # LSE: BST (UTC+1) en mayo. Abierto: lunes a viernes de 08:00 a 16:30 local.
-    lon_time = ahora_utc + timedelta(hours=1)
+
+    # LSE: hora local de Londres (GMT/BST, con cambio de horario automático). Abierto: lunes a viernes de 08:00 a 16:30 local.
+    lon_time = ahora_utc.astimezone(ZoneInfo("Europe/London"))
     lon_open = (0 <= lon_time.weekday() <= 4) and (time(8, 0) <= lon_time.time() <= time(16, 30))
     
     # TSE: JST (UTC+9). Abierto: lunes a viernes de 09:00-11:30 y 12:30-15:00 local.
@@ -159,6 +152,8 @@ f"<div>TSE (Tokyo): <strong style='color:#eef4ff;'>{status_tok}</strong></div>"
 f"</div>",
         unsafe_allow_html=True
     )
+
+    render_module_showcase()
 
     # 2. GRID DE MERCADO (Con VIX y US 10Y integrados)
     snapshot = obtener_market_snapshot()
@@ -196,12 +191,17 @@ f"</article>"
                 title = html.escape(noticia.get("title", "Noticia financiera"))
                 date = html.escape(noticia.get("date", ""))[:32]
                 url = html.escape(noticia.get("url", "#"))
-                
+                source = html.escape(noticia.get("source", "") or "")
+
                 image_url = noticia.get("image")
                 img_src = html.escape(image_url) if image_url and len(image_url) > 5 else logo_uri
-                
+
+                source_badge = (
+                    f"<div class='vq-news-source' style='font-size:0.7rem; letter-spacing:0.04em; text-transform:uppercase; opacity:0.65; margin-bottom:2px;'>{source}</div>"
+                    if source else ""
+                )
                 # HTML Compactado con estilos in-line (object-fit: cover) para que la imagen quede perfecta
-                news_html += f"<a class='vq-news-card' href='{url}' target='_blank' rel='noopener noreferrer' style='text-decoration:none;'><img src='{img_src}' alt='News image' onerror=\"this.src='{logo_uri}'\" style='width: 100%; height: 140px; object-fit: cover; border-radius: 6px 6px 0 0; border-bottom: 1px solid rgba(148, 163, 184, 0.1);'><div class='vq-news-body'><div class='vq-news-date'>{date}</div><div class='vq-news-title'>{title}</div></div></a>"
+                news_html += f"<a class='vq-news-card' href='{url}' target='_blank' rel='noopener noreferrer' style='text-decoration:none;'><img src='{img_src}' alt='News image' onerror=\"this.src='{logo_uri}'\" style='width: 100%; height: 140px; object-fit: cover; border-radius: 6px 6px 0 0; border-bottom: 1px solid rgba(148, 163, 184, 0.1);'><div class='vq-news-body'>{source_badge}<div class='vq-news-date'>{date}</div><div class='vq-news-title'>{title}</div></div></a>"
                 
             st.markdown(f"<div class='vq-news-grid'>{news_html}</div>", unsafe_allow_html=True)
 

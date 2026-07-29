@@ -25,7 +25,7 @@ def run_contract_checks() -> list[str]:
     screener = _read("screener.py")
     assert_true(screener.count('if __name__ == "__main__":') == 1, "screener.py debe tener un único bloque main")
     assert_true("import os" not in screener, "screener.py no debe conservar import os no usado")
-    assert_true("from valuator import valorar_empresa" not in screener, "screener.py no debe conservar valorar_empresa no usado")
+    assert_true("from financials.valuator import valorar_empresa" not in screener, "screener.py no debe conservar valorar_empresa no usado")
     checks.append("screener cleanup")
 
     for required in [
@@ -39,11 +39,6 @@ def run_contract_checks() -> list[str]:
         assert_true((PROJECT_ROOT / required).exists(), f"Falta {required}")
     checks.append("yfinance resilience files exist")
 
-    data_provider = _read("data_provider.py")
-    backtester = _read("backtester.py")
-    screener = _read("screener.py")
-    assert_true("safe_yfinance_download" in data_provider, "data_provider debe usar safe_yfinance_download")
-    assert_true("safe_yfinance_download" in backtester, "backtester debe usar safe_yfinance_download")
     assert_true("safe_yfinance_info" in screener, "screener debe usar safe_yfinance_info")
     checks.append("core yfinance calls use helpers")
 

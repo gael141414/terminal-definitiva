@@ -43,7 +43,7 @@ def generar_reporte_pdf(ticker, precio, res_val, nota, fcf_yield, buyback_yield)
     pdf.set_font("Arial", '', 11)
     if res_val and precio:
         g = res_val.get('crecimiento_sostenible', 0.05)
-        r = res_val.get('tasa_descuento_capm', 0.10)
+        r = res_val.get('wacc', 0.10)
         eps = res_val.get('eps_actual', 0)
         per = res_val.get('per_asumido', 15)
         

@@ -8,8 +8,10 @@ import plotly.graph_objects as go
 import streamlit as st
 import yfinance as yf
 
+from modulos.config import DEBT_EQUITY_RED_FLAG
 from modulos.fmp_api import extraer_datos_fundamentales_fmp, obtener_cotizacion_fmp
 from modulos.utils import analizar_sentimiento_noticias
+from modulos.yahoo_resilience import safe_yfinance_fetch, safe_yfinance_info
 
 
 def _numero(valor: object, default: float = np.nan) -> float:
@@ -49,37 +51,37 @@ def _precio_actual(ticker: str) -> float:
         return precio
 
     try:
-        yf_ticker = yf.Ticker(ticker)
-        fast_info = getattr(yf_ticker, "fast_info", {}) or {}
+        fast_info = getattr(yf.Ticker(ticker), "fast_info", {}) or {}
         precio = _numero(fast_info.get("last_price") or fast_info.get("lastPrice"))
         if isfinite(precio) and precio > 0:
             return precio
-        info = yf_ticker.info or {}
-        return _numero(info.get("currentPrice") or info.get("previousClose"), 0.0)
     except Exception:
-        return 0.0
+        pass
+    info = _info_yfinance(ticker)
+    return _numero(info.get("currentPrice") or info.get("previousClose"), 0.0)
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
 def _volatilidad_anual(ticker: str) -> float:
-    try:
-        hist = yf.download(ticker, period="1y", auto_adjust=True, progress=False, threads=False)
-        close = hist["Close"] if "Close" in hist else hist
-        if isinstance(close, pd.DataFrame):
-            close = close.iloc[:, 0]
-        returns = pd.to_numeric(close, errors="coerce").pct_change().dropna()
-        if returns.empty:
-            return 0.30
-        return float(returns.std() * np.sqrt(252))
-    except Exception:
+    hist, status = safe_yfinance_fetch(
+        lambda: yf.download(ticker, period="1y", auto_adjust=True, progress=False, threads=False),
+        empty_value=pd.DataFrame(),
+        context=f"proyeccion:volatilidad:{ticker}",
+    )
+    if status != "ok":
         return 0.30
+    close = hist["Close"] if "Close" in hist else hist
+    if isinstance(close, pd.DataFrame):
+        close = close.iloc[:, 0]
+    returns = pd.to_numeric(close, errors="coerce").pct_change().dropna()
+    if returns.empty:
+        return 0.30
+    return float(returns.std() * np.sqrt(252))
 
 
+@st.cache_data(ttl=86400, show_spinner=False)
 def _info_yfinance(ticker: str) -> dict:
-    try:
-        info = yf.Ticker(ticker).info
-        return info if isinstance(info, dict) else {}
-    except Exception:
-        return {}
+    return safe_yfinance_info(yf, ticker, context=f"proyeccion:info:{ticker}")
 
 
 def _construir_modelo(ticker: str, precio_actual: float) -> dict[str, object]:
@@ -145,7 +147,7 @@ def _construir_modelo(ticker: str, precio_actual: float) -> dict[str, object]:
 
     if fcf_margin_ref < 0:
         riesgos.append("Free cash flow negativo: vigilar runway de caja y posible dilucion.")
-    if isfinite(debt_equity) and debt_equity > 1.5:
+    if isfinite(debt_equity) and debt_equity > DEBT_EQUITY_RED_FLAG:
         riesgos.append("Apalancamiento elevado frente al perfil de crecimiento.")
     if isfinite(pe) and pe > 60:
         riesgos.append("Multiplo exigente: sensible a revisiones de beneficios.")

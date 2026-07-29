@@ -74,15 +74,31 @@ def run_contract_checks() -> list[str]:
         _clear_cache(mw.obtener_market_treemap_data)
     checks.append("treemap avoids quoteSummary info fallback")
 
+    from modulos import fmp_api, yahoo_resilience
+
+    original_fmp_quote = fmp_api.obtener_cotizacion_fmp
+    original_sleep = yahoo_resilience.time.sleep
+
+    def fmp_also_unavailable(_ticker: str) -> float:
+        return 0.0
+
     try:
         mw.yf.Ticker = RateLimitedTicker
+        fmp_api.obtener_cotizacion_fmp = fmp_also_unavailable
+        yahoo_resilience.time.sleep = lambda _seconds: None  # no esperar el backoff real en el test
         _clear_cache(mw.obtener_datos_ticker_tape)
         tape = mw.obtener_datos_ticker_tape()
-        assert_true("Mercado pendiente" in tape or "Datos no disponibles" in tape, "Ticker tape debe usar fallback")
+        assert_true(
+            "Rate limit temporal de Yahoo" in tape or "Fuente no disponible" in tape,
+            "Ticker tape debe mostrar un estado explícito por símbolo cuando Yahoo y FMP fallan, no desaparecer en silencio",
+        )
+        assert_true("vq-tape-item" in tape, "Ticker tape debe seguir renderizando items aunque falten datos")
     finally:
         mw.yf.Ticker = original_ticker
+        fmp_api.obtener_cotizacion_fmp = original_fmp_quote
+        yahoo_resilience.time.sleep = original_sleep
         _clear_cache(mw.obtener_datos_ticker_tape)
-    checks.append("ticker tape has rate-limit fallback")
+    checks.append("ticker tape shows explicit per-symbol status when Yahoo and FMP both fail")
 
     return checks
 

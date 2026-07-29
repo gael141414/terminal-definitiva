@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import contextlib
 import importlib
 import py_compile
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+
+from modulos.network_guard import blocked_network
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -75,6 +78,10 @@ CONTRACT_MODULES = [
     ("yfinance_helper_migration_contract", "scripts.test_yfinance_helper_migration_contract"),
     ("charts_yfinance_resilience_contract", "scripts.test_charts_yfinance_resilience_contract"),
     ("final_cleanup_contract", "scripts.test_final_cleanup_contract"),
+    ("data_layer_consolidation_contract", "scripts.test_data_layer_consolidation_contract"),
+    ("ticker_tape_fallback_contract", "scripts.test_ticker_tape_fallback_contract"),
+    ("watchlist_price_cache_contract", "scripts.test_watchlist_price_cache_contract"),
+    ("fmp_news_resilience_contract", "scripts.test_fmp_news_resilience_contract"),
 ]
 
 CRITICAL_IMPORTS = [
@@ -260,21 +267,33 @@ def _check_scoring_model() -> list[SmokeCheck]:
     return checks
 
 
-def run_smoke_tests() -> list[SmokeCheck]:
-    checks: list[SmokeCheck] = []
-    for path in CRITICAL_FILES:
-        checks.extend(_check_file(path))
-    for _, module_name in CONTRACT_MODULES:
-        module_path = module_name.replace(".", "/") + ".py"
-        checks.extend(_check_file(module_path))
-    checks.extend(_check_import(name) for name in CRITICAL_IMPORTS)
-    checks.extend(_check_catalog())
-    checks.extend(_check_router())
-    checks.extend(_check_product_surface_audit())
-    for slug, module_name in CONTRACT_MODULES:
-        checks.extend(_check_contract(slug, module_name))
-    checks.extend(_check_scoring_model())
-    return checks
+def run_smoke_tests(*, allow_network: bool = False) -> list[SmokeCheck]:
+    """Ejecuta todos los checks de la suite.
+
+    Por defecto (``allow_network=False``) instala ``modulos.network_guard``
+    antes de correr los checks: ningún proveedor externo real (Yahoo, FMP...)
+    es alcanzable, así que la suite valida el comportamiento de degradación
+    del código de forma determinista en vez de depender de si el proveedor
+    respondió bien en el momento exacto de la ejecución. ``allow_network=True``
+    es el modo de integración real opcional (contra proveedores reales), para
+    verificación manual — no es el modo usado por CI/--strict por defecto.
+    """
+    network_context = contextlib.nullcontext() if allow_network else blocked_network()
+    with network_context:
+        checks: list[SmokeCheck] = []
+        for path in CRITICAL_FILES:
+            checks.extend(_check_file(path))
+        for _, module_name in CONTRACT_MODULES:
+            module_path = module_name.replace(".", "/") + ".py"
+            checks.extend(_check_file(module_path))
+        checks.extend(_check_import(name) for name in CRITICAL_IMPORTS)
+        checks.extend(_check_catalog())
+        checks.extend(_check_router())
+        checks.extend(_check_product_surface_audit())
+        for slug, module_name in CONTRACT_MODULES:
+            checks.extend(_check_contract(slug, module_name))
+        checks.extend(_check_scoring_model())
+        return checks
 
 
 def format_smoke_results(checks: list[SmokeCheck]) -> str:
@@ -292,7 +311,8 @@ def format_smoke_results(checks: list[SmokeCheck]) -> str:
 def main(argv: list[str] | None = None) -> int:
     argv = argv if argv is not None else sys.argv[1:]
     strict = "--strict" in argv
-    checks = run_smoke_tests()
+    allow_network = "--allow-network" in argv
+    checks = run_smoke_tests(allow_network=allow_network)
     print(format_smoke_results(checks))
     failed = [check for check in checks if not check.ok]
     if strict and failed:

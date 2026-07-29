@@ -2,6 +2,8 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 
+from modulos.yahoo_resilience import safe_yfinance_info
+
 def ejecutar_escaner_global():
     st.markdown("### 🌐 Escáner Cuantitativo de Oportunidades")
     st.markdown("Introduce una cesta de acciones y aplica filtros institucionales estrictos para separar las empresas excepcionales de las mediocres.")
@@ -38,40 +40,44 @@ def ejecutar_escaner_global():
             # Iniciamos la barra de progreso
             barra_progreso = st.progress(0, text="Iniciando conexión con bases de datos...")
             resultados = []
-            
+            fallos = {}
+
             for i, ticker in enumerate(lista_tickers):
                 # Actualizamos el texto de la barra para que el usuario sepa qué hace
                 barra_progreso.progress((i + 1) / len(lista_tickers), text=f"Analizando fundamentales de: {ticker}...")
-                
-                try:
-                    info = yf.Ticker(ticker).info
-                    
-                    # Extraer métricas clave de forma segura. Si no existen, ponemos valores por defecto que no rompan el filtro
-                    per = info.get('trailingPE', 999) # Si no tiene PER, le ponemos 999 para que suspenda el filtro de barato
-                    roe = info.get('returnOnEquity', 0) * 100 if info.get('returnOnEquity') else 0
-                    crecimiento = info.get('revenueGrowth', 0) * 100 if info.get('revenueGrowth') else 0
-                    deuda = info.get('debtToEquity', 0)
-                    sector = info.get('sector', 'Desconocido')
-                    
-                    # Guardar datos en crudo en nuestro diccionario
-                    resultados.append({
-                        'Ticker': ticker,
-                        'Sector': sector,
-                        'PER': round(float(per), 2),
-                        'ROE (%)': round(float(roe), 2),
-                        'Crecimiento YoY (%)': round(float(crecimiento), 2),
-                        'Deuda/Equity': round(float(deuda), 2) if deuda else 0.0
-                    })
-                except Exception as e:
-                    # Si un ticker falla (porque está mal escrito o Yahoo no lo tiene), lo ignoramos silenciosamente
-                    pass 
-                
+
+                info = safe_yfinance_info(yf, ticker, context=f"screener:{ticker}")
+                if not info:
+                    fallos[ticker] = "Sin datos (rate limit temporal o ticker inválido)"
+                    continue
+
+                # Extraer métricas clave de forma segura. Si no existen, ponemos valores por defecto que no rompan el filtro
+                per = info.get('trailingPE', 999) # Si no tiene PER, le ponemos 999 para que suspenda el filtro de barato
+                roe = info.get('returnOnEquity', 0) * 100 if info.get('returnOnEquity') else 0
+                crecimiento = info.get('revenueGrowth', 0) * 100 if info.get('revenueGrowth') else 0
+                deuda = info.get('debtToEquity', 0)
+                sector = info.get('sector', 'Desconocido')
+
+                # Guardar datos en crudo en nuestro diccionario
+                resultados.append({
+                    'Ticker': ticker,
+                    'Sector': sector,
+                    'PER': round(float(per), 2),
+                    'ROE (%)': round(float(roe), 2),
+                    'Crecimiento YoY (%)': round(float(crecimiento), 2),
+                    'Deuda/Equity': round(float(deuda), 2) if deuda else 0.0
+                })
+
             # Borrar barra al terminar el bucle
-            barra_progreso.empty() 
-            
+            barra_progreso.empty()
+
+            if fallos:
+                detalle_fallos = ", ".join(f"{t} ({motivo})" for t, motivo in fallos.items())
+                st.warning(f"⚠️ No se pudo obtener información de {len(fallos)} ticker(s): {detalle_fallos}")
+
             # --- PROCESAMIENTO DE RESULTADOS ---
             if not resultados:
-                st.error("No se ha podido extraer información de ninguno de los Tickers proporcionados. Comprueba que estén bien escritos.")
+                st.error("No se ha podido extraer información de ninguno de los Tickers proporcionados. Comprueba que estén bien escritos o inténtalo de nuevo en unos minutos si Yahoo Finance está limitando peticiones.")
             else:
                 df = pd.DataFrame(resultados)
                 

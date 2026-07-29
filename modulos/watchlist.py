@@ -4,10 +4,23 @@ from typing import Any
 
 import pandas as pd
 import streamlit as st
-import yfinance as yf
 
 from modulos.watchlist_alerts import alert_summary, build_watchlist_alerts
 from modulos.analysis_store import score_evolution_summary, score_history_for_ticker
+from modulos.quotes import fetch_quotes_with_fallback
+from modulos.sec_validation_store import sec_validation_summary
+from modulos.ui_components import sec_validation_watchlist_label
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _obtener_precios_watchlist(tickers: tuple[str, ...]):
+    """Cotizaciones de la watchlist en lote y cacheadas (TTL 5 min).
+
+    Antes se hacía una llamada individual de histórico por ticker, sin caché, en
+    cada rerun de la pestaña — esto disparaba N peticiones no cacheadas a Yahoo
+    solo por abrir/redibujar la Watchlist.
+    """
+    return fetch_quotes_with_fallback(tickers, period="5d")
 
 # Definimos la ruta de la base de datos
 DB_FOLDER = "data"
@@ -225,6 +238,7 @@ def _build_watchlist_row(
         "Ajuste Calidad": quality_adjusted,
         "Quality Gate": analysis.get("score_quality_gate_reason") or "-",
         "Red Flags": red_flags_count,
+        "SEC": sec_validation_watchlist_label(sec_validation_summary(ticker)),
         "Margen Seguridad": analysis.get("margin_of_safety"),
         "Régimen Valoración": analysis.get("valuation_regime", "-"),
         "Comparador": analysis.get("competitor", "-"),
@@ -503,27 +517,20 @@ def ejecutar_watchlist():
 
     with st.spinner("Sincronizando precios, snapshots y alertas inteligentes..."):
         tickers_list = list(db.keys())
+        cotizaciones = _obtener_precios_watchlist(tuple(tickers_list))
         resultados = []
+        fallos = []
 
         for ticker in tickers_list:
             item = _normalizar_item(db.get(ticker, {}))
             analysis = _extraer_last_analysis(item)
+            quote = cotizaciones.get(ticker)
 
-            try:
-                tk = yf.Ticker(ticker)
-                hist = tk.history(period="5d")
-
-                if not hist.empty and len(hist) >= 2:
-                    precio_actual = float(hist["Close"].iloc[-1])
-                    precio_ayer = float(hist["Close"].iloc[-2])
-                    cambio_pct = ((precio_actual - precio_ayer) / precio_ayer) * 100
-                else:
-                    precio_actual = float(tk.fast_info.last_price)
-                    precio_ayer = float(tk.fast_info.previous_close)
-                    cambio_pct = ((precio_actual - precio_ayer) / precio_ayer) * 100
+            if quote is not None and quote.ok:
+                precio_actual = quote.price
+                cambio_pct = quote.change_pct if quote.change_pct is not None else 0.0
 
                 target = _as_float(item.get("target"), 0.0)
-
                 if target > 0:
                     distancia = ((precio_actual - target) / target) * 100
                     alerta = "✅ EN PRECIO" if precio_actual <= target else f"A un -{distancia:.1f}% de caer"
@@ -539,9 +546,9 @@ def ejecutar_watchlist():
                     target=target,
                     distancia_alerta=alerta,
                 )
-                resultados.append(record)
-
-            except Exception:
+            else:
+                estado = quote.status_label if quote is not None else "Sin datos disponibles"
+                fallos.append(f"{ticker} ({estado})")
                 record = _build_watchlist_row(
                     ticker=ticker,
                     item=item,
@@ -549,9 +556,12 @@ def ejecutar_watchlist():
                     precio_actual=0.0,
                     cambio_pct=0.0,
                     target=_as_float(item.get("target"), 0.0),
-                    distancia_alerta="⚠️ Error de datos",
+                    distancia_alerta=f"⚠️ {estado}",
                 )
-                resultados.append(record)
+            resultados.append(record)
+
+        if fallos:
+            st.warning(f"⚠️ No se pudo actualizar el precio de: {', '.join(fallos)}")
 
         df_watch = pd.DataFrame(resultados)
         if not df_watch.empty and "Prioridad Score" in df_watch.columns:

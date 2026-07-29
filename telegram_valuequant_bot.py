@@ -11,10 +11,11 @@ import pandas as pd
 import requests
 import yfinance as yf
 
-from balance_analyzer import analizar_balance
-from cashflow_analyzer import analizar_flujo_efectivo
+from financials.balance_analyzer import analizar_balance
+from financials.cashflow_analyzer import analizar_flujo_efectivo
 from downloader import obtener_estados_financieros
-from income_analyzer import analizar_cuenta_resultados
+from financials.income_analyzer import analizar_cuenta_resultados
+from modulos.config import DEBT_EQUITY_WARNING
 from modulos.utils import calcular_score_buffett
 
 
@@ -239,7 +240,7 @@ def scan_fundamental_deterioration(max_tickers=5):
             roic = get_last(res_bs["ratios"], "ROIC %")
             fcf = get_last(res_cf["ratios"], "Free Cash Flow (B USD)")
 
-            if debt_cap is not None and debt_cap > 1.2:
+            if debt_cap is not None and debt_cap > DEBT_EQUITY_WARNING:
                 alerts.append(
                     f"🚨 <b>Deterioro fundamental</b>\n"
                     f"${ticker}: Deuda/Capital en <b>{debt_cap:.2f}x</b>. "

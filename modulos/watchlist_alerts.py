@@ -12,6 +12,9 @@ from typing import Any
 
 import pandas as pd
 
+from modulos.sec_fmp_cross_validation import SEVERE_DISCREPANCY_PCT
+from modulos.sec_validation_store import sec_validation_summary
+
 
 @dataclass(frozen=True)
 class WatchlistAlert:
@@ -95,6 +98,53 @@ def _alert(
     )
 
 
+def _sec_validation_alert(ticker: str) -> WatchlistAlert | None:
+    """Alerta a partir del resumen compacto que persiste el job nocturno
+    (modulos/sec_validation_store.py, Sub-fase 3b) — se relee por ticker
+    directamente (lectura local en JSON, no red) en vez de depender de
+    columnas de paso en ``row``, igual que ``score_evolution_summary``.
+
+    ``None`` tanto si nunca hubo verificación como si la hubo y coincide del
+    todo: ninguno de los dos casos es una alerta — "sin verificar" no es un
+    riesgo en sí mismo, se refleja en la columna "SEC" de Watchlist, no aquí.
+    """
+
+    summary = sec_validation_summary(ticker)
+    if not summary or not summary.get("last_successful_check_at"):
+        return None
+
+    discrepancy_count = int(summary.get("discrepancy_count") or 0)
+    period_misaligned_count = int(summary.get("period_misaligned_count") or 0)
+    if discrepancy_count == 0 and period_misaligned_count == 0:
+        return None
+
+    if discrepancy_count > 0:
+        worst_diff = summary.get("worst_diff_pct")
+        severa = worst_diff is not None and abs(worst_diff) > SEVERE_DISCREPANCY_PCT
+        worst_metric = summary.get("worst_metric")
+        detail = f"{discrepancy_count} métrica(s) difieren de SEC EDGAR"
+        detail += f" (peor: {worst_metric}, {worst_diff:+.1f}%)." if worst_metric and worst_diff is not None else "."
+        return _alert(
+            ticker=ticker,
+            priority="Alta" if severa else "Media",
+            category="SEC EDGAR",
+            title="Discrepancia con SEC EDGAR",
+            detail=detail,
+            action="Revisar en Auditoría Forense → Modo Auditoría",
+            score=82 if severa else 60,
+        )
+
+    return _alert(
+        ticker=ticker,
+        priority="Baja",
+        category="SEC EDGAR",
+        title="Posible restatement SEC EDGAR",
+        detail=f"{period_misaligned_count} métrica(s) con fechas de periodo no coincidentes frente a SEC EDGAR.",
+        action="Revisar en Auditoría Forense → Modo Auditoría",
+        score=48,
+    )
+
+
 def evaluate_watchlist_row(row: dict[str, Any]) -> list[WatchlistAlert]:
     """Genera alertas para una fila normalizada de watchlist."""
 
@@ -147,6 +197,10 @@ def evaluate_watchlist_row(row: dict[str, Any]) -> list[WatchlistAlert]:
                 score=90,
             )
         )
+
+    sec_alert = _sec_validation_alert(ticker)
+    if sec_alert is not None:
+        alerts.append(sec_alert)
 
     if quality_adjusted:
         alerts.append(

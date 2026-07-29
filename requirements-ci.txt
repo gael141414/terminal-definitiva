@@ -17,3 +17,5 @@ ta==0.11.0
 textblob==0.17.1
 nltk==3.8.1
 matplotlib==3.8.2
+pytest==9.1.1
+edgartools==5.30.2

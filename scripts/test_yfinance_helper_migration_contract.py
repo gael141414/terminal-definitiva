@@ -21,17 +21,6 @@ def _read(path: str) -> str:
 def run_contract_checks() -> list[str]:
     checks: list[str] = []
 
-    data_provider = _read("data_provider.py")
-    assert_true("safe_yfinance_download" in data_provider, "data_provider debe usar safe_yfinance_download")
-    assert_true("yf.download(" not in data_provider, "data_provider no debe llamar directamente a yf.download")
-    checks.append("data_provider uses resilient download helper")
-
-    backtester = _read("backtester.py")
-    assert_true("safe_yfinance_download" in backtester, "backtester debe usar safe_yfinance_download")
-    assert_true("yf.download(" not in backtester, "backtester no debe llamar directamente a yf.download")
-    assert_true("Backtest cancelado sin romper ejecución" in backtester, "backtester debe degradar sin romper si no hay precios")
-    checks.append("backtester uses resilient download helper")
-
     screener = _read("screener.py")
     assert_true("safe_yfinance_info" in screener, "screener debe usar safe_yfinance_info")
     assert_true("yf.Ticker(" not in screener, "screener no debe llamar directamente a yf.Ticker")

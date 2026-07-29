@@ -13,12 +13,13 @@ from modulos.app_assets import strip_visual_prefix
 
 
 BLOQUE_UI = {
-    "📌 Núcleo Empresa": ("Empresa", "bar-chart-line"),
-    "📈 Mercado y Timing": ("Mercado", "graph-up-arrow"),
-    "🛡️ Riesgo y Defensa": ("Riesgo", "shield-lock"),
-    "🔎 Descubrimiento": ("Descubrimiento", "search"),
-    "💼 Cartera y Decisión": ("Cartera", "briefcase"),
-    "🧠 IA y Mentoría": ("IA", "cpu"),
+    "🧩 Research Core": ("Research Core", "diagram-3"),
+    "📊 Market Terminal": ("Market", "graph-up-arrow"),
+    "🔎 Discovery Engine": ("Discovery", "search"),
+    "⏳ Historical Lab": ("Lab", "hourglass-split"),
+    "⚖️ Portfolio & Risk": ("Portfolio", "shield-lock"),
+    "🤖 Automatización & Watchlist": ("Watchlist", "list-check"),
+    "🧰 Utilidades & Post-MVP": ("Utilidades", "tools"),
 }
 
 
@@ -26,14 +27,14 @@ TOOL_UI_ICONS = {
     "📊 Resumen Ejecutivo": "speedometer2",
     "🔎 Análisis Fundamental": "clipboard-data",
     "🧠 Auditoría Forense": "fingerprint",
-    "🔮 Proyección IA y Catalizadores": "stars",
+    "🔮 Proyección Cuantitativa y Catalizadores": "stars",
     "🎓 Visor de Gurús (Estrategias)": "mortarboard",
     "📈 Técnico y Opciones": "graph-up",
     "🧮 Opciones Avanzadas (BSM)": "calculator",
     "🌍 Radar Macro y Sectores": "globe2",
     "🕰️ Reloj Económico (Regímenes)": "clock-history",
     "🚰 Monitor de Liquidez (FED)": "bank",
-    "🔭 Predictor de Techos/Suelos": "bullseye",
+    "📊 Extremos de Volatilidad (Z-Score)": "activity",
     "🦢 Test Cisnes Negros (Crisis)": "exclamation-triangle",
     "🛡️ Radar de Coberturas (Hedging)": "shield-check",
     "⏳ Máquina del Tiempo (Backtest)": "hourglass-split",

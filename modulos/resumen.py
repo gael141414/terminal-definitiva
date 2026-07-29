@@ -4,8 +4,10 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from charts import plot_anillo_puntuacion, plot_dashboard_interactivo, plot_football_field
+from modulos.config import DEBT_EQUITY_RED_FLAG, DEBT_EQUITY_WARNING
 from modulos.utils import renderizar_grafico_tradingview, escanear_vulnerabilidades
 from modulos.scoring_engine import render_valuequant_score_card
+from modulos.ui_components import kpi_status_from_thresholds, render_kpi_card
 
 # Importa tus gráficos personalizados si los usas aquí
 from charts import plot_dashboard_interactivo, plot_calidad_beneficios 
@@ -51,21 +53,61 @@ def ejecutar_resumen_ejecutivo(ticker_input, is_df, bs_df, cf_df, res_is, res_bs
     sc_roic = get_last(res_bs["ratios"], "ROIC %")
     sc_fcf = get_last(res_cf["ratios"], "Free Cash Flow (B USD)")
     sc_deuda = get_last(res_bs["ratios"], "Deuda / Capital")
-    
+
     sc1, sc2, sc3, sc4 = st.columns(4)
-    sc1.metric("ROE (Rentabilidad)", f"{sc_roe:.1f}%" if sc_roe else "N/A", "Aprobado" if sc_roe and sc_roe > 15 else "Bajo")
-    sc2.metric("ROIC (Calidad)", f"{sc_roic:.1f}%" if sc_roic else "N/A", "Aprobado" if sc_roic and sc_roic > 15 else "Bajo")
-    sc3.metric("FCF Último Año", f"${sc_fcf:.1f}B" if sc_fcf else "N/A", "Genera Caja" if sc_fcf and sc_fcf > 0 else "Quema Caja")
-    sc4.metric("Deuda / Capital", f"{sc_deuda:.2f}x" if sc_deuda else "N/A", "Sano" if sc_deuda and sc_deuda < 0.8 else "Peligro", delta_color="inverse")
+    with sc1:
+        # ROE se muestra en estado "normal" (sin juicio de valor), igual que
+        # el ejemplo del propio mockup: informativo, no hay un umbral único
+        # y objetivo para "ROE bueno" salvo el que ya cubre ROIC.
+        render_kpi_card(
+            "ROE (Rentabilidad)",
+            f"{sc_roe:.1f}%" if sc_roe is not None else None,
+            detail="Retorno sobre patrimonio, último año." if sc_roe is not None else "",
+            tag="TTM",
+        )
+    with sc2:
+        roic_favorable = sc_roic is not None and sc_roic > 15
+        render_kpi_card(
+            "ROIC (Calidad)",
+            f"{sc_roic:.1f}%" if sc_roic is not None else None,
+            status="favorable" if roic_favorable else "normal",
+            detail="Supera el 15%: crea valor por encima del coste de capital." if sc_roic is not None else "",
+        )
+    with sc3:
+        fcf_favorable = sc_fcf is not None and sc_fcf >= 0
+        render_kpi_card(
+            "FCF Último Año",
+            f"${sc_fcf:.1f}B" if sc_fcf is not None else None,
+            status="favorable" if fcf_favorable else ("riesgo" if sc_fcf is not None else "normal"),
+            detail=("Genera caja real." if fcf_favorable else "Quema de caja: revisar sostenibilidad.") if sc_fcf is not None else "",
+        )
+    with sc4:
+        deuda_status = kpi_status_from_thresholds(sc_deuda, warning=DEBT_EQUITY_WARNING, danger=DEBT_EQUITY_RED_FLAG)
+        deuda_detail = {
+            "normal": "Apalancamiento moderado.",
+            "advertencia": f"Entre el aviso ({DEBT_EQUITY_WARNING}x) y el umbral crítico ({DEBT_EQUITY_RED_FLAG}x).",
+            "riesgo": f"Supera el umbral crítico de {DEBT_EQUITY_RED_FLAG}x — red flag.",
+            "no_disponible": "",
+        }.get(deuda_status, "")
+        render_kpi_card(
+            "Deuda / Capital",
+            f"{sc_deuda:.2f}x" if sc_deuda is not None else None,
+            status=deuda_status,
+            detail=deuda_detail,
+        )
 
     st.markdown("### 📈 Gráfico Interactivo Pro")
     renderizar_grafico_tradingview(ticker_input)
 
     # ======== VEREDICTO ========
-    if res_val and precio_mercado:
-        v_justo = res_val.get('dcf_value') or res_val.get('epv_value') or res_val.get('graham_value', 0)
-        margen_seguridad = ((precio_mercado - v_justo) / v_justo) * 100 if v_justo > 0 else 0
-        estado_precio = "Infravalorada (Descuento)" if margen_seguridad < 0 else "Sobrevalorada (Prima)"
+    # Convención unificada de margen de seguridad: (fair_value - price) / price
+    # (misma que modulos/scoring_engine.py y modulos/investment_thesis.py/Tesis/
+    # Watchlist ya usaban). Antes aquí era (price - fair_value) / fair_value:
+    # signo y denominador contrarios al resto de la app.
+    v_justo = res_val.get('dcf_value') or res_val.get('epv_value') or res_val.get('graham_value') if res_val else None
+    if res_val and precio_mercado and v_justo:
+        margen_seguridad = ((v_justo - precio_mercado) / precio_mercado) * 100
+        estado_precio = "Infravalorada (Descuento)" if margen_seguridad > 0 else "Sobrevalorada (Prima)"
     else:
         estado_precio = "Datos insuficientes"
     

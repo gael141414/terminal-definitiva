@@ -86,7 +86,9 @@ class AppConfig:
     google_api_key: str
     telegram_bot_token: str
     telegram_chat_id: str
+    sec_edgar_identity: str
     debug: bool = False
+    fmp_news_enabled: bool = False
 
 
 @lru_cache(maxsize=1)
@@ -98,8 +100,19 @@ def get_config() -> AppConfig:
         google_api_key=str(get_secret("GOOGLE_API_KEY", "")),
         telegram_bot_token=str(get_secret("TELEGRAM_BOT_TOKEN", "")),
         telegram_chat_id=str(get_secret("TELEGRAM_CHAT_ID", "")),
+        sec_edgar_identity=str(get_secret("SEC_EDGAR_IDENTITY", "Buffett Terminal gaelestgon@gmail.com")),
         debug=get_bool_secret("VALUEQUANT_DEBUG", get_bool_secret("DEBUG", False)),
+        fmp_news_enabled=get_bool_secret("FMP_NEWS_ENABLED", False),
     )
 
 
 CONFIG = get_config()
+
+
+# --- Umbrales de negocio compartidos -----------------------------------
+# Antes coexistían 1.2 y 1.5 como el mismo tipo de umbral duplicado en varios
+# archivos (algunos como aviso temprano, otros como red flag más grave) sin
+# una única fuente de verdad. Warning = merece atención; Red flag = nivel de
+# apalancamiento que el modelo considera peligroso.
+DEBT_EQUITY_WARNING = 1.2
+DEBT_EQUITY_RED_FLAG = 1.5

@@ -4,65 +4,36 @@ import requests
 import yfinance as yf
 
 from downloader import obtener_estados_financieros
-from income_analyzer import analizar_cuenta_resultados
-from balance_analyzer import analizar_balance
-from cashflow_analyzer import analizar_flujo_efectivo
+from financials.income_analyzer import analizar_cuenta_resultados
+from financials.balance_analyzer import analizar_balance
+from financials.cashflow_analyzer import analizar_flujo_efectivo
+from modulos.utils import calcular_score_buffett
 from modulos.yahoo_resilience import safe_yfinance_info
 
-# Copiamos aquí la función del Score para que el bot pueda evaluarlas
-def calcular_score_buffett(df_is, df_bs, df_cf):
-    score = 0
-    def get_last(df, col):
-        if df is not None and col in df.columns:
-            s = df[col].dropna()
-            return s.iloc[-1] if not s.empty else None
-        return None
-
-    mb = get_last(df_is, "Margen Bruto %")
-    mn = get_last(df_is, "Margen Neto %")
-    roe = get_last(df_bs, "ROE %")
-    roic = get_last(df_bs, "ROIC %")
-    deuda = get_last(df_bs, "Deuda / Capital")
-    capex = get_last(df_cf, "CAPEX % sobre Beneficio")
-    fcf = get_last(df_cf, "Free Cash Flow (B USD)")
-
-    if mb and mb > 40: score += 10
-    elif mb and mb > 20: score += 5
-    if mn and mn > 20: score += 15
-    elif mn and mn > 10: score += 7
-
-    if roe and roe > 15: score += 15
-    if roic and roic > 15: score += 15
-
-    if deuda is not None and deuda < 0.8: score += 15
-    elif deuda is not None and deuda < 1.5: score += 7
-    if capex is not None and capex < 25: score += 10
-    elif capex is not None and capex < 50: score += 5
-
-    if fcf and fcf > 0: score += 20
-
-    return score
-
-# Leer todas las tablas de la página de Wikipedia del S&P 500
-url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
-headers = {
+SP500_WIKI_URL = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
+SP500_WIKI_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
 }
-html_content = requests.get(url, headers=headers).text
-tables = pd.read_html(html_content)
 
-# La primera tabla (índice 0) contiene la lista de componentes actuales
-df = tables[0]
 
-# Extraer los tickers como una lista
-tickers_a_evaluar = df['Symbol'].tolist()
+def obtener_tickers_sp500():
+    """Descarga la lista de tickers del S&P 500 desde Wikipedia (llamada de red bajo demanda)."""
+    html_content = requests.get(SP500_WIKI_URL, headers=SP500_WIKI_HEADERS).text
+    tables = pd.read_html(html_content)
 
-# (Opcional) Limpiar tickers: algunos usan '.' en lugar de '-' (ej. BRK.B)
-tickers_a_evaluar = [ticker.replace('.', '-') for ticker in tickers_a_evaluar]
+    # La primera tabla (índice 0) contiene la lista de componentes actuales
+    df = tables[0]
 
-print(f"Total de tickers encontrados: {len(tickers_a_evaluar)}")
+    # Extraer los tickers como una lista
+    tickers = df['Symbol'].tolist()
+
+    # (Opcional) Limpiar tickers: algunos usan '.' en lugar de '-' (ej. BRK.B)
+    return [ticker.replace('.', '-') for ticker in tickers]
+
 
 def ejecutar_screener():
+    tickers_a_evaluar = obtener_tickers_sp500()
+    print(f"Total de tickers encontrados: {len(tickers_a_evaluar)}")
     print(f"🚀 Iniciando Screener Institucional (Buffett + Greenblatt + Carlisle) para {len(tickers_a_evaluar)} empresas...")
     resultados = []
 

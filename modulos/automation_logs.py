@@ -36,6 +36,9 @@ class AutomationEvent:
     recalculation_count: int = 0
     sent_parts: int = 0
     fingerprint: str = ""
+    tickers_processed: int = 0
+    tickers_failed: int = 0
+    new_discrepancies_count: int = 0
 
 
 def _now_iso() -> str:
@@ -190,6 +193,43 @@ def log_delivery_attempt(*, channel: str, status: str, detail: str, sent_parts: 
     append_automation_event(event, dedupe=False)
 
 
+def log_sec_validation_run(
+    *,
+    tickers_selected: list[str],
+    tickers_processed: int,
+    tickers_failed: int,
+    new_discrepancies_count: int,
+) -> bool:
+    """Registra una corrida del runner de validación cruzada SEC↔FMP
+    (modulos/sec_validation_runner.py, ejecutado vía cron local)."""
+
+    fingerprint = _hash_payload([
+        "sec_validation_run",
+        len(tickers_selected),
+        tickers_processed,
+        tickers_failed,
+        new_discrepancies_count,
+        datetime.now().strftime("%Y%m%d_%H%M"),
+    ])
+    event = AutomationEvent(
+        timestamp=_now_iso(),
+        event_type="sec_validation_run",
+        status="ok" if tickers_failed == 0 else "partial",
+        channel="local",
+        summary=(
+            f"Validación SEC↔FMP: {tickers_processed} ok, {tickers_failed} fallidos, "
+            f"{new_discrepancies_count} discrepancias nuevas"
+        ),
+        detail="Generado desde el runner de validación SEC↔FMP (cron local).",
+        ticker_count=len(tickers_selected),
+        tickers_processed=tickers_processed,
+        tickers_failed=tickers_failed,
+        new_discrepancies_count=new_discrepancies_count,
+        fingerprint=fingerprint,
+    )
+    return append_automation_event(event, dedupe=True)
+
+
 def load_automation_log(limit: int = 200) -> pd.DataFrame:
     rows = _read_raw_events(limit=limit)
     if not rows:
@@ -207,6 +247,9 @@ def load_automation_log(limit: int = 200) -> pd.DataFrame:
         "review_today",
         "recalculation_count",
         "sent_parts",
+        "tickers_processed",
+        "tickers_failed",
+        "new_discrepancies_count",
     ]
     columns = [col for col in preferred if col in df.columns]
     return df[columns].sort_values("timestamp", ascending=False, ignore_index=True)

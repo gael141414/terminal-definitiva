@@ -76,12 +76,13 @@ def _style_vq_dataframe(df: pd.DataFrame, *, color_func=None, hide_index: bool =
     return styler
 
 # Importamos tus analizadores matemáticos personalizados (que tienes en archivos separados)
-from income_analyzer import analizar_cuenta_resultados
-from balance_analyzer import analizar_balance
-from cashflow_analyzer import analizar_flujo_efectivo
-from valuator import calcular_crecimiento_implicito_dcf, calcular_dcf_fcf_por_accion, valorar_empresa
+from financials.income_analyzer import analizar_cuenta_resultados
+from financials.balance_analyzer import analizar_balance
+from financials.cashflow_analyzer import analizar_flujo_efectivo
+from financials.valuator import calcular_crecimiento_implicito_dcf, calcular_dcf_fcf_por_accion, valorar_empresa
 from modulos.utils import obtener_valoracion_sectorial, cargar_datos, calcular_score_buffett
 from modulos.scoring_engine import render_valuequant_score_card
+from modulos.ui_components import render_kpi_card
 from charts import (
     plot_tsr_vs_sp500, 
     plot_dashboard_interactivo, 
@@ -197,38 +198,51 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
     acciones = res_val.get('acciones_actuales')
     if precio_actual and acciones and "Free Cash Flow (B USD)" in res_cf["ratios"].columns:
         market_cap = precio_actual * acciones
-        
-        ultimo_fcf_b = res_cf["ratios"]["Free Cash Flow (B USD)"].dropna().iloc[-1]
-        ultimas_recompras_b = res_cf["ratios"]["Recompras (B USD)"].dropna().iloc[-1]
-        
-        fcf_real = ultimo_fcf_b * 1e9
-        recompras_reales = ultimas_recompras_b * 1e9
-        
-        fcf_yield = (fcf_real / market_cap) * 100
-        buyback_yield = (recompras_reales / market_cap) * 100
-        
+
+        fcf_series = res_cf["ratios"]["Free Cash Flow (B USD)"].dropna()
+        recompras_col = res_cf["ratios"].get("Recompras (B USD)")
+        recompras_series = recompras_col.dropna() if recompras_col is not None else pd.Series(dtype=float)
+
+        # Recompras ausente (columna sin datos, no un 0 real) no debe tratarse
+        # como "sin recompras": se muestra N/D en vez de sumarse como 0 al yield.
+        ultimo_fcf_b = fcf_series.iloc[-1] if not fcf_series.empty else None
+        ultimas_recompras_b = recompras_series.iloc[-1] if not recompras_series.empty else None
+
+        fcf_yield = (ultimo_fcf_b * 1e9 / market_cap) * 100 if ultimo_fcf_b is not None else None
+        buyback_yield = (ultimas_recompras_b * 1e9 / market_cap) * 100 if ultimas_recompras_b is not None else None
+
         c7, c8, c9 = st.columns(3)
-        
+
         if market_cap >= 1e12:
             c7.metric("Market Cap (Capitalización)", f"${market_cap / 1e12:.2f} Trillones")
         else:
             c7.metric("Market Cap (Capitalización)", f"${market_cap / 1e9:.2f} Billones")
-        
-        color_fcf = "normal" if fcf_yield >= 4.0 else "inverse"
-        c8.metric("FCF Yield (Rendimiento Efectivo)", f"{fcf_yield:.2f}%", "Óptimo > 4%" if fcf_yield >= 4.0 else "Pobre/Caro", delta_color=color_fcf)
-        
-        c9.metric("Buyback Yield (Recompras)", f"{buyback_yield:.2f}%", "Destrucción de acciones" if buyback_yield > 0 else "")
+
+        if fcf_yield is not None:
+            color_fcf = "normal" if fcf_yield >= 4.0 else "inverse"
+            c8.metric("FCF Yield (Rendimiento Efectivo)", f"{fcf_yield:.2f}%", "Óptimo > 4%" if fcf_yield >= 4.0 else "Pobre/Caro", delta_color=color_fcf)
+        else:
+            c8.metric("FCF Yield (Rendimiento Efectivo)", "N/D")
+
+        if buyback_yield is not None:
+            c9.metric("Buyback Yield (Recompras)", f"{buyback_yield:.2f}%", "Destrucción de acciones" if buyback_yield > 0 else "")
+        else:
+            c9.metric("Buyback Yield (Recompras)", "N/D")
 
         st.write("")
-        total_yield = fcf_yield + buyback_yield
-        
-        if total_yield >= 8.0:
-            st.success(f"✅ **Veredicto (Máquina de Efectivo):** Excepcional. La empresa te está devolviendo un **{total_yield:.2f}%** de tu inversión anual de forma 'invisible' (sumando su FCF Yield y las recompras). Está destruyendo acciones a buen ritmo y generando muchísima caja.")
-        elif total_yield >= 4.0:
-            st.info(f"⚖️ **Veredicto (Sano):** Razonable. Un rendimiento de efectivo total del **{total_yield:.2f}%**, en línea con empresas sólidas y estables. El dinero fluye correctamente hacia el accionista.")
+
+        if fcf_yield is not None and buyback_yield is not None:
+            total_yield = fcf_yield + buyback_yield
+
+            if total_yield >= 8.0:
+                st.success(f"✅ **Veredicto (Máquina de Efectivo):** Excepcional. La empresa te está devolviendo un **{total_yield:.2f}%** de tu inversión anual de forma 'invisible' (sumando su FCF Yield y las recompras). Está destruyendo acciones a buen ritmo y generando muchísima caja.")
+            elif total_yield >= 4.0:
+                st.info(f"⚖️ **Veredicto (Sano):** Razonable. Un rendimiento de efectivo total del **{total_yield:.2f}%**, en línea con empresas sólidas y estables. El dinero fluye correctamente hacia el accionista.")
+            else:
+                st.warning(f"⚠️ **Veredicto (Caja Pobre):** Un rendimiento del **{total_yield:.2f}%** significa que la empresa está muy cara respecto al dinero real que genera, o bien que su negocio requiere reinvertir todo lo que gana (muy intensivo en capital) dejando poco para ti.")
         else:
-            st.warning(f"⚠️ **Veredicto (Caja Pobre):** Un rendimiento del **{total_yield:.2f}%** significa que la empresa está muy cara respecto al dinero real que genera, o bien que su negocio requiere reinvertir todo lo que gana (muy intensivo en capital) dejando poco para ti.")
-        
+            st.info("No hay datos suficientes de FCF y/o recompras para calcular el retorno de efectivo total.")
+
     else:
         st.info("No hay datos suficientes de Flujo de Caja para calcular el FCF Yield.")
         
@@ -270,29 +284,50 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
     st.markdown("#### 🔬 Análisis DuPont: Desmontando el ROE")
     st.caption("Charlie Munger dice: 'Un ROE alto es inútil si se logra a base de deudas'. Aquí vemos de dónde viene realmente el ROE del último año.")
     
-    # Función escudo para evitar el IndexError si la columna entera son NaNs
+    # Función escudo: un dato ausente sigue siendo None (no un 0.0 que se
+    # confunda con un valor real) para que render_kpi_card lo muestre como
+    # "n/d" en vez de un 0% o 0x engañoso.
     def get_safe_last_val(df, col):
         if col in df.columns:
             s = df[col].dropna()
             if not s.empty:
                 return s.iloc[-1]
-        return 0.0
+        return None
 
     # Extraemos el último año usando nuestra función escudo
     dupont_margen = get_safe_last_val(res_bs["ratios"], "DuPont: Margen Neto %")
     dupont_rotacion = get_safe_last_val(res_bs["ratios"], "DuPont: Rotación Activos")
     dupont_apalan = get_safe_last_val(res_bs["ratios"], "DuPont: Apalancamiento")
     roe_ultimo = get_safe_last_val(res_bs["ratios"], "ROE %")
-    
+
     c_dp1, c_dp2, c_dp3, c_dp4 = st.columns(4)
-    c_dp1.metric("1. Margen Neto (Eficiencia)", f"{dupont_margen:.1f}%")
-    c_dp2.metric("2. Rotación Activos (Volumen)", f"{dupont_rotacion:.2f}x")
-    
-    estado_apalan = "Riesgo si > 3.0x" if dupont_apalan > 3.0 else "Sano"
-    color_apalan = "inverse" if dupont_apalan > 3.0 else "normal"
-    c_dp3.metric("3. Apalancamiento (Deuda)", f"{dupont_apalan:.2f}x", estado_apalan, delta_color=color_apalan)
-    
-    c_dp4.metric("= ROE Total", f"{roe_ultimo:.1f}%")
+    with c_dp1:
+        render_kpi_card(
+            "1. Margen Neto (Eficiencia)",
+            f"{dupont_margen:.1f}%" if dupont_margen is not None else None,
+        )
+    with c_dp2:
+        render_kpi_card(
+            "2. Rotación Activos (Volumen)",
+            f"{dupont_rotacion:.2f}x" if dupont_rotacion is not None else None,
+        )
+    with c_dp3:
+        # "DuPont: Apalancamiento" es Activos/Patrimonio (multiplicador), una
+        # magnitud distinta de Deuda/Capital: no reutiliza DEBT_EQUITY_WARNING/
+        # RED_FLAG de modulos/config.py (una empresa sin deuda ya tiene
+        # Apalancamiento=1.0x, no 0x), mantiene su propio umbral histórico (3.0x).
+        apalan_riesgo = dupont_apalan is not None and dupont_apalan > 3.0
+        render_kpi_card(
+            "3. Apalancamiento (Deuda)",
+            f"{dupont_apalan:.2f}x" if dupont_apalan is not None else None,
+            status="riesgo" if apalan_riesgo else "normal",
+            detail="Riesgo si supera 3.0x." if dupont_apalan is not None else "",
+        )
+    with c_dp4:
+        render_kpi_card(
+            "= ROE Total",
+            f"{roe_ultimo:.1f}%" if roe_ultimo is not None else None,
+        )
 
     st.write("")
     if dupont_apalan > 3.0:
@@ -690,26 +725,29 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
         p_actual_seguro = precio_actual if isinstance(precio_actual, (int, float)) else 0
         
         # 1. Graham
+        # Convención unificada: (fair_value - price) / price (positivo = barata/
+        # infravalorada). Antes era (price - fair_value) / fair_value: signo y
+        # denominador contrarios al resto de la app (scoring_engine, Tesis, Watchlist).
         v_graham = res_val.get('graham_value', 0) if res_val else 0
         if p_actual_seguro > 0 and isinstance(v_graham, (int, float)) and v_graham > 0:
-            margen_graham = ((p_actual_seguro - v_graham) / v_graham) * 100
+            margen_graham = ((v_graham - p_actual_seguro) / p_actual_seguro) * 100
         else:
             margen_graham = 0
-            
-        color_g = "inverse" if margen_graham > 0 else "normal"
-        estado_g = "Cara" if margen_graham > 0 else "Barata"
+
+        color_g = "normal" if margen_graham > 0 else "inverse"
+        estado_g = "Barata" if margen_graham > 0 else "Cara"
         col_m1.metric("Benjamin Graham (Value)", f"${v_graham:.2f}", f"{estado_g} ({margen_graham:+.1f}%)", delta_color=color_g)
         col_m1.caption("Graham Number clásico: EPS y valor contable por acción. En negocios asset-light suele ser un suelo muy conservador.")
-        
-        # 2. Peter Lynch
+
+        # 2. Peter Lynch (misma convención unificada que Graham arriba)
         v_lynch = res_val.get('lynch_value', 0) if res_val else 0
         if p_actual_seguro > 0 and isinstance(v_lynch, (int, float)) and v_lynch > 0:
-            margen_lynch = ((p_actual_seguro - v_lynch) / v_lynch) * 100
+            margen_lynch = ((v_lynch - p_actual_seguro) / p_actual_seguro) * 100
         else:
             margen_lynch = 0
-            
-        color_l = "inverse" if margen_lynch > 0 else "normal"
-        estado_l = "Cara" if margen_lynch > 0 else "Barata"
+
+        color_l = "normal" if margen_lynch > 0 else "inverse"
+        estado_l = "Barata" if margen_lynch > 0 else "Cara"
         col_m2.metric("Peter Lynch (Crecimiento)", f"${v_lynch:.2f}", f"{estado_l} ({margen_lynch:+.1f}%)", delta_color=color_l)
         lynch_pe = res_val.get('lynch_pe', 0)
         col_m2.caption(f"PEG=1 sobre crecimiento normalizado. PER justo usado: {lynch_pe:.1f}x.")
@@ -734,8 +772,11 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
         cagr_usr = st.slider("Crecimiento Anual FCF/acción %", min_value=-5.0, max_value=20.0, value=float(g_sugerido), step=0.5)
         
     with col_slider2:
-        wacc_sugerido = res_val.get('tasa_descuento_capm', 0.10) * 100
-        tasa_desc_usr = st.slider("Tasa de Descuento (CAPM) %", min_value=5.0, max_value=20.0, value=float(wacc_sugerido), step=0.5)
+        wacc_real_sugerido = res_val.get('wacc', 0.10) * 100
+        tasa_desc_usr = st.slider("Tasa de Descuento (WACC) %", min_value=5.0, max_value=20.0, value=float(wacc_real_sugerido), step=0.5)
+        wacc_nota = res_val.get('wacc_nota') or ""
+        if wacc_nota:
+            st.caption(f"ℹ️ {wacc_nota}")
         
     with col_slider3:
         margen_seguridad_usr = st.slider("Margen de Seguridad %", min_value=0, max_value=50, value=25, step=5)
@@ -753,9 +794,10 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
     c1, c2, c3 = st.columns(3)
 
     if precio_actual and v_dcf > 0:
-        descuento_dcf = ((precio_actual - v_dcf) / v_dcf) * 100
-        estado_valor = "Sobrevalorada" if descuento_dcf > 0 else "Infravalorada"
-        color_valor = "inverse" if descuento_dcf > 0 else "normal"
+        # Convención unificada: (fair_value - price) / price (positivo = infravalorada).
+        descuento_dcf = ((v_dcf - precio_actual) / precio_actual) * 100
+        estado_valor = "Infravalorada" if descuento_dcf > 0 else "Sobrevalorada"
+        color_valor = "normal" if descuento_dcf > 0 else "inverse"
         c1.metric("Precio de Mercado Hoy", f"${precio_actual:.2f}", f"{estado_valor} ({descuento_dcf:+.1f}%)", delta_color=color_valor)
     else:
         c1.metric("Precio de Mercado", "No disp.")

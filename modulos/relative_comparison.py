@@ -18,10 +18,10 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
-from balance_analyzer import analizar_balance
-from cashflow_analyzer import analizar_flujo_efectivo
-from income_analyzer import analizar_cuenta_resultados
-from valuator import valorar_empresa
+from financials.balance_analyzer import analizar_balance
+from financials.cashflow_analyzer import analizar_flujo_efectivo
+from financials.income_analyzer import analizar_cuenta_resultados
+from financials.valuator import valorar_empresa
 from modulos.investment_thesis import build_investment_thesis
 from modulos.scoring_engine import calcular_valuequant_score
 from modulos.utils import calcular_score_buffett, cargar_datos
@@ -160,17 +160,19 @@ def _fetch_yfinance_snapshot(ticker: str) -> CompanySnapshot:
     except Exception:
         return CompanySnapshot(ticker=symbol)
 
+    from modulos.yahoo_resilience import safe_yfinance_fetch, safe_yfinance_info
+
     info: dict[str, Any] = {}
     hist = None
     try:
-        yf_ticker = yf.Ticker(symbol)
-        raw_info = yf_ticker.info
+        raw_info = safe_yfinance_info(yf, symbol, context=f"relative_comparison:info:{symbol}")
         if isinstance(raw_info, dict):
             info = raw_info
-        try:
-            hist = yf_ticker.history(period="1y", auto_adjust=True)
-        except Exception:
-            hist = None
+        hist, _status = safe_yfinance_fetch(
+            lambda: yf.Ticker(symbol).history(period="1y", auto_adjust=True),
+            empty_value=None,
+            context=f"relative_comparison:history:{symbol}",
+        )
     except Exception:
         return CompanySnapshot(ticker=symbol)
 
