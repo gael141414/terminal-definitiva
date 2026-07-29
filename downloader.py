@@ -129,6 +129,12 @@ def _obtener_estados_financieros_impl(ticker, años=10, usar_cache=True):
                     elif hasattr(stmt, 'to_pandas'): return stmt.to_pandas() if callable(stmt.to_pandas) else stmt.to_pandas
             return None
 
+        # Fecha de filing real por año fiscal (Sub-fase 0, calibración del score):
+        # filing.filing_date es cuándo se presentó ESE 10-K concreto -- distinto
+        # de period_end_dates (fin del periodo fiscal que cubre). Sin esto no
+        # hay forma de saber cuándo un año fiscal se volvió público de verdad.
+        filing_dates: dict[str, str] = {}
+
         for filing in filings:
             try:
                 xbrl = filing.xbrl()
@@ -137,6 +143,29 @@ def _obtener_estados_financieros_impl(ticker, años=10, usar_cache=True):
                 df_is = get_statement_df(xbrl.statements, ['income_statement'])
                 df_bs = get_statement_df(xbrl.statements, ['balance_sheet'])
                 df_cf = get_statement_df(xbrl.statements, ['cashflow_statement', 'cash_flow_statement', 'cashflows'])
+
+                # Se asocia la fecha de ESTE filing únicamente a su propio año
+                # fiscal primario (el periodo más reciente entre sus columnas),
+                # nunca a los años anteriores que pueda traer como comparativa
+                # -- esos ya tuvieron su propio 10-K con su propia fecha, que se
+                # captura cuando el bucle llegue a ese filing más adelante
+                # (`filings` viene ordenado del más reciente al más antiguo).
+                filing_date_raw = getattr(filing, "filing_date", None)
+                if filing_date_raw:
+                    for candidate_df in (df_is, df_bs, df_cf):
+                        if candidate_df is None or candidate_df.empty:
+                            continue
+                        años_propios = [
+                            match.group(1)
+                            for match in (
+                                _PERIOD_COLUMN_PATTERN.match(str(c)) for c in candidate_df.columns
+                            )
+                            if match
+                        ]
+                        if años_propios:
+                            año_propio = max(años_propios)[:4]
+                            filing_dates.setdefault(año_propio, str(filing_date_raw))
+                        break
 
                 if df_is is not None: lista_is.append(df_is)
                 if df_bs is not None: lista_bs.append(df_bs)
@@ -208,6 +237,10 @@ def _obtener_estados_financieros_impl(ticker, años=10, usar_cache=True):
             resultado.attrs["period_end_dates"] = period_end_dates
             if fiscal_period_type:
                 resultado.attrs["fiscal_period_type"] = fiscal_period_type
+            # filing_dates (Sub-fase 0, calibración del score): igual que
+            # period_end_dates, no sobrevive un roundtrip por CSV -- mismo
+            # limitación conocida, solo disponible en un fetch fresco.
+            resultado.attrs["filing_dates"] = dict(filing_dates)
             return resultado
 
         df_resultados = consolidar_y_limpiar(lista_is)

@@ -348,7 +348,7 @@ def _endpoint_a_dataframe(
             return None
 
         metadata_columns = {
-            "symbol", "reportedCurrency", "cik", "fillingDate", "acceptedDate",
+            "symbol", "reportedCurrency", "cik", "filingDate", "acceptedDate",
             "calendarYear", "period", "link", "finalLink",
         }
         for column in df.columns:
@@ -356,6 +356,26 @@ def _endpoint_a_dataframe(
                 converted = pd.to_numeric(df[column], errors="coerce")
                 if converted.notna().any():
                     df[column] = converted
+
+        # filing_dates/accepted_dates (Sub-fase 0, calibración del score): FMP
+        # ya devuelve filingDate/acceptedDate reales por periodo -- se exponen
+        # vía df.attrs (mismo mecanismo que period_end_dates en downloader.py)
+        # para no tocar el contrato de retorno de extraer_datos_fundamentales_fmp
+        # ni de ninguno de sus consumidores. Ausentes -> dict vacío (p.ej.
+        # key-metrics no trae estas columnas).
+        filing_dates: dict[str, str] = {}
+        accepted_dates: dict[str, str] = {}
+        if "filingDate" in df.columns or "acceptedDate" in df.columns:
+            for idx in df.index:
+                year_label = str(idx.year)
+                filing_date = df.at[idx, "filingDate"] if "filingDate" in df.columns else None
+                accepted_date = df.at[idx, "acceptedDate"] if "acceptedDate" in df.columns else None
+                if filing_date and str(filing_date) not in ("nan", "NaT", ""):
+                    filing_dates[year_label] = str(filing_date)
+                if accepted_date and str(accepted_date) not in ("nan", "NaT", ""):
+                    accepted_dates[year_label] = str(accepted_date)
+        df.attrs["filing_dates"] = filing_dates
+        df.attrs["accepted_dates"] = accepted_dates
 
         return df
     except (KeyError, ValueError, TypeError) as exc:

@@ -60,9 +60,10 @@ def _load_fixture(name: str) -> pd.DataFrame:
 class _FakeFiling:
     """Doble mínimo de edgar.entity.filings.EntityFiling."""
 
-    def __init__(self, xbrl_obj=None, fail: bool = False):
+    def __init__(self, xbrl_obj=None, fail: bool = False, filing_date: str | None = None):
         self._xbrl_obj = xbrl_obj
         self._fail = fail
+        self.filing_date = filing_date
 
     def xbrl(self):
         if self._fail:
@@ -257,6 +258,56 @@ def test_un_filing_roto_no_tumba_el_resto(_no_disk_cache, monkeypatch):
     df_is, df_bs, df_cf = downloader.obtener_estados_financieros("TESTX", años=2, usar_cache=False)
 
     assert df_is is not None and "2024" in df_is.columns
+
+
+# ---------------------------------------------------------------------------
+# Sub-fase 0 (calibración del score): filing_dates vía df.attrs
+# ---------------------------------------------------------------------------
+
+
+def test_filing_dates_asocia_cada_anio_a_su_propio_filing(_no_disk_cache, monkeypatch):
+    """Cada año debe quedar con la fecha de SU PROPIO 10-K, no la del 10-K más
+    reciente que lo muestre como columna comparativa (filings viene ordenado
+    del más reciente al más antiguo: 2024 antes que 2023)."""
+    filing_2023 = _FakeFiling(xbrl_obj=_FakeXbrl(*_single_year_frames("2023-09-30")), filing_date="2023-11-03")
+    filing_2024 = _FakeFiling(xbrl_obj=_FakeXbrl(*_single_year_frames("2024-09-28")), filing_date="2024-11-01")
+    monkeypatch.setattr(
+        downloader, "Company",
+        lambda ticker: _FakeCompany(filings_result=_FakeFilings([filing_2024, filing_2023])),
+    )
+    monkeypatch.setattr(downloader.time, "sleep", lambda _s: None)
+
+    df_is, df_bs, df_cf = downloader.obtener_estados_financieros("TESTX", años=2, usar_cache=False)
+
+    assert df_is.attrs["filing_dates"] == {"2024": "2024-11-01", "2023": "2023-11-03"}
+    # Las 3 salidas comparten el mismo mapa: es propiedad del filing, no del estado.
+    assert df_bs.attrs["filing_dates"] == df_is.attrs["filing_dates"]
+    assert df_cf.attrs["filing_dates"] == df_is.attrs["filing_dates"]
+
+
+def test_filing_dates_vacio_si_el_filing_no_expone_filing_date(_no_disk_cache, monkeypatch):
+    filing = _FakeFiling(xbrl_obj=_FakeXbrl(*_single_year_frames("2024-09-28")), filing_date=None)
+    monkeypatch.setattr(downloader, "Company", lambda ticker: _FakeCompany(filings_result=filing))
+    monkeypatch.setattr(downloader.time, "sleep", lambda _s: None)
+
+    df_is, df_bs, df_cf = downloader.obtener_estados_financieros("TESTX", años=1, usar_cache=False)
+
+    assert df_is.attrs["filing_dates"] == {}
+
+
+def test_filing_dates_no_sobrevive_cache_en_disco(_no_disk_cache, monkeypatch):
+    """Mismo criterio que period_end_dates (ya documentado): .attrs no
+    sobrevive un roundtrip por CSV -- una segunda lectura desde el cache en
+    disco no lo tendrá hasta que se refresque."""
+    filing = _FakeFiling(xbrl_obj=_FakeXbrl(*_single_year_frames("2024-09-28")), filing_date="2024-11-01")
+    monkeypatch.setattr(downloader, "Company", lambda ticker: _FakeCompany(filings_result=filing))
+    monkeypatch.setattr(downloader.time, "sleep", lambda _s: None)
+
+    df_is_fresh, _, _ = downloader.obtener_estados_financieros("TESTX", años=1, usar_cache=False)
+    assert df_is_fresh.attrs.get("filing_dates") == {"2024": "2024-11-01"}
+
+    df_is_cached, _, _ = downloader.obtener_estados_financieros("TESTX", años=1, usar_cache=True)
+    assert df_is_cached.attrs.get("filing_dates", {}) == {}
 
 
 # ---------------------------------------------------------------------------

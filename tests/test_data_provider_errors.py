@@ -191,6 +191,70 @@ def test_obtener_cotizacion_fmp_no_propaga_excepciones_tipadas(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# Sub-fase 0 (calibración del score): filing_dates/accepted_dates vía df.attrs
+# ---------------------------------------------------------------------------
+
+
+def test_endpoint_a_dataframe_expone_filing_dates_y_accepted_dates(monkeypatch):
+    payload = [
+        {"date": "2023-09-30", "revenue": 100, "filingDate": "2023-11-03", "acceptedDate": "2023-11-02 18:08:27"},
+        {"date": "2024-09-28", "revenue": 110, "filingDate": "2024-11-01", "acceptedDate": "2024-11-01 06:01:36"},
+    ]
+    monkeypatch.setattr(fmp_api.requests, "get", lambda *a, **k: _FakeResponse(status_code=200, json_data=payload))
+
+    df = fmp_api._endpoint_a_dataframe([("https://financialmodelingprep.com/stable/income-statement", {"symbol": "TEST"})])
+
+    assert df is not None
+    assert df.attrs["filing_dates"] == {"2023": "2023-11-03", "2024": "2024-11-01"}
+    assert df.attrs["accepted_dates"] == {"2023": "2023-11-02 18:08:27", "2024": "2024-11-01 06:01:36"}
+
+
+def test_endpoint_a_dataframe_sin_filing_date_da_dicts_vacios(monkeypatch):
+    """key-metrics (u otro endpoint sin estas columnas) no debe fallar ni
+    inventar una fecha que FMP no trae en ese endpoint."""
+    payload = [{"date": "2024-09-28", "peRatio": 30.5}]
+    monkeypatch.setattr(fmp_api.requests, "get", lambda *a, **k: _FakeResponse(status_code=200, json_data=payload))
+
+    df = fmp_api._endpoint_a_dataframe([("https://financialmodelingprep.com/stable/key-metrics", {"symbol": "TEST"})])
+
+    assert df is not None
+    assert df.attrs["filing_dates"] == {}
+    assert df.attrs["accepted_dates"] == {}
+
+
+def test_filing_date_typo_corregido_sobrevive_como_fecha_real(monkeypatch):
+    """Regresión del typo fillingDate->filingDate en metadata_columns:
+    filingDate debe sobrevivir tal cual (string), nunca perderse via
+    to_numeric. El typo anterior ya lo protegía por accidente (to_numeric
+    sobre fechas da NaN, notna().any() es False, nunca sobrescribía) -- esto
+    lo hace explícito e intencional en vez de un no-op afortunado."""
+    payload = [{"date": "2024-09-28", "revenue": 110, "filingDate": "2024-11-01", "acceptedDate": "2024-11-01 06:01:36"}]
+    monkeypatch.setattr(fmp_api.requests, "get", lambda *a, **k: _FakeResponse(status_code=200, json_data=payload))
+
+    df = fmp_api._endpoint_a_dataframe([("https://financialmodelingprep.com/stable/income-statement", {"symbol": "TEST"})])
+
+    assert df["filingDate"].tolist() == ["2024-11-01"]
+    assert df["acceptedDate"].tolist() == ["2024-11-01 06:01:36"]
+    # revenue sí debe convertirse a numérico (no es una columna de metadata).
+    assert df["revenue"].tolist() == [110]
+
+
+def test_extraer_datos_fundamentales_fmp_expone_filing_dates_end_to_end(monkeypatch):
+    """El contrato de retorno (4-tupla) no cambia -- filing_dates viaja en
+    .attrs de cada DataFrame, no como un elemento nuevo de la tupla."""
+    payload = [{"date": "2024-09-28", "revenue": 110, "filingDate": "2024-11-01", "acceptedDate": "2024-11-01 06:01:36"}]
+    monkeypatch.setattr(fmp_api.requests, "get", lambda *a, **k: _FakeResponse(status_code=200, json_data=payload))
+    monkeypatch.setattr(fmp_api, "FMP_API_KEY", "fake-key-for-test")
+
+    resultado = fmp_api.extraer_datos_fundamentales_fmp("TESTFILINGDATES", 3)
+
+    assert len(resultado) == 4
+    is_df, bs_df, cf_df, metrics_df = resultado
+    assert is_df is not None
+    assert is_df.attrs["filing_dates"] == {"2024": "2024-11-01"}
+
+
+# ---------------------------------------------------------------------------
 # yahoo_resilience.py: distinción de timeout vs error genérico
 # ---------------------------------------------------------------------------
 
