@@ -488,6 +488,148 @@ def extraer_datos_fundamentales_fmp(
         return None, None, None, None
 
 
+# =============================================================================
+# "As reported" (Sub-fase 1, calibración del score) — conceptos XBRL en bruto
+# =============================================================================
+#
+# IMPORTANTE (hallazgo del diagnóstico previo, confirmado empíricamente contra
+# ~100 tickers): estos 3 endpoints -- y de hecho los endpoints "normales" de
+# fundamentales también -- están restringidos bajo el plan actual a un
+# conjunto de símbolos que NO se puede predecir por tamaño de empresa. AAPL/
+# MSFT/TSLA/GOOGL/JPM funcionan; AXON (~$40B de capitalización), PETS, ADTN,
+# IMMR, CODI, PLUG, KHC, IBM, MCD, HD, MRK (entre muchos otros) devuelven
+# HTTP 402 "This value set for 'symbol' is not available under your current
+# subscription" -- para el endpoint "as reported" Y para el endpoint normal
+# por igual. No es un límite de años (los parámetros year/from/to se ignoran;
+# el endpoint siempre devuelve como mucho los ``FMP_MAX_LIMIT_CURRENT_PLAN``
+# periodos más recientes) ni un ticker inválido: es una restricción de plan
+# por símbolo, y se clasifica como tal (``RestrictedError``/``RESTRICTED_PLAN``,
+# la misma vía que ya usan los endpoints legacy 403).
+STABLE_AS_REPORTED_ENDPOINTS = {
+    "income_statement": f"{STABLE_BASE_URL}/income-statement-as-reported",
+    "balance_sheet": f"{STABLE_BASE_URL}/balance-sheet-statement-as-reported",
+    "cash_flow": f"{STABLE_BASE_URL}/cash-flow-statement-as-reported",
+}
+
+
+def _as_reported_a_dataframe(payload: list[dict]) -> pd.DataFrame | None:
+    """Aplana el payload 'as reported' (lista de ``{date, fiscalYear, period,
+    reportedCurrency, data: {...conceptos XBRL en bruto...}}``) a un
+    DataFrame indexado por fecha de periodo, con los conceptos como columnas.
+
+    A diferencia de ``_endpoint_a_dataframe`` (endpoints normales, ya planos),
+    aquí hay que desanidar ``data`` primero -- por eso es una función propia,
+    no una reutilización directa.
+    """
+    if not payload:
+        return None
+
+    filas: list[dict[str, Any]] = []
+    for registro in payload:
+        datos = registro.get("data")
+        if not isinstance(datos, dict):
+            continue
+        fila = dict(datos)
+        fila["date"] = registro.get("date")
+        fila["fiscalYear"] = registro.get("fiscalYear")
+        fila["period"] = registro.get("period")
+        filas.append(fila)
+
+    if not filas:
+        return None
+
+    df = pd.DataFrame(filas)
+    quality = validate_dataframe(df, ["date"], source="fmp_as_reported", min_rows=1)
+    if quality.blocking:
+        return None
+
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    df = df.dropna(subset=["date"]).set_index("date").sort_index(ascending=True)
+    if df.empty:
+        return None
+
+    metadata_columns = {"fiscalYear", "period"}
+    for column in df.columns:
+        if column not in metadata_columns:
+            converted = pd.to_numeric(df[column], errors="coerce")
+            if converted.notna().any():
+                df[column] = converted
+
+    return df
+
+
+def _descargar_as_reported(statement_key: str, ticker: str, limite_anios: int) -> pd.DataFrame | None:
+    if not _fmp_api_disponible():
+        return None
+
+    url = STABLE_AS_REPORTED_ENDPOINTS[statement_key]
+    limite = min(max(int(limite_anios), 1), FMP_MAX_LIMIT_CURRENT_PLAN)
+    params = {
+        "symbol": _normalizar_ticker(ticker),
+        "period": "annual",
+        "limit": limite,
+        "apikey": FMP_API_KEY,
+    }
+    payload = _descargar_json(url, params)
+    if not payload:
+        # _descargar_json ya registró la causa (incluida la restricción de
+        # plan por símbolo, ver nota del módulo) -- nada nuevo que loguear aquí.
+        return None
+    return _as_reported_a_dataframe(payload)
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def extraer_datos_as_reported_fmp(
+    ticker: str,
+    limite_anios: int = 5,
+) -> tuple[pd.DataFrame | None, pd.DataFrame | None, pd.DataFrame | None]:
+    """Descarga income/balance/cash-flow "as reported" (conceptos XBRL en
+    bruto, sin normalizar a la taxonomía propia de FMP) para ``ticker``.
+
+    Devuelve ``(df_is, df_bs, df_cf)`` -- sin métricas, ese concepto no existe
+    "as reported" (key-metrics es siempre un cálculo derivado, nunca un dato
+    reportado tal cual). Cada DataFrame trae ``filing_dates``/``accepted_dates``
+    en ``.attrs`` (Sub-fase 0): "as reported" no incluye su propia fecha de
+    filing en el payload, así que se completa uniendo por año con el mismo
+    ticker/rango vía ``extraer_datos_fundamentales_fmp`` (el endpoint normal,
+    que sí la trae) -- una llamada adicional, pero cacheada igual que esta.
+
+    Ver la nota del módulo sobre la restricción de plan por símbolo: para la
+    mayoría de tickers esto devolverá ``(None, None, None)`` con el plan
+    actual, no por fallo de red ni ticker inválido.
+    """
+    ticker_limpio = _normalizar_ticker(ticker)
+    if not ticker_limpio:
+        return None, None, None
+
+    try:
+        df_is = _descargar_as_reported("income_statement", ticker_limpio, limite_anios)
+        df_bs = _descargar_as_reported("balance_sheet", ticker_limpio, limite_anios)
+        df_cf = _descargar_as_reported("cash_flow", ticker_limpio, limite_anios)
+
+        if all(df is None for df in (df_is, df_bs, df_cf)):
+            logger.warning(
+                "FMP %s",
+                NoDataError(
+                    "ningún estado 'as reported' disponible (posible restricción de plan por símbolo).",
+                    context=f"as_reported:{ticker_limpio}",
+                ),
+            )
+            return None, None, None
+
+        df_is_norm, df_bs_norm, df_cf_norm, _df_metrics_norm = extraer_datos_fundamentales_fmp(ticker_limpio, limite_anios)
+        for df_reported, df_normal in ((df_is, df_is_norm), (df_bs, df_bs_norm), (df_cf, df_cf_norm)):
+            if df_reported is None:
+                continue
+            df_reported.attrs["filing_dates"] = dict(df_normal.attrs.get("filing_dates", {})) if df_normal is not None else {}
+            df_reported.attrs["accepted_dates"] = dict(df_normal.attrs.get("accepted_dates", {})) if df_normal is not None else {}
+
+        return df_is, df_bs, df_cf
+    except Exception as exc:
+        logger.error("FMP error inesperado obteniendo 'as reported' de %s: %s", ticker_limpio, type(exc).__name__)
+        return None, None, None
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def obtener_cotizacion_fmp(ticker: str) -> float:
     """Obtiene la cotización actual de FMP."""

@@ -255,6 +255,106 @@ def test_extraer_datos_fundamentales_fmp_expone_filing_dates_end_to_end(monkeypa
 
 
 # ---------------------------------------------------------------------------
+# Sub-fase 1 (calibración del score): motor de acceso "as reported"
+# ---------------------------------------------------------------------------
+
+
+def test_as_reported_a_dataframe_desanida_data_y_construye_indice_por_fecha():
+    payload = [
+        {
+            "symbol": "TEST", "fiscalYear": 2023, "period": "FY", "date": "2023-09-30",
+            "data": {"revenuefromcontractwithcustomerexcludingassessedtax": 100, "netincomeloss": 10},
+        },
+        {
+            "symbol": "TEST", "fiscalYear": 2024, "period": "FY", "date": "2024-09-28",
+            "data": {"revenuefromcontractwithcustomerexcludingassessedtax": 110, "netincomeloss": 12},
+        },
+    ]
+
+    df = fmp_api._as_reported_a_dataframe(payload)
+
+    assert df is not None
+    assert list(df.index.year) == [2023, 2024]
+    assert df.loc["2023-09-30", "revenuefromcontractwithcustomerexcludingassessedtax"] == 100
+    assert df.loc["2024-09-28", "revenuefromcontractwithcustomerexcludingassessedtax"] == 110
+    assert df.loc["2023-09-30", "netincomeloss"] == 10
+    assert df["fiscalYear"].tolist() == [2023, 2024]
+
+
+def test_as_reported_a_dataframe_ignora_registros_sin_data_dict():
+    payload = [
+        {"symbol": "TEST", "fiscalYear": 2024, "period": "FY", "date": "2024-09-28", "data": {"netincomeloss": 12}},
+        {"symbol": "TEST", "fiscalYear": 2023, "period": "FY", "date": "2023-09-30"},  # sin "data"
+    ]
+
+    df = fmp_api._as_reported_a_dataframe(payload)
+
+    assert df is not None
+    assert len(df) == 1
+    assert df.index[0].year == 2024
+
+
+def test_as_reported_a_dataframe_none_si_payload_vacio_o_sin_registros_validos():
+    assert fmp_api._as_reported_a_dataframe([]) is None
+    assert fmp_api._as_reported_a_dataframe([{"date": "2024-09-28"}]) is None  # sin "data" y es el único
+
+
+def test_extraer_datos_as_reported_fmp_expone_filing_dates_unidos_del_endpoint_normal(monkeypatch):
+    """El payload 'as reported' no trae su propia fecha de filing -- debe
+    unirse desde el endpoint normal (mismo ticker/año), vía .attrs."""
+    as_reported_payload = [
+        {"symbol": "TEST", "fiscalYear": 2024, "period": "FY", "date": "2024-09-28", "data": {"netincomeloss": 12}},
+    ]
+    normal_payload = [
+        {"date": "2024-09-28", "revenue": 110, "filingDate": "2024-11-01", "acceptedDate": "2024-11-01 06:01:36"},
+    ]
+
+    def fake_get(url, params=None, timeout=None):
+        if "as-reported" in url:
+            return _FakeResponse(status_code=200, json_data=as_reported_payload)
+        return _FakeResponse(status_code=200, json_data=normal_payload)
+
+    monkeypatch.setattr(fmp_api.requests, "get", fake_get)
+    monkeypatch.setattr(fmp_api, "FMP_API_KEY", "fake-key-for-test")
+
+    resultado = fmp_api.extraer_datos_as_reported_fmp("TESTASREPORTED", limite_anios=5)
+
+    assert len(resultado) == 3  # sin métricas, a diferencia de extraer_datos_fundamentales_fmp
+    is_df, bs_df, cf_df = resultado
+    assert is_df is not None
+    assert is_df.attrs["filing_dates"] == {"2024": "2024-11-01"}
+    assert is_df.attrs["accepted_dates"] == {"2024": "2024-11-01 06:01:36"}
+    assert is_df.loc["2024-09-28", "netincomeloss"] == 12
+
+
+def test_extraer_datos_as_reported_fmp_degrada_limpio_si_simbolo_no_disponible(monkeypatch):
+    """Confirmado empíricamente (diagnóstico Sub-fase 1) contra ~100 tickers
+    reales: el plan actual restringe 'as reported' (y los endpoints normales)
+    a un conjunto de símbolos que no se puede predecir por tamaño de empresa
+    -- AXON, PETS, ADTN, IMMR, CODI, entre muchos otros, devuelven HTTP 402
+    "This value set for 'symbol' is not available under your current
+    subscription". Debe degradar a (None, None, None), nunca lanzar."""
+    monkeypatch.setattr(
+        fmp_api.requests, "get",
+        lambda *a, **k: _FakeResponse(status_code=402, json_data=None),
+    )
+    monkeypatch.setattr(fmp_api, "FMP_API_KEY", "fake-key-for-test")
+
+    resultado = fmp_api.extraer_datos_as_reported_fmp("TESTBLOQUEADO", limite_anios=5)
+
+    assert resultado == (None, None, None)
+
+
+def test_extraer_datos_as_reported_fmp_sin_ticker_devuelve_none_sin_llamar_red(monkeypatch):
+    llamadas = []
+    monkeypatch.setattr(fmp_api.requests, "get", lambda *a, **k: llamadas.append(1) or _FakeResponse(status_code=200, json_data=[]))
+    monkeypatch.setattr(fmp_api, "FMP_API_KEY", "fake-key-for-test")
+
+    assert fmp_api.extraer_datos_as_reported_fmp("", limite_anios=5) == (None, None, None)
+    assert not llamadas
+
+
+# ---------------------------------------------------------------------------
 # yahoo_resilience.py: distinción de timeout vs error genérico
 # ---------------------------------------------------------------------------
 
