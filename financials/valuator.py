@@ -3,9 +3,11 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from charts import obtener_risk_free_real
 from financials.balance_analyzer import _tasa_fiscal_efectiva
 from financials.income_analyzer import _fmp_series, _is_fmp_statement, _safe_ratio, _years_from_statement, extraer_dato_robusto
 from modulos.fmp_api import obtener_cotizacion_fmp
+from modulos.scoring_engine import obtener_beta_real
 
 
 def valorar_empresa(
@@ -154,8 +156,7 @@ def _valorar_empresa_fmp(
     payout_ratio = float(np.clip(payout_ratio if payout_ratio is not None else 0.0, 0.0, 1.0))
 
     per_futuro = _per_asumido_desde_metricas(roe_medio, cagr_historico, roic_series)
-    tasa_libre_riesgo = 0.045
-    beta = 1.0
+    tasa_libre_riesgo, beta, capm_nota = _obtener_capm_inputs(ticker_symbol)
     tasa_descuento_capm = max(tasa_libre_riesgo + beta * 0.055, 0.07)
 
     market_cap_para_wacc = market_cap if market_cap else (
@@ -165,13 +166,14 @@ def _valorar_empresa_fmp(
     interest_expense_actual = _last_valid_allow_zero(interest_expense)
     tax_rate_actual = _last_valid_allow_zero(tax_rate_series)
     tax_rate_actual = tax_rate_actual if tax_rate_actual is not None else 0.21
-    wacc, wacc_nota = _calcular_wacc(
+    wacc, wacc_nota_deuda = _calcular_wacc(
         market_cap=market_cap_para_wacc,
         total_debt=total_debt_actual,
         interest_expense=interest_expense_actual,
         tax_rate=tax_rate_actual,
         costo_capital_propio=tasa_descuento_capm,
     )
+    wacc_nota = " ".join(nota for nota in [capm_nota, wacc_nota_deuda] if nota)
 
     g_estimado = _crecimiento_normalizado(
         market_cap=market_cap,
@@ -284,8 +286,7 @@ def _valorar_empresa_legacy(
     fcf_per_share_current = _last_valid(fcf_per_share)
 
     per_futuro = _per_asumido_desde_metricas(roe_medio, cagr_historico, None)
-    tasa_libre_riesgo = 0.045
-    beta = 1.0
+    tasa_libre_riesgo, beta, capm_nota = _obtener_capm_inputs(ticker_symbol)
     tasa_descuento_capm = max(tasa_libre_riesgo + beta * 0.055, 0.07)
     g_estimado = _crecimiento_normalizado(
         market_cap=None,
@@ -305,10 +306,11 @@ def _valorar_empresa_legacy(
     # así que no se calcula un WACC real aquí (fuera de alcance de esta tarea:
     # requeriría su propia extracción por concepto XBRL). "wacc" se expone
     # igual, alias de tasa_descuento_capm (CAPM puro), para que los llamadores
-    # (fundamental.py, app_pdf_export.py) no caigan en un valor por defecto
-    # inventado si alguna vez reciben un res_val de esta ruta.
+    # (fundamental.py) no caigan en un valor por defecto inventado si alguna
+    # vez reciben un res_val de esta ruta.
     wacc = tasa_descuento_capm
-    wacc_nota = "Ruta SEC/XBRL: WACC = CAPM de equity (sin extracción de deuda/impuestos en esta ruta todavía)."
+    wacc_nota_legacy = "Ruta SEC/XBRL: WACC = CAPM de equity (sin extracción de deuda/impuestos en esta ruta todavía)."
+    wacc_nota = " ".join(nota for nota in [capm_nota, wacc_nota_legacy] if nota)
 
     return {
         "año_inicio": int(str(eps.index[0])[:4]),
@@ -451,6 +453,47 @@ def _last_valid_allow_zero(series: pd.Series | None) -> float | None:
     if clean.empty:
         return None
     return float(clean.iloc[-1])
+
+
+# Fallback declarado del CAPM (Fase 8): los mismos valores que la Fase 7 usaba
+# como unico comportamiento posible, ahora solo como red de seguridad
+# explicita cuando el dato real no esta disponible.
+CAPM_RISK_FREE_FALLBACK = 0.045
+CAPM_BETA_FALLBACK = 1.0
+
+
+def _obtener_capm_inputs(ticker_symbol: str | None) -> tuple[float, float, str]:
+    """Risk-free (``^TNX`` real, via charts.obtener_risk_free_real) y beta
+    (Yahoo Finance, via scoring_engine.obtener_beta_real) para el CAPM.
+
+    Si Yahoo falla (red, ticker sin histórico suficiente) o no hay ticker,
+    no se asume el dato real en silencio: se cae al fallback declarado (los
+    mismos 0.045/1.0 que la Fase 7 usaba siempre) y se documenta en una
+    nota -- mismo principio de "nunca cero/valor artificial silencioso" que
+    el proxy de coste de deuda de ``_calcular_wacc``.
+
+    Devuelve ``(tasa_libre_riesgo, beta, nota)``; ``nota`` es ``""`` si no
+    hizo falta ningún fallback.
+    """
+    notas: list[str] = []
+
+    tasa_libre_riesgo = obtener_risk_free_real()
+    if tasa_libre_riesgo is None:
+        tasa_libre_riesgo = CAPM_RISK_FREE_FALLBACK
+        notas.append(
+            "Risk-free real (^TNX) no disponible: se usa el fallback declarado de "
+            f"{CAPM_RISK_FREE_FALLBACK * 100:.1f}%, no un dato de mercado en vivo."
+        )
+
+    beta = obtener_beta_real(ticker_symbol) if ticker_symbol else None
+    if beta is None:
+        beta = CAPM_BETA_FALLBACK
+        notas.append(
+            f"Beta real no disponible: se usa el fallback declarado de {CAPM_BETA_FALLBACK:.1f} "
+            "(mercado neutral), no un dato de mercado en vivo."
+        )
+
+    return tasa_libre_riesgo, beta, " ".join(notas)
 
 
 def _calcular_wacc(

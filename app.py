@@ -33,7 +33,6 @@ from modulos.company_data_helpers import obtener_datos_directiva, obtener_ticker
 from modulos.app_company_ui import render_company_empty_state
 from modulos.app_integrations import inyectar_atajo_teclado, load_lottieurl, obtener_modelo_gemini, obtener_secreto_streamlit
 from modulos.app_analysis_helpers import analizar_sentimiento_noticias, escanear_vulnerabilidades, ultimo_ratio
-from modulos.app_pdf_export import generar_reporte_pdf
 from modulos.app_runtime import build_runtime_paths
 from modulos.module_loader import safe_call
 from modulos.utils import cargar_datos, calcular_score_buffett

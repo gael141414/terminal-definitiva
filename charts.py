@@ -75,6 +75,32 @@ def _cached_history(ticker: str, period: str = "1y", **kwargs) -> pd.DataFrame:
     return data if isinstance(data, pd.DataFrame) else pd.DataFrame()
 
 
+def obtener_risk_free_real() -> float | None:
+    """Tasa libre de riesgo real (rendimiento del bono del Tesoro a 10 años,
+    ``^TNX``) como fraccion decimal, para el CAPM de financials/valuator.py.
+
+    Reutiliza ``_cached_history`` (mismo dato que ya descarga
+    ``plot_termometro_macro``, compartiendo su cache de 15 min) en vez de
+    duplicar la llamada a Yahoo. ``^TNX`` en Yahoo Finance ya viene en
+    puntos porcentuales directos (p.ej. 4.52 == 4.52%), no en la vieja
+    convencion CBOE x10 -- de ahi el ``/100``. Devuelve ``None`` si Yahoo no
+    da datos (nunca un valor por defecto silencioso).
+
+    Nota: en fallo total, ``_cached_history`` devuelve un ``DataFrame``
+    vacio sin columnas (contrato de ``safe_yfinance_fetch``), así que no se
+    puede indexar ``['Close']`` a ciegas antes de comprobar que la columna
+    existe -- a diferencia de ``plot_termometro_macro``, que sí lo hace
+    (incidental, no corregido aquí: fuera de alcance de esta tarea).
+    """
+    hist = _cached_history('^TNX', period="1mo")
+    if hist.empty or 'Close' not in hist.columns:
+        return None
+    tnx_data = hist['Close'].dropna()
+    if tnx_data.empty:
+        return None
+    return float(tnx_data.iloc[-1]) / 100
+
+
 @st.cache_data(ttl=86400, show_spinner=False)
 def _cached_info(ticker: str) -> dict:
     """``.info`` cacheado 24h y protegido ante 429/quoteSummary.

@@ -338,6 +338,23 @@ def _market_data_snapshot(ticker: str) -> dict[str, Any]:
     return output
 
 
+def obtener_beta_real(ticker: str) -> float | None:
+    """Beta de mercado del ticker, para el CAPM de financials/valuator.py.
+
+    Reutiliza ``_market_data_snapshot`` (mismo dato que ya usa el componente
+    macro del score, cacheado 30 min) en vez de duplicar la llamada a Yahoo.
+    El valor viene directamente de ``info["beta"]`` de Yahoo Finance (su
+    propia regresion, no se recalcula aqui) -- en este proyecto no existe un
+    calculo propio de beta por retornos frente a SPY; lo mas parecido,
+    ``sector_rel_3m`` en este mismo snapshot, compara el ETF del sector
+    contra SPY a 3 meses (momentum relativo), no beta estadistica del
+    ticker. Devuelve ``None`` si Yahoo no expone el dato (nunca un valor por
+    defecto silencioso).
+    """
+    beta = _market_data_snapshot(ticker).get("beta")
+    return float(beta) if _is_valid(beta) else None
+
+
 # =============================================================================
 # Componentes de score
 # =============================================================================
