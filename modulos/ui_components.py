@@ -9,6 +9,7 @@ from modulos.sec_fmp_cross_validation import (
     NOT_COMPARABLE,
     PERIOD_MISALIGNED,
     SEVERE_DISCREPANCY_PCT,
+    SOURCE_ESTIMADO,
 )
 from modulos.tool_catalog import obtener_herramientas_por_grupo_consolidado
 from modulos.tool_consolidation import CONSOLIDATION_GROUPS, get_navigation_groups_ordered
@@ -387,6 +388,14 @@ def _formatear_diff_cross_validation(value: float | None) -> str:
     return "n/d" if value is None else f"{value:+.2f}%"
 
 
+def _formatear_fuente_cross_validation(source: str) -> str:
+    """Marca discreta de procedencia (Fase 8): en blanco para "real" (la
+    mayoría de celdas) y un símbolo corto para "estimado" -- nunca un color
+    nuevo, para no competir con la clasificación coincide/discrepancia/riesgo
+    que ya usa color en toda la fila."""
+    return "≈ estimado" if source == SOURCE_ESTIMADO else ""
+
+
 def cross_validation_dataframe(comparisons: list) -> pd.DataFrame:
     """Prepara el DataFrame de presentación a partir de la lista de
     ``MetricComparison`` que devuelve ``comparar_estados_financieros``.
@@ -403,7 +412,9 @@ def cross_validation_dataframe(comparisons: list) -> pd.DataFrame:
             "Métrica": comp.metric,
             "Año": comp.year,
             "FMP": _formatear_valor_cross_validation(comp.fmp_value),
+            "Fuente FMP": _formatear_fuente_cross_validation(comp.fmp_source),
             "SEC": _formatear_valor_cross_validation(comp.sec_value),
+            "Fuente SEC": _formatear_fuente_cross_validation(comp.sec_source),
             "Diferencia %": _formatear_diff_cross_validation(comp.diff_pct),
             "Estado": _CROSS_VALIDATION_STATUS_LABELS[status],
             "Nota": comp.note,
@@ -411,7 +422,7 @@ def cross_validation_dataframe(comparisons: list) -> pd.DataFrame:
         })
     return pd.DataFrame(
         filas,
-        columns=["Métrica", "Año", "FMP", "SEC", "Diferencia %", "Estado", "Nota", "_status"],
+        columns=["Métrica", "Año", "FMP", "Fuente FMP", "SEC", "Fuente SEC", "Diferencia %", "Estado", "Nota", "_status"],
     )
 
 
@@ -439,7 +450,7 @@ def render_cross_validation_table(comparisons: list) -> None:
     if resumen:
         st.caption(resumen)
 
-    visible_cols = ["Métrica", "Año", "FMP", "SEC", "Diferencia %", "Estado", "Nota"]
+    visible_cols = ["Métrica", "Año", "FMP", "Fuente FMP", "SEC", "Fuente SEC", "Diferencia %", "Estado", "Nota"]
     st.dataframe(
         df[visible_cols].style.apply(_style_cross_validation_row, axis=1),
         use_container_width=True,

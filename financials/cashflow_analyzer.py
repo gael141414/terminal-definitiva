@@ -25,7 +25,7 @@ def _is_fmp_cashflow(df: pd.DataFrame | None) -> bool:
 def analizar_flujo_efectivo(
     cf_df: pd.DataFrame | None,
     is_df: pd.DataFrame | None,
-) -> dict[str, pd.DataFrame | str] | None:
+) -> dict[str, pd.DataFrame | str | dict[str, pd.Series]] | None:
     """Analiza flujos de caja usando columnas FMP normalizadas."""
     if cf_df is None or cf_df.empty or is_df is None or is_df.empty:
         return None
@@ -59,6 +59,10 @@ def analizar_flujo_efectivo(
 
     fcf_reportado = _fmp_series(cf_df, ["freeCashFlow"], years, default=np.nan)
     fcf_calculado = fco + capex.fillna(0.0)
+    # "estimado" (Fase 8): por año, si freeCashFlow no venia reportado y el
+    # valor salio del fallback fco+capex (nunca marca "estimado" un año que
+    # sigue NaN, eso es "ausente", no "calculado").
+    fcf_estimado = fcf_reportado.isna() & fcf_calculado.notna()
     fcf = fcf_reportado.fillna(fcf_calculado)
     capex_abs = capex.abs()
 
@@ -83,13 +87,17 @@ def analizar_flujo_efectivo(
     else:
         status = "Alta Intensidad de Capital (CAPEX > 50%)"
 
-    return {"ratios": df_cf_ratios.replace([np.inf, -np.inf], np.nan).round(2), "veredicto": status}
+    return {
+        "ratios": df_cf_ratios.replace([np.inf, -np.inf], np.nan).round(2),
+        "veredicto": status,
+        "estimado": {"Free Cash Flow (B USD)": fcf_estimado},
+    }
 
 
 def _analizar_flujo_efectivo_legacy(
     cf_df: pd.DataFrame,
     is_df: pd.DataFrame,
-) -> dict[str, pd.DataFrame | str] | None:
+) -> dict[str, pd.DataFrame | str | dict[str, pd.Series]] | None:
     cols_cf = sorted([c for c in cf_df.columns if str(c).isdigit() and len(str(c)) == 4])
     cols_is = sorted([c for c in is_df.columns if str(c).isdigit() and len(str(c)) == 4])
     if not cols_cf:
@@ -130,6 +138,10 @@ def _analizar_flujo_efectivo_legacy(
     df_cf_ratios = pd.DataFrame(index=cols_cf)
     df_cf_ratios["CAPEX % sobre Beneficio"] = _safe_ratio(capex_abs, beneficio_neto, multiplier=100)
     df_cf_ratios["Recompras (B USD)"] = recompras.abs() / 1e9
+    # A diferencia de la ruta FMP (que a veces trae "freeCashFlow" reportado
+    # directamente), SEC/XBRL no tiene una partida "Free Cash Flow" propia --
+    # aqui SIEMPRE se calcula como fco-capex, nunca es un dato reportado.
+    fcf_estimado = pd.Series(True, index=cols_cf)
     df_cf_ratios["Free Cash Flow (B USD)"] = (fco - capex_abs) / 1e9
     df_cf_ratios["CFO (B USD)"] = fco / 1e9
     df_cf_ratios["CAPEX (B USD)"] = capex_abs / 1e9
@@ -147,4 +159,8 @@ def _analizar_flujo_efectivo_legacy(
     else:
         status = "Alta Intensidad de Capital (CAPEX > 50%)"
 
-    return {"ratios": df_cf_ratios.replace([np.inf, -np.inf], np.nan).round(2), "veredicto": status}
+    return {
+        "ratios": df_cf_ratios.replace([np.inf, -np.inf], np.nan).round(2),
+        "veredicto": status,
+        "estimado": {"Free Cash Flow (B USD)": fcf_estimado},
+    }

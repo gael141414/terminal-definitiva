@@ -12,7 +12,7 @@ from financials.income_analyzer import (
 )
 
 
-def _tasa_fiscal_efectiva(tax_expense: pd.Series, ebt: pd.Series) -> pd.Series:
+def _tasa_fiscal_efectiva(tax_expense: pd.Series, ebt: pd.Series) -> tuple[pd.Series, pd.Series]:
     """Tasa fiscal efectiva estimada: ``tax_expense / EBT``, acotada a
     [0%, 35%] con fallback al 21% (tipo federal estatutario US) cuando no es
     derivable (EBT<=0, datos ausentes o fuera de rango plausible).
@@ -23,9 +23,16 @@ def _tasa_fiscal_efectiva(tax_expense: pd.Series, ebt: pd.Series) -> pd.Series:
     aquí (no duplicada) porque es la misma fórmula que ya usaban ambas ramas
     de ``analizar_balance``; valuator.py la reutiliza importándola en vez de
     reimplementarla.
+
+    Devuelve ``(tax_rate, es_proxy)`` (Fase 8): ``es_proxy`` marca, por año,
+    si ese valor concreto vino del fallback al 21% (no derivable de
+    tax_expense/EBT, o fuera del rango [0%, 35%] y por tanto acotado) en vez
+    de ser el cálculo directo tax_expense/EBT.
     """
-    tax_rate = (tax_expense / ebt.replace(0, np.nan)).replace([np.inf, -np.inf], np.nan)
-    return tax_rate.clip(lower=0.0, upper=0.35).fillna(0.21)
+    tax_rate_bruto = (tax_expense / ebt.replace(0, np.nan)).replace([np.inf, -np.inf], np.nan)
+    es_proxy = tax_rate_bruto.isna() | (tax_rate_bruto < 0.0) | (tax_rate_bruto > 0.35)
+    tax_rate = tax_rate_bruto.clip(lower=0.0, upper=0.35).fillna(0.21)
+    return tax_rate, es_proxy
 
 
 def _is_fmp_balance(df: pd.DataFrame | None) -> bool:
@@ -62,12 +69,16 @@ def _patrimonio_negativo_flags(patrimonio: pd.Series) -> list[str]:
 def analizar_balance(
     bs_df: pd.DataFrame | None,
     is_df: pd.DataFrame | None = None,
-) -> dict[str, pd.DataFrame | list[str]] | None:
+) -> dict[str, pd.DataFrame | list[str] | dict[str, pd.Series]] | None:
     """Analiza balance con columnas FMP y conserva fallback legacy.
 
-    Devuelve ``{"ratios": DataFrame, "flags": list[str]}``. ``flags`` recoge
-    alertas estructurales (p. ej. patrimonio negativo) que no encajan como
-    columna numérica del DataFrame de ratios.
+    Devuelve ``{"ratios": DataFrame, "flags": list[str], "estimado": dict}``.
+    ``flags`` recoge alertas estructurales (p. ej. patrimonio negativo) que no
+    encajan como columna numérica del DataFrame de ratios. ``estimado``
+    (Fase 8) mapea nombre de columna -> ``pd.Series[bool]`` (mismo índice que
+    ``ratios``) para las columnas con un fallback/proxy conocido
+    ("Deuda / Capital", "Caja Neta (B USD)", "ROIC %") -- una columna ausente
+    de este dict se interpreta como "siempre real" (sin fallback rastreado).
 
     Nota sobre la tasa fiscal usada para NOPAT/ROIC: cuando no se puede
     derivar de tax_expense/EBT (EBT <= 0, datos ausentes o fuera de rango
@@ -89,15 +100,21 @@ def analizar_balance(
     activos = _fmp_series(bs_df, ["totalAssets"], years)
 
     deuda_total = _fmp_series(bs_df, ["totalDebt"], years, default=np.nan)
-    if deuda_total.isna().all():
+    # totalDebt esta presente o ausente para TODO el estado a la vez (no hay
+    # columna parcial por año) -- el fallback (Fase 8: "estimado") aplica por
+    # igual a todos los años cuando se dispara.
+    deuda_estimado_flag = bool(deuda_total.isna().all())
+    if deuda_estimado_flag:
         deuda_total = (
             _fmp_series(bs_df, ["shortTermDebt"], years, default=np.nan)
             + _fmp_series(bs_df, ["longTermDebt"], years, default=np.nan)
         )
+    deuda_estimado = pd.Series(deuda_estimado_flag, index=years)
 
     deuda_largo = _fmp_series(bs_df, ["longTermDebt"], years, default=np.nan)
     caja_total = _fmp_series(bs_df, ["cashAndShortTermInvestments"], years, default=np.nan)
-    if caja_total.isna().all():
+    caja_estimado_flag = bool(caja_total.isna().all())
+    if caja_estimado_flag:
         # Solo caja + inversiones a corto plazo (líquidas). No se suman
         # longTermInvestments automáticamente: no hay garantía de que sean
         # líquidas, y sumarlas infla la "Caja Neta" con activos que pueden no
@@ -106,6 +123,7 @@ def analizar_balance(
             _fmp_series(bs_df, ["cashAndCashEquivalents"], years, default=np.nan)
             + _fmp_series(bs_df, ["shortTermInvestments"], years, default=np.nan)
         )
+    caja_estimado = pd.Series(caja_estimado_flag, index=years)
 
     ganancias_retenidas = _fmp_series(bs_df, ["retainedEarnings"], years)
     ppe = _fmp_series(bs_df, ["propertyPlantEquipmentNet"], years)
@@ -128,7 +146,7 @@ def analizar_balance(
         df_bal_ratios["DuPont: Rotación Activos"] = _safe_ratio(ventas, activos_avg)
         df_bal_ratios["DuPont: Apalancamiento"] = _safe_ratio(activos_avg, equity_avg, positive_denominator=True)
 
-        tax_rate = _tasa_fiscal_efectiva(tax_expense, ebt)
+        tax_rate, tax_rate_estimado = _tasa_fiscal_efectiva(tax_expense, ebt)
         nopat = op_income * (1 - tax_rate)
 
         # Capital invertido = Deuda financiera + Patrimonio - Caja (fórmula única,
@@ -141,6 +159,11 @@ def analizar_balance(
         df_bal_ratios["ROIC %"] = _safe_ratio(nopat, capital_invertido_avg, multiplier=100, positive_denominator=True)
         df_bal_ratios["Años para pagar Deuda LP"] = _safe_ratio(deuda_largo, beneficio_neto)
         df_bal_ratios["Carga PP&E (PP&E/Benef.)"] = _safe_ratio(ppe, beneficio_neto)
+        # ROIC hereda "estimado" (Fase 8) del proxy de tasa fiscal (afecta al
+        # NOPAT) y de los mismos fallbacks de deuda/caja que Capital Invertido.
+        roic_estimado = tax_rate_estimado | deuda_estimado | caja_estimado
+    else:
+        roic_estimado = pd.Series(False, index=years)
 
     df_bal_ratios["Deuda / Capital"] = _safe_ratio(deuda_total, patrimonio, positive_denominator=True)
     df_bal_ratios["Caja Neta (B USD)"] = (caja_total - deuda_total) / 1e9
@@ -153,6 +176,11 @@ def analizar_balance(
     return {
         "ratios": df_bal_ratios.replace([np.inf, -np.inf], np.nan).round(2),
         "flags": flags,
+        "estimado": {
+            "Deuda / Capital": deuda_estimado,
+            "Caja Neta (B USD)": deuda_estimado | caja_estimado,
+            "ROIC %": roic_estimado,
+        },
     }
 
 
@@ -165,7 +193,7 @@ def _average_balance_series(series: pd.Series) -> pd.Series:
 def _analizar_balance_legacy(
     bs_df: pd.DataFrame,
     is_df: pd.DataFrame | None = None,
-) -> dict[str, pd.DataFrame | list[str]] | None:
+) -> dict[str, pd.DataFrame | list[str] | dict[str, pd.Series]] | None:
     cols_bs = sorted([c for c in bs_df.columns if str(c).isdigit() and len(str(c)) == 4])
     if not cols_bs:
         return None
@@ -177,29 +205,43 @@ def _analizar_balance_legacy(
     )
     activos = extraer_dato_robusto(bs_df, ["Assets", "Total assets", "Total Assets"], cols_bs)
 
-    deuda_largo = extraer_dato_robusto(
+    deuda_largo_raw = extraer_dato_robusto(
         bs_df,
         ["LongTermDebtNoncurrent", "LongTermDebt", "UnsecuredDebt", "Term debt", "Long-term debt"],
         cols_bs,
-    ).fillna(0)
+    )
+    commercial_paper_raw = extraer_dato_robusto(bs_df, ["CommercialPaper", "Commercial Paper"], cols_bs)
+    deuda_corriente_raw = extraer_dato_robusto(bs_df, ["LongTermDebtCurrent", "Current portion of long-term debt"], cols_bs)
+    deuda_corto_raw = extraer_dato_robusto(bs_df, ["ShortTermBorrowings", "Short-term debt"], cols_bs)
+    # "estimado" (Fase 8), por año: si CUALQUIERA de las sub-partidas de deuda
+    # sumadas aqui vino ausente y se sustituyo por 0 -- "columna ausente del
+    # estado" y "dato ausente" son indistinguibles con extraer_dato_robusto
+    # (limitacion ya documentada desde la Fase 7), asi que esto no resuelve esa
+    # ambiguedad, solo la hace visible: un año con al menos un fillna(0) en la
+    # suma queda marcado como estimado, aunque el 0 real hubiera dado el mismo
+    # resultado.
+    deuda_estimado = deuda_largo_raw.isna() | commercial_paper_raw.isna() | deuda_corriente_raw.isna() | deuda_corto_raw.isna()
+    deuda_largo = deuda_largo_raw.fillna(0)
     deuda_total = deuda_largo
-    deuda_total += extraer_dato_robusto(bs_df, ["CommercialPaper", "Commercial Paper"], cols_bs).fillna(0)
-    deuda_total += extraer_dato_robusto(bs_df, ["LongTermDebtCurrent", "Current portion of long-term debt"], cols_bs).fillna(0)
-    deuda_total += extraer_dato_robusto(bs_df, ["ShortTermBorrowings", "Short-term debt"], cols_bs).fillna(0)
+    deuda_total += commercial_paper_raw.fillna(0)
+    deuda_total += deuda_corriente_raw.fillna(0)
+    deuda_total += deuda_corto_raw.fillna(0)
 
     # Solo caja + inversiones a corto plazo (líquidas), igual que la ruta FMP
     # (ver nota en analizar_balance): no se suman valores a largo plazo /
     # noncurrent sin verificar liquidez.
-    caja_total = extraer_dato_robusto(
+    caja_efectivo_raw = extraer_dato_robusto(
         bs_df,
         ["CashAndCashEquivalentsAtCarryingValue", "Cash and cash equivalents"],
         cols_bs,
-    ).fillna(0)
-    caja_total += extraer_dato_robusto(
+    )
+    caja_inversiones_raw = extraer_dato_robusto(
         bs_df,
         ["MarketableSecuritiesCurrent", "ShortTermInvestments", "Short-term marketable securities"],
         cols_bs,
-    ).fillna(0)
+    )
+    caja_estimado = caja_efectivo_raw.isna() | caja_inversiones_raw.isna()
+    caja_total = caja_efectivo_raw.fillna(0) + caja_inversiones_raw.fillna(0)
 
     ganancias_retenidas = extraer_dato_robusto(
         bs_df,
@@ -227,7 +269,7 @@ def _analizar_balance_legacy(
         activos_avg = _average_balance_series(activos)
         # Tasa fiscal: mismo proxy estimado que la ruta FMP (ver docstring de
         # analizar_balance); solo para NOPAT interno, no para mostrar en UI.
-        tax_rate = _tasa_fiscal_efectiva(tax_expense, ebt)
+        tax_rate, tax_rate_estimado = _tasa_fiscal_efectiva(tax_expense, ebt)
         nopat = op_income * (1 - tax_rate)
 
         # Misma fórmula única que la ruta FMP: Deuda + Patrimonio - Caja,
@@ -243,6 +285,11 @@ def _analizar_balance_legacy(
         df_bal_ratios["ROIC %"] = _safe_ratio(nopat, capital_invertido_avg, multiplier=100, positive_denominator=True)
         df_bal_ratios["Años para pagar Deuda LP"] = _safe_ratio(deuda_largo, beneficio_neto)
         df_bal_ratios["Carga PP&E (PP&E/Benef.)"] = _safe_ratio(ppe, beneficio_neto)
+        # ROIC hereda "estimado" (Fase 8) del proxy de tasa fiscal (afecta al
+        # NOPAT) y de los mismos fallbacks de deuda/caja que Capital Invertido.
+        roic_estimado = tax_rate_estimado | deuda_estimado | caja_estimado
+    else:
+        roic_estimado = pd.Series(False, index=cols_bs)
 
     df_bal_ratios["Deuda / Capital"] = _safe_ratio(deuda_total, patrimonio, positive_denominator=True)
     df_bal_ratios["Caja Neta (B USD)"] = (caja_total - deuda_total) / 1e9
@@ -255,4 +302,9 @@ def _analizar_balance_legacy(
     return {
         "ratios": df_bal_ratios.replace([np.inf, -np.inf], np.nan).round(2),
         "flags": flags,
+        "estimado": {
+            "Deuda / Capital": deuda_estimado,
+            "Caja Neta (B USD)": deuda_estimado | caja_estimado,
+            "ROIC %": roic_estimado,
+        },
     }
