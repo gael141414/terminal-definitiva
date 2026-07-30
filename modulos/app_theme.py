@@ -397,6 +397,21 @@ def inject_terminal_theme() -> None:
                 line-height: 1.65;
             }
 
+            .vq-research-hero {
+                position: relative;
+                border-radius: var(--vq-radius-lg);
+                padding: 1px;
+                margin: 1.4rem 0 1.7rem;
+                background: linear-gradient(120deg, rgba(59, 130, 246, .65), rgba(34, 211, 238, .45) 45%, rgba(59, 130, 246, .12));
+                box-shadow: var(--vq-shadow-soft);
+            }
+
+            .vq-research-hero-inner {
+                border-radius: calc(var(--vq-radius-lg) - 1px);
+                background: linear-gradient(160deg, rgba(20, 29, 43, .98), rgba(11, 17, 26, .98));
+                padding: 1.7rem 2rem;
+            }
+
             .vq-section-title {
                 display: flex;
                 align-items: center;
@@ -670,6 +685,10 @@ def inject_terminal_theme() -> None:
 
                 .vq-home-hero {
                     min-height: 380px;
+                }
+
+                .vq-research-hero-inner {
+                    padding: 1.3rem 1.4rem;
                 }
 
                 .vq-tape-item {

@@ -116,6 +116,12 @@ bloques_internos = list(obtener_bloques_por_modo(modo_navegacion))
 if not bloques_internos:
     bloques_internos = list(BLOQUES_HERRAMIENTAS)
 
+# Research Core no es una pestaña más (mockup docs/design/research_core_navegacion_kpi.html,
+# sección 1a): es la puerta de entrada dominante, fusionada en "Home" — ver más abajo,
+# donde una búsqueda desde la tarjeta hero de Home activa este mismo bloque sin pasar
+# por una pestaña independiente.
+bloques_internos = [b for b in bloques_internos if b != "🧩 Research Core"]
+
 menu_interno = ["__home__"] + bloques_internos
 menu_labels = ["Home"] + [BLOQUE_UI.get(b, (strip_visual_prefix(b), "grid"))[0] for b in bloques_internos]
 menu_icons = ["house"] + [BLOQUE_UI.get(b, (strip_visual_prefix(b), "grid"))[1] for b in bloques_internos]
@@ -139,11 +145,22 @@ st.markdown(
 )
 
 seleccion_idx = menu_labels.index(seleccion_menu) if seleccion_menu in menu_labels else 0
-if menu_interno[seleccion_idx] == "__home__":
+en_home = menu_interno[seleccion_idx] == "__home__"
+# Activado por la tarjeta hero de Research Core en Home (modulos/app_home.py) —
+# mientras esté activo, "Home" deja de mostrar la landing y muestra directamente
+# el Research Core ya resuelto, sin que este exista como pestaña independiente.
+research_core_activo = en_home and bool(st.session_state.get("vq_research_core_activo", False))
+
+if en_home and not research_core_activo:
     render_home_page(LOGO_PATH, HOME_BG_PATH)
     st.stop()
 
-bloque_actual = menu_interno[seleccion_idx]
+if research_core_activo:
+    if st.button("← Volver a Home", key="vq_volver_home"):
+        st.session_state["vq_research_core_activo"] = False
+        st.rerun()
+
+bloque_actual = "🧩 Research Core" if research_core_activo else menu_interno[seleccion_idx]
 herramientas_bloque = obtener_herramientas_por_bloque_y_modo(bloque_actual, modo_navegacion)
 etiquetas_bloque = [h["label"] for h in herramientas_bloque]
 tool_labels = [strip_visual_prefix(label) for label in etiquetas_bloque]
@@ -217,9 +234,24 @@ else:
         lista_tickers_sec = ["AAPL - Apple Inc.", "MSFT - Microsoft Corp."]
 
     indice_aapl = next((i for i, item in enumerate(lista_tickers_sec) if item.startswith("AAPL -")), 0)
+    indice_default = indice_aapl
+    if research_core_activo:
+        # Llegamos aquí desde la tarjeta hero de Home con un ticker ya resuelto
+        # (modulos.app_home._activar_research_core) — el selectbox debe arrancar
+        # en ese ticker, no en AAPL por defecto.
+        ticker_buscado_hero = st.session_state.get("ticker_analizado")
+        if ticker_buscado_hero:
+            indice_default = next(
+                (
+                    i
+                    for i, item in enumerate(lista_tickers_sec)
+                    if item.split(" - ")[0].strip().upper() == str(ticker_buscado_hero).upper()
+                ),
+                indice_aapl,
+            )
     col_1, col_2, col_3, col_4 = st.columns([2.2, 2.2, 1, 1])
     with col_1:
-        seleccion_principal = st.selectbox("Empresa", options=lista_tickers_sec, index=indice_aapl)
+        seleccion_principal = st.selectbox("Empresa", options=lista_tickers_sec, index=indice_default)
         ticker_input = seleccion_principal.split(" - ")[0]
     with col_2:
         lista_competidores = [""] + lista_tickers_sec

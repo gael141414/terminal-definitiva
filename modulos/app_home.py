@@ -10,6 +10,7 @@ import plotly.graph_objects as go
 
 from modulos.app_assets import asset_to_data_uri, strip_visual_prefix
 from modulos.app_navigation import TOOL_UI_ICONS
+from modulos.company_data_helpers import obtener_tickers_filtrados
 from modulos.tool_catalog import TOOL_CATALOG
 from modulos.tool_consolidation import get_navigation_groups_ordered
 from modulos.ui_components import render_navigation_groups_grid
@@ -19,6 +20,114 @@ from modulos.market_widgets import (
     obtener_market_treemap_data,
     obtener_ultimas_noticias,
 )
+
+MAX_TICKERS_RECIENTES = 3
+
+
+def _resolver_ticker_buscado(query: str) -> str:
+    """Resuelve texto libre (ticker o nombre) contra el catálogo real de la SEC.
+
+    Mismo criterio de fallback que ya usa la búsqueda de ETF en app.py: si no
+    hay coincidencia exacta ni por nombre, se usa el texto tal cual en
+    mayúsculas -- nunca se bloquea la búsqueda por no estar en el catálogo
+    filtrado (algunos tickers válidos quedan fuera de ese filtro)."""
+    query_norm = query.strip().upper()
+    if not query_norm:
+        return query_norm
+
+    try:
+        lista_tickers = obtener_tickers_filtrados()
+    except Exception:
+        lista_tickers = []
+
+    coincidencia_ticker = next(
+        (item for item in lista_tickers if item.split(" - ")[0].strip().upper() == query_norm),
+        None,
+    )
+    if coincidencia_ticker:
+        return coincidencia_ticker.split(" - ")[0].strip()
+
+    coincidencia_nombre = next(
+        (item for item in lista_tickers if query_norm in item.split(" - ", 1)[-1].upper()),
+        None,
+    )
+    if coincidencia_nombre:
+        return coincidencia_nombre.split(" - ")[0].strip()
+
+    return query_norm
+
+
+def _activar_research_core(query: str) -> None:
+    """Resuelve la búsqueda de la tarjeta hero y salta directo al Research Core
+    ya analizado -- mismas claves de session_state que usa hoy app.py para el
+    flujo de herramientas de empresa (empresa_analizada/ticker_analizado/
+    competidor_analizado/años_analizados), así el chequeo existente de
+    "empresa_no_analizada" ya viene satisfecho en el primer render."""
+    ticker = _resolver_ticker_buscado(query)
+    if not ticker:
+        return
+
+    recientes = [t for t in st.session_state.get("vq_recent_tickers", []) if t != ticker]
+    st.session_state["vq_recent_tickers"] = [ticker] + recientes[: MAX_TICKERS_RECIENTES - 1]
+
+    st.session_state["vq_research_core_activo"] = True
+    st.session_state["empresa_analizada"] = True
+    st.session_state["ticker_analizado"] = ticker
+    st.session_state["competidor_analizado"] = ""
+    st.session_state["años_analizados"] = 5
+    st.rerun()
+
+
+def render_research_core_hero() -> None:
+    """Tarjeta hero de ancho completo (mockup docs/design/research_core_navegacion_kpi.html,
+    sección 1a): Research Core como puerta de entrada dominante, con buscador
+    funcional (no decorativo) de ticker o nombre de empresa. Un Analizar aquí
+    salta directo al Research Core ya resuelto -- ver app.py, donde "Home" se
+    convierte en el propio Research Core mientras la búsqueda esté activa, en
+    vez de tratar Research Core como una pestaña más."""
+    recientes = st.session_state.get("vq_recent_tickers", [])
+
+    st.markdown('<div class="vq-research-hero"><div class="vq-research-hero-inner">', unsafe_allow_html=True)
+    col_izquierda, col_derecha = st.columns([1.7, 1], gap="large")
+
+    with col_izquierda:
+        st.markdown(
+            """
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
+                <span style="font-size:10.5px; font-weight:700; letter-spacing:0.14em; color:var(--vq-cyan); text-transform:uppercase;">Experiencia principal</span>
+                <span style="height:1px; width:36px; background:rgba(34,211,238,0.4); display:inline-block;"></span>
+            </div>
+            <div style="font-size:1.7rem; font-weight:800; letter-spacing:-0.01em; color:#FFFFFF;">Research Core</div>
+            <div style="font-size:.92rem; color:var(--vq-text-soft); max-width:520px; line-height:1.5; margin-top:6px;">
+                Análisis fundamental completo de una empresa: score global, valoración, calidad, riesgo y veredicto en una sola mesa de trabajo.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        if recientes:
+            st.markdown(
+                "<div style='font-size:.72rem; color:var(--vq-muted); margin:.7rem 0 .3rem;'>Recientes:</div>",
+                unsafe_allow_html=True,
+            )
+            cols_pills = st.columns(len(recientes))
+            for i, tk in enumerate(recientes):
+                with cols_pills[i]:
+                    if st.button(tk, key=f"vq_hero_recent_{tk}", use_container_width=True):
+                        _activar_research_core(tk)
+
+    with col_derecha:
+        with st.form("vq_hero_search_form", border=False):
+            query = st.text_input(
+                "Ticker o nombre de empresa",
+                placeholder="Ticker o nombre de empresa…",
+                label_visibility="collapsed",
+            )
+            submitted = st.form_submit_button("Analizar", type="primary", use_container_width=True)
+        st.caption("Enter para abrir el resumen ejecutivo")
+        if submitted and query.strip():
+            _activar_research_core(query)
+
+    st.markdown("</div></div>", unsafe_allow_html=True)
 
 
 def render_module_showcase(limit: int = 9) -> None:
@@ -153,6 +262,7 @@ f"</div>",
         unsafe_allow_html=True
     )
 
+    render_research_core_hero()
     render_module_showcase()
 
     # 2. GRID DE MERCADO (Con VIX y US 10Y integrados)
