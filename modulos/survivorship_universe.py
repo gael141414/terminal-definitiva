@@ -36,6 +36,31 @@ Casos curados y verificados en vivo contra SEC EDGAR:
   ``CompanyNotFoundError`` en vez de resolver a una entidad equivocada (a
   diferencia de BBBY/SHLD, aquí el fallo es ruidoso, no silencioso -- pero
   sigue bloqueando el acceso si no se conoce el CIK de antemano).
+
+Disponibilidad de precio histórico (Sub-fase 3, verificado en vivo contra
+la API de Yahoo Finance directamente -- sin pasar por yfinance, cuyo propio
+mecanismo de cookie/crumb estaba bloqueado por rate-limit en el momento de
+esta verificación; el bloqueo era de esa librería, no de Yahoo, que sí
+respondía con datos reales a una petición HTTP directa al endpoint de
+cotizaciones):
+
+- BBBY: SÍ hay precio real (376 puntos diarios, 2021-12-31 a 2023-06-30,
+  ``instrumentType=EQUITY``) que cubre por completo el rango de los puntos
+  de congelación de la Sub-fase 3 (2020 a 2023-06-15). Usable en la
+  Sub-fase 4 para cruzar retorno.
+- SHLD: NO hay precio disponible bajo ningún ticker conocido. El símbolo
+  actual resuelve a "Global X Defense Tech ETF" (sin relación con Sears,
+  datos solo desde 2023-09) y el sucesor OTC "SHLDQ" devuelve 404 ("No data
+  found, symbol may be delisted"). No es un bloqueo temporal: el hueco es
+  estructural (reasignación permanente del ticker). NO usable en la
+  Sub-fase 4 para retorno -- solo fundamentales.
+- TOYS: NO hay precio disponible, y no lo habrá nunca para el rango
+  relevante: Toys "R" Us fue una empresa PRIVADA desde el LBO de KKR/Bain/
+  Vornado en 2005 hasta su quiebra de 2017 -- no tuvo acción cotizada en
+  ningún momento de la ventana de congelación de la Sub-fase 3 (2012-2017).
+  El símbolo actual "TOYS" en Yahoo resuelve además a un fondo mutuo sin
+  relación alguna. NO usable en la Sub-fase 4 para retorno -- solo
+  fundamentales.
 """
 
 from __future__ import annotations
@@ -58,6 +83,11 @@ class HistoricalCompanyRecord:
     ``ultimo_filing_10k`` es la fecha del último 10-K conocido en el momento
     en que se curó este registro -- referencia de cobertura, no una garantía
     viva (un trustee de la quiebra podría presentar un filing tardío).
+
+    ``precio_historico_disponible`` -- verificado en la Sub-fase 3 contra la
+    API de Yahoo Finance directamente (ver nota del módulo): indica si este
+    caso puede cruzarse con retorno en la Sub-fase 4, o si se queda limitado
+    a validar que el score se calcula (solo fundamentales, sin retorno).
     """
 
     ticker_historico: str
@@ -65,6 +95,7 @@ class HistoricalCompanyRecord:
     nombre_esperado: str
     ultimo_filing_10k: str
     motivo: str
+    precio_historico_disponible: bool
     nota: str = ""
 
 
@@ -75,10 +106,14 @@ SURVIVORSHIP_CASES: dict[str, HistoricalCompanyRecord] = {
         nombre_esperado="DK-Butterfly",
         ultimo_filing_10k="2023-06-14",
         motivo="quiebra (Chapter 11, 2023)",
+        precio_historico_disponible=True,
         nota=(
             "El ticker BBBY fue reutilizado por Overstock.com tras comprar la marca "
             "en la quiebra -- Company('BBBY') hoy resuelve a esa empresa NUEVA "
-            "(CIK 1130713, filings 2024-2026), no a la Bed Bath & Beyond original."
+            "(CIK 1130713, filings 2024-2026), no a la Bed Bath & Beyond original. "
+            "Precio (Sub-fase 3): SÍ disponible en Yahoo Finance -- 376 puntos diarios "
+            "2021-12-31/2023-06-30, instrumentType=EQUITY, cubre todo el rango de "
+            "congelación. Usable en la Sub-fase 4 para cruzar retorno."
         ),
     ),
     "SHLD": HistoricalCompanyRecord(
@@ -87,9 +122,14 @@ SURVIVORSHIP_CASES: dict[str, HistoricalCompanyRecord] = {
         nombre_esperado="SEARS HOLDINGS",
         ultimo_filing_10k="2018-03-23",
         motivo="quiebra (Chapter 11, 2018)",
+        precio_historico_disponible=False,
         nota=(
             "El ticker SHLD fue reasignado a un emisor de ETFs -- Company('SHLD') "
-            "hoy resuelve a 'Global X Funds' (CIK 1432353), sin ninguna relación con Sears."
+            "hoy resuelve a 'Global X Funds' (CIK 1432353), sin ninguna relación con Sears. "
+            "Precio (Sub-fase 3): NO disponible en Yahoo Finance bajo ningún ticker -- "
+            "'SHLD' hoy es Global X Defense Tech ETF (datos solo desde 2023-09) y el "
+            "sucesor OTC 'SHLDQ' devuelve 404. Hueco estructural (ticker reasignado), no "
+            "un bloqueo temporal. NO usable en la Sub-fase 4 para retorno, solo fundamentales."
         ),
     ),
     "TOYS": HistoricalCompanyRecord(
@@ -98,10 +138,16 @@ SURVIVORSHIP_CASES: dict[str, HistoricalCompanyRecord] = {
         nombre_esperado="TOYS R US",
         ultimo_filing_10k="2017-04-12",
         motivo="liquidación completa (Chapter 11, 2017-2018)",
+        precio_historico_disponible=False,
         nota=(
             "El ticker TOYS nunca se reutilizó -- Company('TOYS') falla directamente "
             "con CompanyNotFoundError en vez de resolver a una entidad equivocada "
-            "(a diferencia de BBBY/SHLD, el fallo aquí es ruidoso, no silencioso)."
+            "(a diferencia de BBBY/SHLD, el fallo aquí es ruidoso, no silencioso). "
+            "Precio (Sub-fase 3): NO disponible, y no lo habrá nunca para el rango "
+            "relevante -- Toys \"R\" Us fue una empresa PRIVADA (LBO KKR/Bain/Vornado "
+            "2005) hasta su quiebra de 2017, sin acción cotizada durante toda la "
+            "ventana de congelación (2012-2017). NO usable en la Sub-fase 4 para "
+            "retorno, solo fundamentales."
         ),
     ),
 }
