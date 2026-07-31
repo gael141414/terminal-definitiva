@@ -80,6 +80,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+import requests
 import yfinance as yf
 
 import financials.valuator as valuator
@@ -261,6 +262,66 @@ def generar_puntos_de_congelacion_sec(cik: int | str, *, años: int = 5) -> list
 # 3. Precio y snapshot de mercado histórico (ver docstring del módulo)
 # ---------------------------------------------------------------------------
 
+_YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
+_YAHOO_HEADERS = {"User-Agent": "Mozilla/5.0"}
+
+
+def _descargar_historial_yahoo_directo(ticker: str, start: str, end: str) -> pd.DataFrame:
+    """Histórico diario vía petición HTTP directa al endpoint de gráfico de
+    Yahoo -- bypass de un bug real de yfinance encontrado en esta misma
+    sub-fase: su propio preflight de autenticación (cookie/crumb) devolvía
+    429 en query1.finance.yahoo.com/v1/test/getcrumb incluso con Yahoo
+    accesible (una petición directa al endpoint de datos, sin ese
+    preflight, respondía con normalidad). Se usa como vía PRIMARIA (no solo
+    fallback) porque en la práctica es la que funciona hoy; devuelve un
+    DataFrame vacío -- nunca dato fabricado -- ante cualquier fallo, para
+    que el llamador caiga al intento con safe_yfinance_fetch/yfinance
+    exactamente igual que si esta función no existiera."""
+    try:
+        p1 = int(pd.Timestamp(start).timestamp())
+        p2 = int(pd.Timestamp(end).timestamp())
+        respuesta = requests.get(
+            _YAHOO_CHART_URL.format(ticker=ticker),
+            params={"period1": p1, "period2": p2, "interval": "1d"},
+            headers=_YAHOO_HEADERS,
+            timeout=15,
+        )
+        if respuesta.status_code != 200:
+            return pd.DataFrame()
+
+        datos = respuesta.json()
+        resultado = datos.get("chart", {}).get("result")
+        if not resultado:
+            return pd.DataFrame()
+
+        timestamps = resultado[0].get("timestamp") or []
+        cierres = (resultado[0].get("indicators", {}).get("quote") or [{}])[0].get("close") or []
+        if not timestamps or not cierres:
+            return pd.DataFrame()
+
+        indice = pd.to_datetime(timestamps, unit="s").normalize()
+        return pd.DataFrame({"Close": cierres}, index=indice).dropna()
+    except Exception:
+        return pd.DataFrame()
+
+
+def _obtener_historial(ticker: str, start: str, end: str, *, context: str) -> pd.DataFrame:
+    """Histórico diario con Close -- prueba primero el bypass directo a
+    Yahoo (ver _descargar_historial_yahoo_directo) y, solo si no da nada,
+    cae a yfinance vía safe_yfinance_fetch (ambos caminos legítimos; el
+    bypass es hoy el que funciona, pero si yfinance se recupera y el
+    bypass falla por lo que sea, no se pierde el dato)."""
+    hist = _descargar_historial_yahoo_directo(ticker, start, end)
+    if not hist.empty:
+        return hist
+
+    hist, _status = safe_yfinance_fetch(
+        lambda: yf.Ticker(ticker).history(start=start, end=end, interval="1d", auto_adjust=True),
+        empty_value=pd.DataFrame(),
+        context=context,
+    )
+    return hist if hist is not None else pd.DataFrame()
+
 
 def _historical_price(ticker: str, as_of_date: str) -> float | None:
     """Último cierre disponible en/antes de as_of_date. None si Yahoo no
@@ -271,11 +332,7 @@ def _historical_price(ticker: str, as_of_date: str) -> float | None:
     start = (as_of_ts - pd.Timedelta(days=10)).strftime("%Y-%m-%d")
     end = (as_of_ts + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
 
-    hist, _status = safe_yfinance_fetch(
-        lambda: yf.Ticker(ticker).history(start=start, end=end, interval="1d", auto_adjust=True),
-        empty_value=pd.DataFrame(),
-        context=f"point_in_time:price:{ticker}",
-    )
+    hist = _obtener_historial(ticker, start, end, context=f"point_in_time:price:{ticker}")
     if hist is None or hist.empty or "Close" not in hist.columns:
         return None
     close = hist["Close"].dropna()
@@ -303,11 +360,7 @@ def _historical_market_snapshot(ticker: str, as_of_date: str) -> dict[str, Any]:
     start = (as_of_ts - pd.Timedelta(days=550)).strftime("%Y-%m-%d")
     end = (as_of_ts + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
 
-    hist, _status = safe_yfinance_fetch(
-        lambda: yf.Ticker(ticker).history(start=start, end=end, interval="1d", auto_adjust=True),
-        empty_value=pd.DataFrame(),
-        context=f"point_in_time:history:{ticker}",
-    )
+    hist = _obtener_historial(ticker, start, end, context=f"point_in_time:history:{ticker}")
     if hist is None or hist.empty or "Close" not in hist.columns:
         return output
 
@@ -337,14 +390,8 @@ def _historical_market_snapshot(ticker: str, as_of_date: str) -> dict[str, Any]:
 
     sector_etf = _SECTOR_TO_ETF.get(str(output.get("sector") or ""))
     if sector_etf:
-        sector_hist, _ = safe_yfinance_fetch(
-            lambda: yf.Ticker(sector_etf).history(start=start, end=end, interval="1d", auto_adjust=True),
-            empty_value=pd.DataFrame(), context=f"point_in_time:sector_etf:{sector_etf}",
-        )
-        spy_hist, _ = safe_yfinance_fetch(
-            lambda: yf.Ticker("SPY").history(start=start, end=end, interval="1d", auto_adjust=True),
-            empty_value=pd.DataFrame(), context="point_in_time:sector_etf:SPY",
-        )
+        sector_hist = _obtener_historial(sector_etf, start, end, context=f"point_in_time:sector_etf:{sector_etf}")
+        spy_hist = _obtener_historial("SPY", start, end, context="point_in_time:sector_etf:SPY")
         sector_close = sector_hist["Close"].dropna() if not sector_hist.empty else sector_hist
         spy_close = spy_hist["Close"].dropna() if not spy_hist.empty else spy_hist
         if len(sector_close) > 63 and len(spy_close) > 63:

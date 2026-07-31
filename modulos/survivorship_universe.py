@@ -37,17 +37,32 @@ Casos curados y verificados en vivo contra SEC EDGAR:
   diferencia de BBBY/SHLD, aquí el fallo es ruidoso, no silencioso -- pero
   sigue bloqueando el acceso si no se conoce el CIK de antemano).
 
-Disponibilidad de precio histórico (Sub-fase 3, verificado en vivo contra
-la API de Yahoo Finance directamente -- sin pasar por yfinance, cuyo propio
-mecanismo de cookie/crumb estaba bloqueado por rate-limit en el momento de
-esta verificación; el bloqueo era de esa librería, no de Yahoo, que sí
-respondía con datos reales a una petición HTTP directa al endpoint de
-cotizaciones):
+Disponibilidad de precio histórico (Sub-fase 3, primera verificación en vivo
+contra la API de Yahoo Finance directamente -- sin pasar por yfinance, cuyo
+propio mecanismo de cookie/crumb estaba bloqueado por rate-limit en ese
+momento; el bloqueo era de esa librería, no de Yahoo. CORREGIDO en la
+Sub-fase 4 para BBBY -- ver más abajo):
 
-- BBBY: SÍ hay precio real (376 puntos diarios, 2021-12-31 a 2023-06-30,
-  ``instrumentType=EQUITY``) que cubre por completo el rango de los puntos
-  de congelación de la Sub-fase 3 (2020 a 2023-06-15). Usable en la
-  Sub-fase 4 para cruzar retorno.
+- BBBY: NO hay precio real utilizable, pese a que la Sub-fase 3 concluyó
+  inicialmente que sí (376 puntos diarios, 2021-12-31 a 2023-06-30,
+  ``instrumentType=EQUITY``). Esa primera verificación solo comprobó que
+  HABÍA una serie de precios con fechas plausibles, sin comprobar que
+  fuera la empresa correcta -- error que la Sub-fase 4 detectó al intentar
+  cruzar retorno real: el 23/04/2023 (fecha real de la quiebra, la acción
+  se desplomó a 0,193 $ y fue excluida de Nasdaq) el ticker "BBBY" en Yahoo
+  seguía cotizando a ~18 $, sin ningún hueco ni caída. La razón: Overstock.com
+  compró la marca en la quiebra y en agosto de 2023 se renombró a sí misma
+  "Bed Bath & Beyond Inc.", adoptando el ticker "BBBY" -- Yahoo (y otros
+  proveedores de datos que se apoyan en el mismo identificador continuo,
+  como MacroTrends) reasignan la SERIE DE PRECIOS COMPLETA al nuevo nombre
+  del emisor, incluida la cotización de Overstock anterior a 2023 (el
+  "máximo histórico" de ~120 $ en agosto de 2020 que aparece bajo "BBBY" es
+  en realidad el rally de Overstock durante la pandemia, no de Bed Bath &
+  Beyond). A diferencia de SEC EDGAR (CIK permanente), Yahoo no tiene un
+  identificador estable para el precio que sobreviva a un cambio de ticker
+  -- no hay forma de aislar el precio real de la Bed Bath & Beyond original
+  a través de Yahoo. NO usable en la Sub-fase 4 para retorno -- solo
+  fundamentales, igual que SHLD y TOYS.
 - SHLD: NO hay precio disponible bajo ningún ticker conocido. El símbolo
   actual resuelve a "Global X Defense Tech ETF" (sin relación con Sears,
   datos solo desde 2023-09) y el sucesor OTC "SHLDQ" devuelve 404 ("No data
@@ -106,14 +121,19 @@ SURVIVORSHIP_CASES: dict[str, HistoricalCompanyRecord] = {
         nombre_esperado="DK-Butterfly",
         ultimo_filing_10k="2023-06-14",
         motivo="quiebra (Chapter 11, 2023)",
-        precio_historico_disponible=True,
+        precio_historico_disponible=False,
         nota=(
             "El ticker BBBY fue reutilizado por Overstock.com tras comprar la marca "
             "en la quiebra -- Company('BBBY') hoy resuelve a esa empresa NUEVA "
             "(CIK 1130713, filings 2024-2026), no a la Bed Bath & Beyond original. "
-            "Precio (Sub-fase 3): SÍ disponible en Yahoo Finance -- 376 puntos diarios "
-            "2021-12-31/2023-06-30, instrumentType=EQUITY, cubre todo el rango de "
-            "congelación. Usable en la Sub-fase 4 para cruzar retorno."
+            "Precio: la Sub-fase 3 concluyó inicialmente que SÍ había precio "
+            "utilizable (376 puntos, 2021-12-31/2023-06-30) -- CORREGIDO en la "
+            "Sub-fase 4: esa serie es en realidad la de Overstock.com, que en "
+            "agosto de 2023 se renombró 'Bed Bath & Beyond Inc.' y adoptó el "
+            "ticker BBBY: el 23/04/2023 (quiebra real, la acción cayó a 0,193 $ y "
+            "fue excluida de Nasdaq) Yahoo seguía mostrando ~18 $ bajo 'BBBY', sin "
+            "ningún hueco. NO usable en la Sub-fase 4 para retorno -- solo "
+            "fundamentales, igual que SHLD y TOYS."
         ),
     ),
     "SHLD": HistoricalCompanyRecord(
