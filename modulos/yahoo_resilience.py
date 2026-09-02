@@ -181,29 +181,86 @@ def safe_yfinance_download(yf_module: Any, *args: Any, context: str = "yfinance"
     return pd.DataFrame(data)
 
 
-def safe_yfinance_info(yf_module: Any, ticker: str, *, context: str = "yfinance_info") -> dict[str, Any]:
-    """Obtiene yf.Ticker(...).info con fallback estable ante 429/quoteSummary."""
+# Un ``.info`` "vacío" de Yahoo no llega como {} ni como excepción: llega como
+# un dict de ~3-5 claves (normalmente sólo maxAge/symbol/trailingPegRatio)
+# cuando quoteSummary ha sido rechazado. Tratarlo como válido era la causa de
+# que la UI mostrase 0.0 y "N/D" en vez de reintentar o avisar.
+YAHOO_INFO_MIN_KEYS = 5
 
-    stdout = io.StringIO()
-    stderr = io.StringIO()
-    try:
-        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
-            info = yf_module.Ticker(ticker).info
-    except Exception as exc:
-        if is_yahoo_timeout_error(exc):
-            logger.warning("Yahoo info timeout para %s en %s; se devuelve dict vacío.", ticker, context)
-        elif is_yahoo_rate_limit_error(exc):
-            logger.warning("Yahoo info rate limit para %s en %s; se devuelve dict vacío.", ticker, context)
-        else:
+
+def _info_util(info: Any) -> bool:
+    return isinstance(info, dict) and len(info) > YAHOO_INFO_MIN_KEYS
+
+
+def safe_yfinance_info(
+    yf_module: Any,
+    ticker: str,
+    *,
+    context: str = "yfinance_info",
+    retries: int = 2,
+    backoff_seconds: float = 1.0,
+) -> dict[str, Any]:
+    """Obtiene ``yf.Ticker(...).info`` con reintentos y validación de contenido.
+
+    Antes esta función no reintentaba (a diferencia de ``safe_yfinance_fetch``),
+    así que un único 429 dejaba sin datos a toda la pantalla durante el rerun
+    completo de Streamlit. Ahora reintenta con backoff exponencial y además
+    descarta respuestas "de relleno" (ver ``YAHOO_INFO_MIN_KEYS``).
+
+    Devuelve ``{}`` cuando no hay dato utilizable, nunca lanza.
+    """
+
+    attempt = 0
+    while True:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                info = yf_module.Ticker(ticker).info
+        except Exception as exc:
+            transitorio = is_yahoo_timeout_error(exc) or is_yahoo_rate_limit_error(exc)
+            if transitorio and attempt < retries:
+                espera = backoff_seconds * (2 ** attempt)
+                logger.warning(
+                    "Yahoo info transitorio para %s en %s (intento %s/%s); reintentando en %.1fs.",
+                    ticker, context, attempt + 1, retries, espera,
+                )
+                time.sleep(espera)
+                attempt += 1
+                continue
             logger.warning(
                 "Yahoo info no disponible para %s en %s; se devuelve dict vacío: %s: %s",
                 ticker, context, type(exc).__name__, exc,
             )
-        return {}
+            return {}
 
-    captured = _captured_provider_output(stdout, stderr)
-    if is_yahoo_rate_limit_error(captured):
-        logger.warning("Yahoo info rate limit capturado para %s en %s; se devuelve dict vacío.", ticker, context)
-        return {}
+        captured = _captured_provider_output(stdout, stderr)
+        if is_yahoo_rate_limit_error(captured):
+            if attempt < retries:
+                espera = backoff_seconds * (2 ** attempt)
+                logger.warning(
+                    "Yahoo info rate limit capturado para %s en %s (intento %s/%s); reintentando en %.1fs.",
+                    ticker, context, attempt + 1, retries, espera,
+                )
+                time.sleep(espera)
+                attempt += 1
+                continue
+            logger.warning("Yahoo info rate limit capturado para %s en %s; se agotan reintentos.", ticker, context)
+            return {}
 
-    return info if isinstance(info, dict) else {}
+        if _info_util(info):
+            return info
+
+        # Respuesta formalmente correcta pero sin contenido real.
+        if attempt < retries:
+            espera = backoff_seconds * (2 ** attempt)
+            logger.warning(
+                "Yahoo info devolvió payload vacío para %s en %s (intento %s/%s); reintentando en %.1fs.",
+                ticker, context, attempt + 1, retries, espera,
+            )
+            time.sleep(espera)
+            attempt += 1
+            continue
+
+        logger.warning("Yahoo info sin contenido utilizable para %s en %s.", ticker, context)
+        return {}

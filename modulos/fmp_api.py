@@ -631,6 +631,30 @@ def extraer_datos_as_reported_fmp(
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
+def _cotizacion_fallback_yahoo(ticker: str) -> float:
+    """Precio de respaldo vía Yahoo cuando FMP no cubre el símbolo.
+
+    ``quote-short`` devuelve 403/402 para los símbolos fuera del plan, lo que
+    dejaba ``precio_actual`` a 0.0 y hacía que toda la valoración (margen de
+    seguridad, upside) se mostrara como "N/A" aunque los estados financieros sí
+    estuvieran disponibles por el respaldo de yfinance.
+
+    El import es diferido a propósito: ``modulos.quotes`` importa este módulo,
+    así que un import a nivel de fichero crearía un ciclo.
+    """
+    try:
+        from modulos.quotes import fetch_quotes_with_fallback
+
+        resultado = fetch_quotes_with_fallback((ticker,), period="5d")
+        quote = resultado.get(ticker)
+        if quote is not None and quote.ok and quote.price:
+            logger.info("Cotización de %s resuelta por respaldo Yahoo.", ticker)
+            return float(quote.price)
+    except Exception as exc:
+        logger.warning("Respaldo Yahoo de cotización falló para %s: %s", ticker, type(exc).__name__)
+    return 0.0
+
+
 def obtener_cotizacion_fmp(ticker: str) -> float:
     """Obtiene la cotización actual de FMP."""
     ticker_limpio = _normalizar_ticker(ticker)
@@ -656,10 +680,11 @@ def obtener_cotizacion_fmp(ticker: str) -> float:
 
         if not payload:
             logger.warning("FMP %s", NoDataError("no hay cotización disponible.", context=f"cotizacion:{ticker_limpio}"))
-            return 0.0
+            return _cotizacion_fallback_yahoo(ticker_limpio)
 
         price = payload[0].get("price", 0.0)
-        return float(price) if price is not None else 0.0
+        precio = float(price) if price is not None else 0.0
+        return precio if precio > 0 else _cotizacion_fallback_yahoo(ticker_limpio)
     except (TypeError, ValueError) as exc:
         logger.warning(
             "FMP %s",

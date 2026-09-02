@@ -184,10 +184,29 @@ def test_extraer_datos_fundamentales_fmp_no_propaga_excepciones_tipadas(monkeypa
 
 
 def test_obtener_cotizacion_fmp_no_propaga_excepciones_tipadas(monkeypatch):
+    """Si FMP falla y tampoco hay respaldo, se devuelve 0.0 sin lanzar.
+
+    El respaldo de Yahoo se anula aquí a propósito: este test cubre el camino
+    FMP en aislamiento y debe seguir siendo hermético (sin red).
+    """
     monkeypatch.setattr(fmp_api.requests, "get", lambda *a, **k: _FakeResponse(status_code=500))
     monkeypatch.setattr(fmp_api, "FMP_API_KEY", "fake-key-for-test")
+    monkeypatch.setattr(fmp_api, "_cotizacion_fallback_yahoo", lambda ticker: 0.0)
 
     assert fmp_api.obtener_cotizacion_fmp("AAPL") == 0.0
+
+
+def test_obtener_cotizacion_fmp_usa_respaldo_yahoo_si_fmp_no_cubre_el_simbolo(monkeypatch):
+    """FMP devuelve 402/403 para símbolos fuera del plan (IBM, MCD, KHC...).
+
+    Antes eso dejaba precio_actual = 0.0 y toda la valoración en "N/A" aunque los
+    estados financieros sí estuvieran disponibles. Ahora se resuelve por Yahoo.
+    """
+    monkeypatch.setattr(fmp_api.requests, "get", lambda *a, **k: _FakeResponse(status_code=403))
+    monkeypatch.setattr(fmp_api, "FMP_API_KEY", "fake-key-for-test")
+    monkeypatch.setattr(fmp_api, "_cotizacion_fallback_yahoo", lambda ticker: 25.13)
+
+    assert fmp_api.obtener_cotizacion_fmp("KHC") == 25.13
 
 
 # ---------------------------------------------------------------------------

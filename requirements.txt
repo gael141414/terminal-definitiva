@@ -9,7 +9,7 @@ plotly==5.18.0
 openpyxl==3.1.2
 
 requests==2.31.0
-yfinance==0.2.36
+yfinance>=0.2.54
 
 google-generativeai==0.4.1
 textblob==0.18.0.post0
