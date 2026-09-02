@@ -5,6 +5,18 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
+from modulos.earnings_calendar import mostrar_calendario_earnings
+from modulos.watchlist_estados import (
+    ALERTAS_TECNICAS,
+    ESTADOS,
+    META_ESTADOS,
+    evaluar_alertas_tecnicas,
+    evaluar_posicion,
+    inferir_estado,
+    normalizar_estado,
+    ordenar_por_embudo,
+    resumen_embudo,
+)
 from modulos.watchlist_alerts import alert_summary, build_watchlist_alerts
 from modulos.analysis_store import score_evolution_summary, score_history_for_ticker
 from modulos.quotes import fetch_quotes_with_fallback
@@ -462,6 +474,276 @@ def _render_alerts_panel(df_alerts: pd.DataFrame) -> None:
 
 
 # --- INTERFAZ PRINCIPAL ---
+# =============================================================================
+# GESTIÓN POR TICKER (alertas bidireccionales, tesis y salto al análisis)
+# =============================================================================
+# Hasta ahora la watchlist sólo permitía un "target" de compra (alerta si el
+# precio BAJA de X) y el borrado iba por un selectbox global. Faltaban tres
+# cosas de uso diario: alerta también al SUBIR de un precio (toma de
+# beneficios), la tesis escrita junto al ticker, y poder saltar al análisis
+# completo sin volver a buscar el ticker a mano.
+
+
+def _saltar_a_analisis(ticker: str) -> None:
+    """Abre el Research Core ya resuelto para ``ticker``.
+
+    Reutiliza exactamente las mismas claves de session_state que usan la tarjeta
+    hero de Home (modulos/app_home.py) y el chequeo de "empresa_no_analizada" de
+    app.py, para que el análisis aparezca ya cargado en el primer render en vez
+    de pedir otra vez el botón «Analizar».
+    """
+    st.session_state["vq_research_core_activo"] = True
+    st.session_state["empresa_analizada"] = True
+    st.session_state["ticker_analizado"] = ticker
+    st.session_state["competidor_analizado"] = ""
+    st.session_state["años_analizados"] = 5
+    st.rerun()
+
+
+def evaluar_alertas_precio(
+    precio_actual: float,
+    target_compra: float,
+    target_venta: float,
+) -> tuple[str, str]:
+    """Estado de la alerta de precio de un ticker.
+
+    Devuelve ``(etiqueta, nivel)`` donde nivel es ``"compra"``, ``"venta"``,
+    ``"neutro"`` o ``"sin_datos"``. Se extrae como función pura para poder
+    testearla sin Streamlit.
+    """
+    if not precio_actual or precio_actual <= 0:
+        return "Sin precio", "sin_datos"
+
+    compra_activa = target_compra and target_compra > 0
+    venta_activa = target_venta and target_venta > 0
+
+    if compra_activa and precio_actual <= target_compra:
+        return f"🟢 EN PRECIO DE COMPRA (≤ ${target_compra:,.2f})", "compra"
+    if venta_activa and precio_actual >= target_venta:
+        return f"🔴 OBJETIVO ALCANZADO (≥ ${target_venta:,.2f})", "venta"
+
+    if compra_activa:
+        distancia = (precio_actual - target_compra) / target_compra * 100
+        return f"A un -{distancia:.1f}% de tu precio de compra", "neutro"
+    if venta_activa:
+        distancia = (target_venta - precio_actual) / precio_actual * 100
+        return f"A un +{distancia:.1f}% de tu objetivo de venta", "neutro"
+
+    return "Sin alertas configuradas", "neutro"
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def _precios_historicos_watchlist(tickers: tuple[str, ...]) -> dict[str, Any]:
+    """OHLCV de la watchlist para poder evaluar alertas técnicas.
+
+    Reutiliza el descargador por lotes del escáner de swing, así que no añade
+    una vía de descarga nueva ni duplica la caché.
+    """
+    if not tickers:
+        return {}
+    try:
+        from modulos.swing_scanner import descargar_universo
+
+        return descargar_universo(tickers, periodo="1y")
+    except Exception:
+        return {}
+
+
+def _render_embudo(db: dict[str, Any]) -> None:
+    """Cabecera con el reparto de la watchlist por fase de decisión."""
+    conteo = resumen_embudo(db)
+    st.markdown("### 🧭 Embudo de decisión")
+    st.caption(
+        "Una watchlist plana mezcla ideas recién descubiertas con posiciones ya abiertas, "
+        "y en la práctica sólo se acaban mirando siempre las mismas. Cada fase tiene una "
+        "pregunta pendiente distinta."
+    )
+    columnas = st.columns(len(ESTADOS))
+    for columna, estado in zip(columnas, ESTADOS):
+        meta = META_ESTADOS[estado]
+        columna.metric(meta["etiqueta"], conteo.get(estado, 0), help=meta["pregunta"])
+
+
+def _render_diagnostico_salida(ticker: str, ohlcv, entrada: float, stop: float) -> None:
+    """Estado técnico de una posición abierta.
+
+    Es informativo a propósito. La validación histórica (2.377 operaciones, dos
+    estrategias de entrada) mostró que actuar sobre estas señales NO mejoró el
+    resultado frente a mantener el stop fijo: salir con señal bajista resultó
+    inerte y el stop dinámico restó unos 0,11R por operación. Se muestra para
+    que sepas qué está pasando, no como instrucción de venta.
+    """
+    if ohlcv is None or getattr(ohlcv, "empty", True):
+        return
+
+    try:
+        from modulos.indicadores import enriquecer_ohlcv
+        from modulos.swing_salidas import RESULTADO_VALIDACION, SALIR, VIGILAR, evaluar_salida
+
+        enriquecido = enriquecer_ohlcv(ohlcv)
+        if enriquecido.empty:
+            return
+        decision = evaluar_salida(enriquecido, entrada=entrada, stop=stop or None)
+    except Exception:
+        return
+
+    with st.expander(f"🔍 Estado técnico de la posición · {decision.etiqueta}"):
+        for motivo in decision.motivos:
+            if decision.accion == SALIR:
+                st.error(motivo)
+            elif decision.accion == VIGILAR:
+                st.warning(motivo)
+            else:
+                st.info(motivo)
+
+        st.caption(
+            f"Aviso: {RESULTADO_VALIDACION['conclusion']} Trátalo como información de contexto "
+            "para tu criterio, no como una regla mecánica."
+        )
+
+
+def _render_gestion_por_ticker(db: dict[str, Any], cotizaciones: dict[str, Any]) -> None:
+    """Ficha editable por ticker: fase, alertas, posición, tesis y acciones."""
+
+    st.markdown("### 🎯 Fichas de seguimiento")
+    st.caption(
+        "Cada ficha guarda su fase, sus alertas de precio y técnicas, la posición abierta si la hay "
+        "y tu tesis, en `data/watchlist.json`. «Analizar» abre el Research Core con el ticker cargado."
+    )
+
+    precios_hist = _precios_historicos_watchlist(tuple(sorted(db.keys())))
+
+    for ticker, item_bruto in ordenar_por_embudo([(t, _normalizar_item(db.get(t, {}))) for t in db]):
+        item = item_bruto
+        quote = cotizaciones.get(ticker)
+        precio = float(quote.price) if quote is not None and quote.ok else 0.0
+
+        estado_actual = normalizar_estado(item.get("estado")) if item.get("estado") else inferir_estado(item)
+        meta = META_ESTADOS[estado_actual]
+
+        target_compra = _as_float(item.get("target"), 0.0)
+        target_venta = _as_float(item.get("target_venta"), 0.0)
+        etiqueta_alerta, nivel = evaluar_alertas_precio(precio, target_compra, target_venta)
+
+        # Alertas técnicas activas hoy
+        disparadas = evaluar_alertas_tecnicas(precios_hist.get(ticker), item.get("alertas_tecnicas", []))
+
+        icono = {"compra": "🟢", "venta": "🔴", "neutro": "⚪", "sin_datos": "⚠️"}.get(nivel, "⚪")
+        precio_txt = f"${precio:,.2f}" if precio else "sin precio"
+        aviso_tecnico = f" · 🔔 {len(disparadas)}" if disparadas else ""
+
+        with st.expander(
+            f"{meta['etiqueta']} · {icono} {ticker} · {precio_txt} · {etiqueta_alerta}{aviso_tecnico}",
+            expanded=False,
+        ):
+            if disparadas:
+                for alerta in disparadas:
+                    st.info(f"🔔 **{alerta['etiqueta']}** — {alerta['descripcion']}")
+
+            nuevo_estado = st.selectbox(
+                "Fase",
+                ESTADOS,
+                index=ESTADOS.index(estado_actual),
+                format_func=lambda e: META_ESTADOS[e]["etiqueta"],
+                key=f"wl_estado_{ticker}",
+                help=meta["pregunta"],
+            )
+            st.caption(f"Siguiente paso sugerido: {META_ESTADOS[nuevo_estado]['siguiente']}.")
+
+            col_a, col_b = st.columns(2)
+            with col_a:
+                nuevo_compra = st.number_input(
+                    "Alerta si BAJA de ($)", min_value=0.0, value=float(target_compra), step=1.0,
+                    key=f"wl_compra_{ticker}", help="Precio al que quieres comprar. 0 = sin alerta.",
+                )
+            with col_b:
+                nuevo_venta = st.number_input(
+                    "Alerta si SUBE de ($)", min_value=0.0, value=float(target_venta), step=1.0,
+                    key=f"wl_venta_{ticker}", help="Precio objetivo de salida. 0 = sin alerta.",
+                )
+
+            nuevas_alertas = st.multiselect(
+                "Alertas técnicas",
+                [a.id for a in ALERTAS_TECNICAS],
+                default=[a for a in item.get("alertas_tecnicas", []) if isinstance(a, str)],
+                format_func=lambda aid: next((a.etiqueta for a in ALERTAS_TECNICAS if a.id == aid), aid),
+                key=f"wl_tec_{ticker}",
+                help="No todas las decisiones son de precio: perder una media o entrar en sobreventa también son avisos operativos.",
+            )
+
+            # --- Posición abierta ---
+            posicion = item.get("posicion") if isinstance(item.get("posicion"), dict) else {}
+            with st.container():
+                st.markdown("**Posición abierta** (déjalo a 0 si sólo la vigilas)")
+                col_p1, col_p2, col_p3 = st.columns(3)
+                with col_p1:
+                    acciones = st.number_input(
+                        "Acciones", min_value=0, value=int(_as_float(posicion.get("acciones"), 0)),
+                        step=1, key=f"wl_acc_{ticker}",
+                    )
+                with col_p2:
+                    entrada = st.number_input(
+                        "Precio de entrada ($)", min_value=0.0, value=_as_float(posicion.get("entrada"), 0.0),
+                        step=0.01, key=f"wl_ent_{ticker}",
+                    )
+                with col_p3:
+                    stop = st.number_input(
+                        "Stop ($)", min_value=0.0, value=_as_float(posicion.get("stop"), 0.0),
+                        step=0.01, key=f"wl_stop_{ticker}",
+                        help="Sin stop no se puede medir el resultado en R.",
+                    )
+
+                resultado = evaluar_posicion(
+                    {"acciones": acciones, "entrada": entrada, "stop": stop or None}, precio
+                )
+                if resultado is not None:
+                    m1, m2, m3 = st.columns(3)
+                    m1.metric("Resultado", f"{resultado.pnl_euros:+,.2f}€", f"{resultado.pnl_pct:+.2f}%")
+                    m2.metric("En R", f"{resultado.resultado_r:+.2f}R" if resultado.resultado_r is not None else "n/d",
+                              help="Beneficio medido en unidades del riesgo asumido. Sin stop no es calculable.")
+                    m3.metric("Valor actual", f"{resultado.valor_actual:,.2f}€")
+                    if resultado.stop_roto:
+                        st.error(
+                            "🛑 El precio ha superado tu stop. La tesis con la que entraste ya no se "
+                            "sostiene: toca decidir de forma consciente, no por inercia."
+                        )
+                    _render_diagnostico_salida(ticker, precios_hist.get(ticker), entrada, stop)
+
+            nueva_tesis = st.text_area(
+                "Tesis de inversión / notas",
+                value=str(item.get("notas", "")),
+                key=f"wl_notas_{ticker}", height=110,
+                placeholder="Por qué esta empresa, qué tiene que pasar para comprar, qué invalidaría la tesis...",
+            )
+
+            col_g, col_an, col_del = st.columns([1.2, 1, 1])
+            with col_g:
+                if st.button("💾 Guardar ficha", key=f"wl_save_{ticker}", use_container_width=True):
+                    item["estado"] = nuevo_estado
+                    item["target"] = float(nuevo_compra)
+                    item["target_venta"] = float(nuevo_venta)
+                    item["notas"] = nueva_tesis
+                    item["alertas_tecnicas"] = nuevas_alertas
+                    item["posicion"] = (
+                        {"acciones": int(acciones), "entrada": float(entrada), "stop": float(stop)}
+                        if acciones > 0 and entrada > 0
+                        else {}
+                    )
+                    db[ticker] = item
+                    guardar_watchlist(db)
+                    st.success(f"Ficha de {ticker} guardada.")
+                    st.rerun()
+            with col_an:
+                if st.button("🔍 Analizar", key=f"wl_analizar_{ticker}", type="primary", use_container_width=True):
+                    _saltar_a_analisis(ticker)
+            with col_del:
+                if st.button("🗑️ Eliminar", key=f"wl_del_{ticker}", use_container_width=True):
+                    db.pop(ticker, None)
+                    guardar_watchlist(db)
+                    st.warning(f"{ticker} eliminado de la watchlist.")
+                    st.rerun()
+
+
 def ejecutar_watchlist():
     st.markdown("### 📋 Mi Watchlist Institucional")
     st.markdown(
@@ -593,6 +875,15 @@ def ejecutar_watchlist():
 
         st.markdown("---")
         _render_alerts_panel(df_alerts)
+
+        st.markdown("---")
+        _render_embudo(db)
+
+        st.markdown("---")
+        _render_gestion_por_ticker(db, cotizaciones)
+
+        st.markdown("---")
+        mostrar_calendario_earnings(list(db.keys()))
 
         st.markdown("---")
         st.markdown("### Tabla de seguimiento")

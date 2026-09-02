@@ -33,17 +33,18 @@ from modulos.tool_consolidation import (
 from modulos.tool_router import COMPANY_TOOL_ROUTES, INDEPENDENT_TOOL_ROUTES
 
 EXPECTED_GROUP_COUNTS = {
-    "market_terminal": 5,
+    "market_terminal": 6,  # +1: Swing Trading
     "discovery_engine": 8,
     "historical_lab": 3,  # Predictor de Techos/Suelos se trasladó a utilities_postmvp (Fase 7)
     "portfolio_risk": 6,
-    "automation_watchlist": 7,
+    "automation_watchlist": 8,  # +1: Diario de Decisiones
     "utilities_postmvp": 5,  # +1 tras el traslado anterior; mockup original pedía 5 aquí
 }
 
 
-def test_catalogo_tiene_35_herramientas():
-    assert len(TOOL_CATALOG) == 35
+def test_catalogo_tiene_37_herramientas():
+    # 35 originales de la consolidación + Swing Trading + Diario de Decisiones.
+    assert len(TOOL_CATALOG) == 37
 
 
 def test_todas_las_herramientas_del_catalogo_tienen_metadatos_de_consolidacion():
@@ -65,7 +66,7 @@ def test_conteo_por_grupo_coincide_con_lo_documentado():
     counts.pop("research_core", None)
 
     assert dict(counts) == EXPECTED_GROUP_COUNTS
-    assert sum(EXPECTED_GROUP_COUNTS.values()) == 34
+    assert sum(EXPECTED_GROUP_COUNTS.values()) == 36  # 34 consolidadas + Swing Trading + Diario
     assert sum(EXPECTED_GROUP_COUNTS.values()) + 1 == len(TOOL_CATALOG)  # +1 = Research Core
 
 
@@ -125,7 +126,13 @@ def test_no_hay_funcionalidad_eliminada_respecto_al_catalogo_original():
     }
     assert len(original_labels) == 35
     catalog_labels = {str(t["label"]) for t in TOOL_CATALOG}
-    assert catalog_labels == original_labels
+
+    # Subconjunto, no igualdad: lo que este test protege es que la reagrupación
+    # no haga DESAPARECER funcionalidad. Escrito como igualdad exacta prohibía
+    # además añadir herramientas nuevas, que es un cambio legítimo y no una
+    # regresión.
+    faltantes = original_labels - catalog_labels
+    assert not faltantes, f"Herramientas desaparecidas del catálogo: {faltantes}"
 
 
 @pytest.mark.parametrize("module_name", [
