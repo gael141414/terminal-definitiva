@@ -89,10 +89,18 @@ def render_context_header(
     if herramienta.get("input_mode") == "etf":
         badges.append("<span class='vq-badge vq-badge-warning'><i class='bi bi-diagram-3'></i> ETF / Fondo</span>")
 
+    # Cuando el bloque y la herramienta se llaman igual (p. ej. Research Core),
+    # imprimir ambos escribe el mismo texto dos veces, una encima de la otra.
+    eyebrow = (
+        f'<div class="vq-context-eyebrow">{html.escape(nombre_bloque)}</div>'
+        if nombre_bloque.strip().lower() != nombre_herramienta.strip().lower()
+        else ""
+    )
+
     escribir_html(f"""
         <section class="vq-context-header">
             <div>
-                <div class="vq-context-eyebrow">{html.escape(nombre_bloque)}</div>
+                {eyebrow}
                 <h1 class="vq-context-title">{html.escape(nombre_herramienta)}</h1>
                 <div class="vq-context-subtitle">{html.escape(descripcion)}</div>
             </div>
@@ -113,21 +121,42 @@ def render_option_menu_safe(options: list[str], icons: list[str], key: str, defa
             default_index=default_index,
             orientation="horizontal",
             key=key,
+            # streamlit-option-menu se pinta dentro de un iframe, así que el CSS
+            # del tema NO le llega: su aspecto tiene que declararse aquí. El
+            # azul seleccionado era el cian #00C0F2 del sistema antiguo, que
+            # chocaba con la paleta nueva. "--hover-color" es la única vía que
+            # ofrece el componente para un estado de hover.
             styles={
-                "container": {"padding": "0", "background-color": "transparent", "overflow-x": "auto", "white-space": "nowrap"},
-                "icon": {"color": "#96A3B8", "font-size": "14px"},
-                "nav-link": {
-                    "font-size": "13px",
-                    "font-weight": "700",
-                    "text-align": "center",
-                    "margin": "0 3px",
-                    "padding": "8px 12px",
-                    "color": "#B7C2D6",
-                    "background-color": "#111827",
-                    "border": "1px solid rgba(34,48,71,.85)",
-                    "border-radius": "7px",
+                "container": {
+                    "padding": "5px",
+                    "background-color": "#101827",
+                    "border": "1px solid rgba(147,164,187,.20)",
+                    "border-radius": "12px",
+                    "overflow-x": "auto",
+                    "white-space": "nowrap",
                 },
-                "nav-link-selected": {"background-color": "#00C0F2", "color": "#051018", "font-weight": "800"},
+                "icon": {"color": "#93a4bb", "font-size": "14px"},
+                "nav-link": {
+                    "font-family": "'Space Grotesk', Inter, sans-serif",
+                    "font-size": "13.5px",
+                    "font-weight": "600",
+                    "text-align": "center",
+                    "margin": "0 2px",
+                    "padding": "9px 18px",
+                    "color": "#93a4bb",
+                    "background-color": "transparent",
+                    "border": "1px solid transparent",
+                    "border-radius": "9px",
+                    "transition": "background-color .16s ease, color .16s ease",
+                    "--hover-color": "rgba(59,130,246,.12)",
+                },
+                "nav-link-selected": {
+                    "background": "linear-gradient(160deg, #3b82f6, #2f6fe0)",
+                    "background-color": "#3b82f6",
+                    "color": "#ffffff",
+                    "font-weight": "700",
+                    "box-shadow": "0 2px 10px rgba(59,130,246,.35)",
+                },
             },
         )
     return st.radio(key, options, index=default_index, horizontal=True, label_visibility="collapsed")

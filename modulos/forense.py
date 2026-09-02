@@ -133,7 +133,7 @@ def ejecutar_auditoria_forense(ticker_input, is_df, bs_df, cf_df, res_val, res_b
                 with col_z2:
                     st.markdown("##### Banderas Rojas Detectadas")
                     if not alertas_forenses:
-                        st.success("✅ **Auditoría Limpia:** No se han detectado anomalías graves de liquidez, dividendos o cobertura de intereses. Los estados financieros parecen íntegros.")
+                        st.success("**Auditoría Limpia:** No se han detectado anomalías graves de liquidez, dividendos o cobertura de intereses. Los estados financieros parecen íntegros.")
                     else:
                         for alerta in alertas_forenses:
                             st.markdown(alerta)

@@ -195,3 +195,74 @@ def test_ninguna_animacion_se_repite_indefinidamente_salvo_las_de_espera():
         assert any(p in decl for p in ("vq-barrido", "vq-ticker-scroll")), (
             f"animación infinita que no es un indicador de espera: {decl}"
         )
+
+
+# ==========================================================================
+# ERRORES QUE YA SE COMETIERON UNA VEZ
+# ==========================================================================
+
+
+def test_toda_clase_con_hover_existe_en_alguna_parte_de_la_aplicacion():
+    """El CSS animaba .vq-group-card, que no la generaba nadie.
+
+    El efecto simplemente no ocurría, y sin abrir el navegador no había forma de
+    notarlo: el CSS era válido, la regla existía, y no fallaba ningún test.
+    """
+    css = _css()
+    clases = set()
+    for selector in re.findall(r"\.((?:vq-)[a-z0-9-]+):hover", css):
+        clases.add(selector)
+    assert clases, "no hay reglas :hover que comprobar"
+
+    fuentes = "\n".join(
+        ruta.read_text(encoding="utf-8")
+        for ruta in PROJECT_ROOT.rglob("*.py")
+        if ".venv" not in str(ruta) and "app_theme" not in ruta.name
+    )
+    huerfanas = [c for c in sorted(clases) if c not in fuentes]
+    assert not huerfanas, (
+        f"clases con :hover que ningún módulo genera: {huerfanas}. "
+        "El efecto no ocurre y no lo detecta ningún test que no abra el navegador."
+    )
+
+
+def test_ninguna_animacion_congela_el_transform_de_un_elemento_con_hover():
+    """fill-mode "both" deja fijado el fotograma final para siempre, y una
+    animación CSS gana al :hover en la cascada. Eso dejó las tarjetas quietas
+    aunque la regla de hover existiera y fuera correcta."""
+    css = _css()
+    bloques = re.findall(r"animation:\s*vq-entrada[^;]*;", css)
+    assert bloques, "no se encontró la animación de entrada"
+    for b in bloques:
+        assert " both" not in b, (
+            f"«{b.strip()}» usa fill-mode both: congelará el transform y "
+            "anulará el hover. Usa backwards."
+        )
+
+
+def test_la_tarjeta_no_se_aplica_a_todo_contenedor_de_streamlit():
+    """Streamlit envuelve TODA columna y contenedor en stVerticalBlockBorderWrapper.
+
+    Estilarlos todos ponía un recuadro alrededor de cada columna y sumaba el
+    padding en cada nivel, hasta partir el texto en una palabra por línea.
+    """
+    css = _css()
+    for regla in re.findall(
+        r'div\[data-testid="stVerticalBlockBorderWrapper"\][^{]*\{[^}]*\}', css
+    ):
+        cabecera = regla.split("{")[0]
+        if "padding" in regla and "0" not in regla.split("padding")[1][:12]:
+            assert ":has(" in cabecera, (
+                "regla con padding que afecta a TODOS los contenedores: "
+                f"{cabecera.strip()[:90]}"
+            )
+
+
+def test_el_terminal_ocupa_todo_el_ancho():
+    """Un max-width fijo deja dos franjas muertas en cualquier monitor ancho."""
+    css = _css()
+    encontrado = re.search(r"\.block-container\s*\{[^}]*max-width:\s*([^;!]+)", css)
+    assert encontrado, "no se define el ancho del contenedor principal"
+    assert "100%" in encontrado.group(1), (
+        f"el contenedor está limitado a {encontrado.group(1).strip()}"
+    )

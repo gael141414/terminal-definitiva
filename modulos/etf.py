@@ -20,7 +20,7 @@ def ejecutar_radiografia_etf(ticker_input):
         try:
             info = _obtener_info_etf(ticker_input)
             if not info:
-                st.error("⚠️ No se pudieron obtener datos de Yahoo Finance para este fondo (rate limit temporal o ticker inválido). Inténtalo de nuevo en unos minutos.")
+                st.error("No se pudieron obtener datos de Yahoo Finance para este fondo (rate limit temporal o ticker inválido). Inténtalo de nuevo en unos minutos.")
                 return
 
             # Comprobar si realmente es un ETF/Fondo

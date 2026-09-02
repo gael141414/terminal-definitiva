@@ -62,10 +62,12 @@ def ejecutar_simulador_crisis(ticker_input):
                 return
 
             crisis = {
-                "📉 Gran Crisis Financiera (2007-2009)": ("2007-10-09", "2009-03-09"),
-                "🦠 Crash del COVID-19 (2020)": ("2020-02-19", "2020-03-23"),
-                "🔥 Shock de Inflación / Tipos (2022)": ("2022-01-03", "2022-10-12"),
-                "🏦 Crisis Bancaria Regional (2023)": ("2023-03-08", "2023-05-04"),
+                # Sin emoji: estos nombres viajan al eje del gráfico y a las
+                # exportaciones, así que son dato, no presentación.
+                "Gran Crisis Financiera (2007-2009)": ("2007-10-09", "2009-03-09"),
+                "Crash del COVID-19 (2020)": ("2020-02-19", "2020-03-23"),
+                "Shock de Inflación / Tipos (2022)": ("2022-01-03", "2022-10-12"),
+                "Crisis Bancaria Regional (2023)": ("2023-03-08", "2023-05-04"),
             }
 
             resultados = []
@@ -113,7 +115,7 @@ def ejecutar_simulador_crisis(ticker_input):
                 peor_caida = float(df_res_filtrado["Caída Máxima (%)"].min())
                 crisis_peor = df_res_filtrado.loc[df_res_filtrado["Caída Máxima (%)"].idxmin(), "Crisis"]
                 st.info(
-                    f"💡 **Veredicto de Riesgo:** el peor episodio comparable para **{ticker_input}** fue "
+                    f"**Veredicto de Riesgo:** el peor episodio comparable para **{ticker_input}** fue "
                     f"**{crisis_peor}**, con un drawdown de **{abs(peor_caida):.2f}%**."
                 )
             else:

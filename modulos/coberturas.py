@@ -71,7 +71,7 @@ def ejecutar_radar_coberturas(ticker_input):
                 elif mejor_score < 0:
                     st.info(f"**Cobertura Aceptable:** El **{mejor_cobertura}** ofrece una ligera diversificación. Ayudará a amortiguar las caídas, pero no es un seguro absoluto.")
                 else:
-                    st.warning("**⚠️ Peligro de Riesgo Sistémico:** Ninguno de los activos refugio tradicionales tiene correlación negativa con tu empresa. En una crisis, todo bajará a la vez. Considera tener liquidez extrema (Cash).")
+                    st.warning("**Peligro de Riesgo Sistémico:** Ninguno de los activos refugio tradicionales tiene correlación negativa con tu empresa. En una crisis, todo bajará a la vez. Considera tener liquidez extrema (Cash).")
 
             # --- GRÁFICO VISUAL (ESCALA DE COLOR) ---
             st.markdown("---")
@@ -100,7 +100,7 @@ def ejecutar_radar_coberturas(ticker_input):
             
             st.plotly_chart(fig, use_container_width=True)
             
-            with st.expander("📖 ¿Cómo interpretar este gráfico?"):
+            with st.expander("¿Cómo interpretar este gráfico?"):
                 st.markdown("""
                 * **-1.0 (Verde Fuerte):** Correlación inversa perfecta. Si tu acción baja un 1%, este activo sube un 1%. **Es el seguro ideal.**
                 * **0.0 (Amarillo):** Sin correlación. El activo va a su bola y no le importa lo que le pase a tu acción. Sirve para diversificar a largo plazo.

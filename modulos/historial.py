@@ -221,7 +221,7 @@ def render_evolucion_kpis(ticker: str) -> None:
     """Expander «Evolución de KPIs» para el Resumen Ejecutivo."""
     df = historial_ticker(ticker)
 
-    with st.expander("📈 Evolución de KPIs entre análisis", expanded=False):
+    with st.expander("Evolución de KPIs entre análisis", expanded=False):
         if df.empty or len(df) < 2:
             st.info(
                 "Todavía no hay histórico suficiente para dibujar una evolución: hace falta "

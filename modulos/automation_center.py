@@ -27,9 +27,9 @@ def _configured(value: Any) -> bool:
 
 def _status_chip(label: str, ok: bool, detail: str = "") -> None:
     if ok:
-        st.success(f"✅ {label}: configurado" + (f" · {detail}" if detail else ""))
+        st.success(f"{label}: configurado" + (f" · {detail}" if detail else ""))
     else:
-        st.warning(f"⚠️ {label}: pendiente" + (f" · {detail}" if detail else ""))
+        st.warning(f"{label}: pendiente" + (f" · {detail}" if detail else ""))
 
 
 def _render_configuration_status() -> None:
@@ -46,9 +46,9 @@ def _render_configuration_status() -> None:
         _status_chip("Telegram chat", _configured(CONFIG.telegram_chat_id), "destino")
     with c4:
         if settings.automation_enabled:
-            st.info(f"🟡 Frecuencia: {settings.frequency}")
+            st.info(f"Frecuencia: {settings.frequency}")
         else:
-            st.info("⚪ Automatización: no activa")
+            st.info("Automatización: no activa")
 
     status = telegram_status()
     if status.configured:
@@ -158,7 +158,7 @@ def _render_payloads(df_watch: pd.DataFrame, df_alerts: pd.DataFrame, df_briefin
 def render_automation_center() -> None:
     """Renderiza el centro de automatización sin activar envíos programados."""
 
-    st.title("⚙️ Centro de Automatización")
+    st.title("Centro de Automatización")
     st.caption(
         "Panel de control para validar configuración, preparar payloads, controlar frecuencia "
         "y ejecutar envíos manuales. No hay procesos en segundo plano."

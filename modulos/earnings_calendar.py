@@ -195,7 +195,7 @@ def mostrar_calendario_earnings(tickers: Iterable[str] | None = None) -> None:
     inminentes = df[df["Inminente"]]
     if not inminentes.empty:
         nombres = ", ".join(inminentes["Ticker"].tolist())
-        st.warning(f"⚠️ Resultados en los próximos {DIAS_ALERTA_EARNINGS} días: **{nombres}**")
+        st.warning(f"Resultados en los próximos {DIAS_ALERTA_EARNINGS} días: **{nombres}**")
 
     sin_fecha = int(df["Fecha earnings"].isna().sum())
 

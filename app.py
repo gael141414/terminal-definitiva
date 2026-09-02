@@ -88,36 +88,48 @@ modo_labels = [modo["label"] for modo in modos_navegacion]
 modo_keys = [modo["key"] for modo in modos_navegacion]
 modo_default_idx = modo_keys.index("mvp") if "mvp" in modo_keys else 0
 
-# La cabecera es un contenedor REAL. Antes se abría <div class="vq-nav-shell">
-# en un st.markdown y se cerraba en otro, con el menú en medio: eso no envuelve
-# nada, porque Streamlit pinta cada elemento en un contenedor hermano y el
-# navegador autocierra el <div>.
+# Cabecera PLANA. Antes eran cajas dentro de cajas: un contenedor con borde
+# que envolvía otra caja con la marca y, al lado, una tercera caja solo para el
+# desplegable de modo. Aquí no hay nada que agrupar visualmente: la marca y la
+# navegación son la cabecera, no contenido dentro de ella.
 #
-# El selector de modo vivía en una barra lateral que existía solo para él, y su
-# valor se repetía además en un panel del cuerpo. Ahora es un desplegable en la
-# propia cabecera: un control de producto, no una sección de la aplicación.
-contenedor_cabecera = st.container()
-with contenedor_cabecera:
-    st.markdown('<span class="vq-nav-marca"></span>', unsafe_allow_html=True)
-    col_marca, col_modo = st.columns([5, 1], gap="small")
+# El selector de modo (MVP / Consolidado / Completo) es un ajuste de producto
+# que se toca una vez y se olvida, así que baja al pie de la página. Se lee de
+# session_state ANTES de pintarlo: cuando cambia, Streamlit reejecuta el script
+# de arriba abajo y el valor nuevo ya está disponible aquí.
+modo_label = st.session_state.get("vq_navigation_mode", modo_labels[modo_default_idx])
+if modo_label not in modo_labels:
+    modo_label = modo_labels[modo_default_idx]
 
-    with col_marca:
-        escribir_html(f"""
-            <div class="vq-brand-row">
-                <div class="vq-brand">{logo_tag_nav}<span>ValueQuant Terminal</span></div>
-                <div class="vq-session-pill"><i class="bi bi-broadcast-pin"></i> Research desk active</div>
-            </div>
-        """)
+def render_pie_modo() -> None:
+    """Ajuste de producto, al pie: se toca una vez y se olvida.
 
-    with col_modo:
-        with st.popover("Modo", use_container_width=True):
-            modo_label = st.radio(
-                "Modo de navegación",
-                modo_labels,
-                index=modo_default_idx,
-                key="vq_navigation_mode",
-                help="MVP muestra solo el producto principal. Consolidado agrupa herramientas por arquitectura objetivo. Completo muestra todo.",
-            )
+    Vivía en la cabecera como un desplegable dentro de su propia caja, robando
+    sitio a la navegación. Aquí sigue siendo accesible sin competir con ella.
+    """
+    st.divider()
+    izquierda, derecha = st.columns([3, 1])
+    with izquierda:
+        st.caption(
+            "MVP muestra solo el producto principal · Consolidado agrupa por arquitectura "
+            "objetivo · Completo muestra las 37 herramientas."
+        )
+    with derecha:
+        st.selectbox(
+            "Modo de producto",
+            modo_labels,
+            index=modo_labels.index(modo_label) if modo_label in modo_labels else modo_default_idx,
+            key="vq_navigation_mode",
+            label_visibility="collapsed",
+        )
+
+
+escribir_html(f"""
+    <div class="vq-brand-row">
+        <div class="vq-brand">{logo_tag_nav}<span>ValueQuant Terminal</span></div>
+        <div class="vq-session-pill"><i class="bi bi-broadcast-pin"></i> Research desk active</div>
+    </div>
+""")
 
 modo_navegacion = modo_keys[modo_labels.index(modo_label)] if modo_label in modo_labels else "mvp"
 
@@ -134,9 +146,7 @@ bloques_internos = [b for b in bloques_internos if b != "🧩 Research Core"]
 menu_interno = ["__home__"] + bloques_internos
 menu_labels = ["Home"] + [BLOQUE_UI.get(b, (strip_visual_prefix(b), "grid"))[0] for b in bloques_internos]
 menu_icons = ["house"] + [BLOQUE_UI.get(b, (strip_visual_prefix(b), "grid"))[1] for b in bloques_internos]
-# El menú principal va dentro del contenedor de cabecera abierto arriba.
-with contenedor_cabecera:
-    seleccion_menu = render_option_menu_safe(menu_labels, menu_icons, key=f"vq_main_nav_{modo_navegacion}")
+seleccion_menu = render_option_menu_safe(menu_labels, menu_icons, key=f"vq_main_nav_{modo_navegacion}")
 
 # Aquí se pintaba un panel que solo repetía el modo ya elegido en el selector de
 # la cabecera. Dos controles para el mismo dato es ruido, no redundancia útil.
@@ -150,13 +160,14 @@ research_core_activo = en_home and bool(st.session_state.get("vq_research_core_a
 
 if en_home and not research_core_activo:
     render_home_page(LOGO_PATH, HOME_BG_PATH)
+    render_pie_modo()
     st.stop()
 
 if research_core_activo:
     # Un botón suelto flotando sobre el contenido no dice dónde estás. La miga
     # de pan responde a la vez a "dónde estoy" y "cómo salgo", que es lo que
     # tiene que resolver la navegación.
-    col_ruta, col_salir = st.columns([6, 1], gap="small")
+    col_ruta, col_salir = st.columns([9, 1], gap="small")
     with col_ruta:
         escribir_html(f"""
             <nav class="vq-ruta" aria-label="Ruta de navegación">
@@ -178,36 +189,27 @@ etiquetas_bloque = [h["label"] for h in herramientas_bloque]
 tool_labels = [strip_visual_prefix(label) for label in etiquetas_bloque]
 tool_icons = [TOOL_UI_ICONS.get(label, "circle") for label in etiquetas_bloque]
 
-# El panel de trabajo es un contenedor real: antes se abría el <div> aquí y se
-# cerraba 90 líneas más abajo, con los widgets en medio. Nunca los envolvió.
-contenedor_trabajo = st.container(border=True)
+# Aquí se pintaba "ÁREA DE TRABAJO / <bloque>" con una insignia Command
+# Center. Lo mismo lo dice render_context_header unas líneas más abajo, con más
+# contexto (herramienta, ticker, años). Tres veces el mismo título en la misma
+# pantalla no es jerarquía: es ruido.
+contenedor_trabajo = st.container(border=False)
 with contenedor_trabajo:
-    escribir_html(f"""
-        <div class="vq-panel-cabecera">
-            <div>
-                <div class="vq-context-eyebrow">Área de trabajo</div>
-                <div class="vq-panel-titulo">{html.escape(strip_visual_prefix(bloque_actual))}</div>
-            </div>
-            <span class="vq-badge vq-badge-primary">
-                <i class="bi bi-command"></i> Command Center
-            </span>
-        </div>
-    """)
-
-    seleccion_herramienta = render_option_menu_safe(
-        tool_labels,
-        tool_icons,
-        key=f"vq_tool_nav_{seleccion_idx}"
-    )
+    if len(tool_labels) > 1:
+        seleccion_herramienta = render_option_menu_safe(
+            tool_labels,
+            tool_icons,
+            key=f"vq_tool_nav_{seleccion_idx}"
+        )
+    else:
+        # Con una sola herramienta el menú se pintaba como una barra enorme que
+        # no permitía elegir nada.
+        seleccion_herramienta = tool_labels[0] if tool_labels else ""
 
     seleccion_tool_idx = tool_labels.index(seleccion_herramienta) if seleccion_herramienta in tool_labels else 0
     seccion_actual = etiquetas_bloque[seleccion_tool_idx]
     herramienta_actual = HERRAMIENTAS_POR_LABEL[seccion_actual]
 
-    st.markdown(
-        f"<div class='vq-tool-caption'>{html.escape(herramienta_actual['descripcion'])}</div>",
-        unsafe_allow_html=True,
-    )
 
     # Variables contextuales compartidas por el router
     ticker_input = "AAPL"
@@ -236,7 +238,9 @@ with contenedor_trabajo:
             else:
                 st.info("Introduce un ETF para iniciar la radiografía.")
     elif herramienta_actual["input_mode"] == "standalone":
-        st.caption("Herramienta independiente. Los controles específicos aparecen en el panel central.")
+        # La cabecera contextual ya lleva la insignia "Módulo autónomo": repetirlo
+        # en una leyenda suelta encima no añade nada.
+        pass
     else:
         try:
             lista_tickers_sec = obtener_tickers_filtrados()
@@ -377,36 +381,11 @@ else:
     st.session_state["nota_buffett"] = nota_buffett
     st.session_state["valuequant_score"] = valuequant_score
 
-    st.markdown(
-        "<div class='vq-section-title'><i class='bi bi-speedometer2'></i>Panel ejecutivo</div>",
-        unsafe_allow_html=True,
-    )
-
-    col_kpi_1, col_kpi_2, col_kpi_3 = st.columns(3)
-
-    with col_kpi_1:
-        render_kpi_card(
-            label="Empresa analizada",
-            value=ticker_input,
-            detail=f"Histórico cargado: {años_hist} años",
-            status="neutral"
-        )
-
-    with col_kpi_2:
-        render_kpi_card(
-            label="Módulo activo",
-            value=strip_visual_prefix(herramienta_actual["label"]),
-            detail=strip_visual_prefix(bloque_actual),
-            status="positive"
-        )
-
-    with col_kpi_3:
-        render_kpi_card(
-            label="Comparador",
-            value=ticker_competidor if ticker_competidor else "No definido",
-            detail="Benchmark relativo",
-            status="positive" if ticker_competidor else "warning"
-        )
+    # Aquí había un "Panel ejecutivo" de tres tarjetas que repetía datos ya
+    # visibles: la empresa (está en la miga de pan, en la ficha y en una
+    # insignia), el módulo activo (es el título de la pantalla) y el comparador
+    # (su propio desplegable está justo encima). Además etiquetaba de
+    # "FAVORABLE" un nombre de módulo, que no es una métrica que pueda serlo.
     
     # Invocamos la herramienta correspondiente desde el router central
     tool_context = CompanyToolContext(
@@ -428,3 +407,5 @@ else:
     render_company_tool(seccion_actual, tool_context)
 
 # Chat lateral legacy retirado: la nueva arquitectura usa navegación superior sin sidebar.
+
+render_pie_modo()

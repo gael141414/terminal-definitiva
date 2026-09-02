@@ -53,7 +53,7 @@ def render_navigation_group_card(group_key: str, *, index: int | None = None) ->
         items_html += f"<span style='color:#5b6a80;'>+ {remaining} más</span>"
 
     escribir_html(f"""
-        <div style="background:rgba(18,25,38,0.92); border:1px solid rgba(147,164,187,0.1); border-radius:12px;
+        <div class="vq-group-card" style="background:rgba(18,25,38,0.92); border:1px solid rgba(147,164,187,0.1); border-radius:12px;
                     padding:20px 22px; display:flex; flex-direction:column; gap:12px; height:100%;">
             <div style="display:flex; align-items:baseline; gap:10px;">
                 <span style="font-family:'JetBrains Mono',monospace; color:#37c6e6; font-size:13px;">{ordinal}</span>
@@ -252,7 +252,7 @@ def render_kpi_card(
         )
 
     escribir_html(f"""
-        <div style="background:{style['card_bg']}; border:{style['border']}; box-shadow:{style['left_edge']};
+        <div class="vq-kpi-card" style="background:{style['card_bg']}; border:{style['border']}; box-shadow:{style['left_edge']};
                     border-radius:12px; padding:18px 20px; display:flex; flex-direction:column; gap:8px;">
             <div style="display:flex; align-items:center; gap:8px;">
                 <span style="font-size:11px; font-weight:600; letter-spacing:0.1em; color:{style['label_color']};

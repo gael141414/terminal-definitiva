@@ -857,7 +857,7 @@ def _render_export_panel(df_watch: pd.DataFrame, df_alerts: pd.DataFrame, df_bri
     )
     suffix = generated_at.strftime("%Y%m%d_%H%M")
 
-    with st.expander("📤 Exportar briefing semanal", expanded=False):
+    with st.expander("Exportar briefing semanal", expanded=False):
         st.caption(
             "Descarga un informe de oportunidades para revisión semanal o para enviarlo manualmente por email/Telegram."
         )
@@ -889,7 +889,7 @@ def _render_payload_panel(df_watch: pd.DataFrame, df_alerts: pd.DataFrame, df_br
     payloads = build_briefing_payloads(df_watch, df_alerts, df_briefing)
     suffix = payloads.generated_at.strftime("%Y%m%d_%H%M")
 
-    with st.expander("📨 Preparar briefing para mensajería/email", expanded=False):
+    with st.expander("Preparar briefing para mensajería/email", expanded=False):
         st.caption(
             "Genera versiones compactas del briefing para copiar, revisar o descargar. No envía mensajes automáticamente."
         )
@@ -985,7 +985,7 @@ def render_opportunity_briefing() -> None:
 
     if df_watch.empty:
         st.info(
-            "No hay activos en watchlist. Guarda un análisis desde 🧩 Research Core → 💾 Seguimiento o añade tickers en 📋 Mi Watchlist."
+            "No hay activos en watchlist. Guarda un análisis desde Research Core Seguimiento o añade tickers en Mi Watchlist."
         )
         return
 

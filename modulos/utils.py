@@ -363,7 +363,7 @@ def cargar_datos(ticker: str, años: int):
         return None, None, None, None
 
     st.info(
-        f"📉 FMP no cubre `{ticker}` con el plan actual. Mostrando datos de respaldo de "
+        f"FMP no cubre `{ticker}` con el plan actual. Mostrando datos de respaldo de "
         f"Yahoo Finance: {resumen_cobertura(is_df, bs_df, cf_df)}. "
         "El histórico es más corto y no hay key metrics, así que algunos ratios derivados "
         "pueden aparecer como no disponibles."

@@ -50,7 +50,7 @@ def ejecutar_apartado_consejos():
 
     col_btn, _ = st.columns([1, 2])
     with col_btn:
-        if st.button("💊 Generar Nueva Píldora de Conocimiento", use_container_width=True):
+        if st.button("Generar Nueva Píldora de Conocimiento", use_container_width=True):
             st.session_state.pildora_actual = random.choice(base_conocimiento)
 
     # --- RENDERIZADO DE LA LECCIÓN ---

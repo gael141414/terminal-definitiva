@@ -94,7 +94,7 @@ def ejecutar_radar_macro(ticker_input, ticker_competidor, df_sectores=None):
         st.info("Datos de rotación sectorial no disponibles en este momento.")
     
     # ======== RADAR ROTACIÓN SECTORIAL ========
-    with st.expander("🌍 Radar Macro: ¿Dónde está fluyendo el dinero? (Rotación Sectorial)", expanded=False):
+    with st.expander("Radar Macro: ¿Dónde está fluyendo el dinero? (Rotación Sectorial)", expanded=False):
         st.markdown("Los grandes fondos de inversión rotan su capital constantemente. Aquí puedes ver qué sectores están calentándose y cuáles se están quedando atrás.")
         
         if df_sectores is not None and not df_sectores.empty:
@@ -113,7 +113,7 @@ def ejecutar_radar_macro(ticker_input, ticker_competidor, df_sectores=None):
                 
             mejor_sector = df_sectores.loc[df_sectores['1 Mes (%)'].idxmax()]['Sector']
             peor_sector = df_sectores.loc[df_sectores['1 Mes (%)'].idxmin()]['Sector']
-            st.info(f"💡 **Insight Macro:** En los últimos 30 días, el capital institucional está rotando agresivamente hacia **{mejor_sector}**, mientras abandona **{peor_sector}**.")
+            st.info(f"**Insight Macro:** En los últimos 30 días, el capital institucional está rotando agresivamente hacia **{mejor_sector}**, mientras abandona **{peor_sector}**.")
 
     # ======== TAB 9: ESTACIONALIDAD ========
     st.markdown("### Probabilidad y Estacionalidad (Los últimos 20 años)")
@@ -141,7 +141,7 @@ def ejecutar_radar_macro(ticker_input, ticker_competidor, df_sectores=None):
     
     tickers_cartera = st.text_input("Tickers de tu Cartera (Ej: AAPL, KO, JNJ, V, XOM):", value="AAPL, MSFT, KO, JNJ, V")
     
-    if st.button("🚀 Optimizar Pesos (Correr Monte Carlo)"):
+    if st.button("Optimizar Pesos (Correr Monte Carlo)"):
         lista_tickers = [t.strip().upper() for t in tickers_cartera.split(",")]
         
         if len(lista_tickers) < 2:
@@ -207,11 +207,11 @@ def ejecutar_radar_macro(ticker_input, ticker_competidor, df_sectores=None):
             pol = datos_macro['polaridad']
             with c_mac1:
                 if pol > 0.05:
-                    st.success("##### 🐂 Tono IA: ALCISTA")
+                    st.success("##### Tono IA: ALCISTA")
                 elif pol < -0.05:
-                    st.error("##### 🐻 Tono IA: BAJISTA")
+                    st.error("##### Tono IA: BAJISTA")
                 else:
-                    st.info("##### ⚖️ Tono IA: NEUTRAL")
+                    st.info("##### Tono IA: NEUTRAL")
                     
             with c_mac2:
                 noticias = datos_macro['noticias']
@@ -219,15 +219,15 @@ def ejecutar_radar_macro(ticker_input, ticker_competidor, df_sectores=None):
                     for noti in noticias:
                         st.markdown(f"**{noti['Sentimiento']}** | [{noti['Titular']}]({noti['Link']})")
                 else:
-                    st.warning("⚠️ El servidor de noticias está bloqueando la conexión temporalmente.")
+                    st.warning("El servidor de noticias está bloqueando la conexión temporalmente.")
         else:
-            st.error(f"🚨 Fallo técnico detectado:\n\n{diagnostico_macro}")
+            st.error(f"Fallo técnico detectado:\n\n{diagnostico_macro}")
 
     # ======== ORÁCULO TÁCTICO IA ========
     st.markdown("---")
     st.markdown("### Oráculo Táctico: Playbook de Inversión IA")
 
-    if st.button("🧠 Generar Playbook Estratégico", use_container_width=True):
+    if st.button("Generar Playbook Estratégico", use_container_width=True):
         with st.spinner("La IA está cruzando los datos macroeconómicos..."):
             try:
                 spread = datos_macro.get('spread_curva', 0) if 'datos_macro' in locals() else 0
@@ -254,8 +254,8 @@ def ejecutar_radar_macro(ticker_input, ticker_competidor, df_sectores=None):
                 model = obtener_modelo_gemini()
                 if model:
                     response = model.generate_content(prompt_oraculo)
-                    st.success("✅ Playbook generado con éxito.")
-                    with st.expander("📖 LEER PLAYBOOK TÁCTICO DE LA IA", expanded=True):
+                    st.success("Playbook generado con éxito.")
+                    with st.expander("LEER PLAYBOOK TÁCTICO DE LA IA", expanded=True):
                         st.markdown(response.text)
                 else:
                     aviso_gemini_no_configurado()

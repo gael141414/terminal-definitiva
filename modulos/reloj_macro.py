@@ -120,19 +120,19 @@ def ejecutar_reloj_macro():
                 col_rec1.success("✅ **SOBREPONDERAR (Comprar)**\n- Materias Primas (Petróleo, Cobre)\n- Acciones Value (Energía, Materiales)\n- Mercados Emergentes")
                 col_rec2.info("⚖️ **NEUTRAL (Mantener)**\n- Efectivo / Cash\n- Sector Inmobiliario (REITs)")
                 col_rec3.error("❌ **INFRAPONDERAR (Vender)**\n- Bonos a Largo Plazo (Sufren con la inflación)\n- Acciones Tech (Sensibles a tipos de interés)")
-                st.caption("💡 **Contexto:** La economía crece mucho, pero la inflación se dispara. Los bancos centrales suben tipos de interés. Los bonos son tóxicos aquí, lo mejor son los activos reales tangibles.")
+                st.caption("**Contexto:** La economía crece mucho, pero la inflación se dispara. Los bancos centrales suben tipos de interés. Los bonos son tóxicos aquí, lo mejor son los activos reales tangibles.")
                 
             elif regimen == "Estanflación":
                 col_rec1.success("✅ **SOBREPONDERAR (Comprar)**\n- Efectivo / Liquidez (Rey)\n- Oro y Metales Preciosos\n- Acciones Defensivas (Salud, Utilities)")
                 col_rec2.info("⚖️ **NEUTRAL (Mantener)**\n- Materias Primas energéticas\n- Bonos a Corto Plazo")
                 col_rec3.error("❌ **INFRAPONDERAR (Vender)**\n- Acciones Cíclicas\n- Acciones de Crecimiento (Growth)\n- Bonos a Largo Plazo")
-                st.caption("💡 **Contexto:** El peor escenario posible. La economía frena pero los precios suben (Ej: Shock de los 70s o Guerra de Ucrania). Casi nada funciona bien. Es momento de proteger el capital y esperar.")
+                st.caption("**Contexto:** El peor escenario posible. La economía frena pero los precios suben (Ej: Shock de los 70s o Guerra de Ucrania). Casi nada funciona bien. Es momento de proteger el capital y esperar.")
                 
             else: # Reflación / Recesión
                 col_rec1.success("✅ **SOBREPONDERAR (Comprar)**\n- Bonos Gubernamentales (TLT)\n- Efectivo / Liquidez\n- Acciones Ultra-Defensivas (Consumo Básico)")
                 col_rec2.info("⚖️ **NEUTRAL (Mantener)**\n- Oro\n- Acciones de alta calidad crediticia")
                 col_rec3.error("❌ **INFRAPONDERAR (Vender)**\n- Materias Primas (Colapsan sin demanda)\n- Empresas fuertemente endeudadas\n- Sector Inmobiliario")
-                st.caption("💡 **Contexto:** El crecimiento se desploma y la inflación desaparece. Los bancos centrales entran en pánico y bajan los tipos a cero. Los Bonos Gubernamentales (Renta Fija) son el activo estrella aquí.")
+                st.caption("**Contexto:** El crecimiento se desploma y la inflación desaparece. Los bancos centrales entran en pánico y bajan los tipos a cero. Los Bonos Gubernamentales (Renta Fija) son el activo estrella aquí.")
 
         else:
             st.error("No se pudo calcular el régimen macro actual por un fallo de red con Yahoo Finance.")

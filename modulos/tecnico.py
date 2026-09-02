@@ -47,7 +47,7 @@ def ejecutar_tecnico_y_opciones(ticker_input):
     st.markdown("Selecciona un visor estratégico. Cada algoritmo está diseñado para cazar un comportamiento específico del mercado mediante confluencia matemática.")
     
     visor_seleccionado = st.radio(
-        "🎯 Selecciona el Motor Algorítmico:",
+        "Selecciona el Motor Algorítmico:",
         [
             "🌊 Visor 1: Trend Following (EMAs + MACD + RSI)",
             "💥 Visor 2: Breakout & Volatilidad (Próximamente)",
@@ -77,23 +77,23 @@ def ejecutar_tecnico_y_opciones(ticker_input):
                 with c1:
                     st.markdown("**1. Filtro de Tendencia**")
                     if ultimo['EMA_50'] > ultimo['EMA_200']:
-                        st.success("🟢 **Alcista:** EMA 50 > EMA 200.")
+                        st.success("**Alcista:** EMA 50 > EMA 200.")
                         tendencia_ok = True
                     else:
-                        st.error("🔴 **Bajista:** EMA 50 < EMA 200.")
+                        st.error("**Bajista:** EMA 50 < EMA 200.")
                         tendencia_ok = False
                 
                 with c2:
                     st.markdown("**2. Gatillo de Momentum**")
                     cruce_alcista = ultimo['MACD'] > ultimo['Señal'] and ayer['MACD'] <= ayer['Señal']
                     if cruce_alcista:
-                        st.success("🚀 **Señal:** Cruce alcista hoy/ayer.")
+                        st.success("**Señal:** Cruce alcista hoy/ayer.")
                         gatillo_ok = True
                     elif ultimo['MACD'] > ultimo['Señal']:
-                        st.info("🟢 MACD en fase compradora.")
+                        st.info("MACD en fase compradora.")
                         gatillo_ok = True
                     else:
-                        st.warning("🔴 MACD en fase correctora.")
+                        st.warning("MACD en fase correctora.")
                         gatillo_ok = False
                         
                 with c3:
@@ -110,11 +110,11 @@ def ejecutar_tecnico_y_opciones(ticker_input):
 
                 st.markdown("---")
                 if tendencia_ok and gatillo_ok and rsi_ok:
-                    st.success("✅ **CONFLUENCIA TOTAL: SEÑAL DE COMPRA FUERTE.** Tendencia alcista, momentum positivo y RSI sano.")
+                    st.success("**CONFLUENCIA TOTAL: SEÑAL DE COMPRA FUERTE.** Tendencia alcista, momentum positivo y RSI sano.")
                 elif tendencia_ok and gatillo_ok and not rsi_ok:
-                    st.warning("⚠️ **PRECAUCIÓN: LLEGAS TARDE.** Tendencia y momentum alcistas, pero RSI en extrema sobrecompra.")
+                    st.warning("**PRECAUCIÓN: LLEGAS TARDE.** Tendencia y momentum alcistas, pero RSI en extrema sobrecompra.")
                 else:
-                    st.info("⏳ **SIN CONFLUENCIA:** Los indicadores se contradicen. Mantente al margen.")
+                    st.info("**SIN CONFLUENCIA:** Los indicadores se contradicen. Mantente al margen.")
             else:
                 st.warning("No hay suficientes datos históricos para ejecutar este visor.")
 
@@ -140,49 +140,49 @@ def ejecutar_tecnico_y_opciones(ticker_input):
                 with c1:
                     st.markdown("**1. Estado de Compresión**")
                     if ultimo['Squeeze_On']:
-                        st.error("🔴 **COMPRESIÓN MÁXIMA:** Las Bandas de Bollinger están dentro de Keltner. El mercado está comprimiendo energía como un muelle. Movimiento violento inminente.")
+                        st.error("**COMPRESIÓN MÁXIMA:** Las Bandas de Bollinger están dentro de Keltner. El mercado está comprimiendo energía como un muelle. Movimiento violento inminente.")
                         squeeze_activo = True
                     elif not ultimo['Squeeze_On'] and ayer['Squeeze_On']:
-                        st.success("🚀 **¡RUPTURA (SQUEEZE FIRED)!** El muelle acaba de saltar hoy. La volatilidad se ha liberado.")
+                        st.success("**¡RUPTURA (SQUEEZE FIRED)!** El muelle acaba de saltar hoy. La volatilidad se ha liberado.")
                         squeeze_activo = False
                     else:
-                        st.info("🟢 **Expansión Normal:** El mercado está en fase de movimiento fluido. No hay acumulación latente.")
+                        st.info("**Expansión Normal:** El mercado está en fase de movimiento fluido. No hay acumulación latente.")
                         squeeze_activo = False
 
                 # 2. Dirección del Movimiento (Momentum)
                 with c2:
                     st.markdown("**2. Sesgo de Dirección**")
                     if ultimo['Momentum'] > 0 and ultimo['Close'] > ultimo['SMA_20']:
-                        st.success("📈 **Sesgo Alcista:** El precio empuja por encima de la media móvil. Mayor probabilidad de que la ruptura sea hacia arriba.")
+                        st.success("**Sesgo Alcista:** El precio empuja por encima de la media móvil. Mayor probabilidad de que la ruptura sea hacia arriba.")
                         sesgo = "alcista"
                     elif ultimo['Momentum'] < 0 and ultimo['Close'] < ultimo['SMA_20']:
-                        st.error("📉 **Sesgo Bajista:** El precio pesa por debajo de la media móvil. Mayor probabilidad de desplome.")
+                        st.error("**Sesgo Bajista:** El precio pesa por debajo de la media móvil. Mayor probabilidad de desplome.")
                         sesgo = "bajista"
                     else:
-                        st.warning("⚖️ **Dirección Indecisa:** Momentum plano.")
+                        st.warning("**Dirección Indecisa:** Momentum plano.")
                         sesgo = "neutral"
 
                 # 3. Confirmación de Volumen
                 with c3:
                     st.markdown("**3. Flujo Institucional (Volumen)**")
                     if ultimo['Volume'] > ultimo['Vol_SMA'] * 1.5:
-                        st.success("🔥 **Volumen Extremo (>150% media):** ¡Dinero inteligente detectado! Si hay ruptura hoy, es muy fiable.")
+                        st.success("**Volumen Extremo (>150% media):** ¡Dinero inteligente detectado! Si hay ruptura hoy, es muy fiable.")
                         volumen_fuerte = True
                     elif ultimo['Volume'] > ultimo['Vol_SMA']:
-                        st.info("📊 **Volumen Alto:** Presión institucional por encima de la media.")
+                        st.info("**Volumen Alto:** Presión institucional por encima de la media.")
                         volumen_fuerte = True
                     else:
-                        st.warning("🔇 **Volumen Bajo:** Movimientos con poco capital de respaldo. Riesgo de falsa ruptura (Fakeout).")
+                        st.warning("**Volumen Bajo:** Movimientos con poco capital de respaldo. Riesgo de falsa ruptura (Fakeout).")
                         volumen_fuerte = False
 
                 # --- SÍNTESIS FINAL DE LA ESTRATEGIA ---
                 st.markdown("---")
                 if not ultimo['Squeeze_On'] and ayer['Squeeze_On'] and volumen_fuerte:
-                    st.success(f"✅ **¡GATILLO DE BREAKOUT {sesgo.upper()}!** El sistema acaba de detectar la liberación de la volatilidad acompañada de fuerte volumen institucional. Punto de entrada óptimo.")
+                    st.success(f"**¡GATILLO DE BREAKOUT {sesgo.upper()}!** El sistema acaba de detectar la liberación de la volatilidad acompañada de fuerte volumen institucional. Punto de entrada óptimo.")
                 elif squeeze_activo:
-                    st.warning(f"⏳ **MODO ESPERA ACTIVO:** La acción está en extrema compresión con un sesgo **{sesgo}**. Prepara tus órdenes condicionadas. No operes hasta que las bandas rompan.")
+                    st.warning(f"**MODO ESPERA ACTIVO:** La acción está en extrema compresión con un sesgo **{sesgo}**. Prepara tus órdenes condicionadas. No operes hasta que las bandas rompan.")
                 else:
-                    st.info("🤷‍♂️ **SIN SETUP CLARO:** El precio se está moviendo con normalidad. Este visor no detecta anomalías de volatilidad en este momento. Revisa el Visor 1 (Tendencia).")
+                    st.info("‍**SIN SETUP CLARO:** El precio se está moviendo con normalidad. Este visor no detecta anomalías de volatilidad en este momento. Revisa el Visor 1 (Tendencia).")
             else:
                 st.warning("Datos insuficientes para calcular la volatilidad (Se requieren 50 sesiones).")
     
@@ -209,13 +209,13 @@ def ejecutar_tecnico_y_opciones(ticker_input):
                     st.markdown("**1. Tensión Estadística (Z-Score)**")
                     z_actual = ultimo['Z_Score']
                     if z_actual <= -2:
-                        st.success(f"🟢 **Pánico Extremo ({z_actual:.2f}):** El precio se ha hundido muy por debajo de su media. La goma elástica está tensada al máximo hacia abajo.")
+                        st.success(f"**Pánico Extremo ({z_actual:.2f}):** El precio se ha hundido muy por debajo de su media. La goma elástica está tensada al máximo hacia abajo.")
                         tension = "sobrevendido"
                     elif z_actual >= 2:
-                        st.error(f"🔴 **Euforia Absoluta ({z_actual:.2f}):** El precio se ha disparado. Wall Street está irracionalmente optimista. Riesgo de caída inminente.")
+                        st.error(f"**Euforia Absoluta ({z_actual:.2f}):** El precio se ha disparado. Wall Street está irracionalmente optimista. Riesgo de caída inminente.")
                         tension = "sobrecomprado"
                     else:
-                        st.info(f"⚖️ **Zona Neutral ({z_actual:.2f}):** El precio orbita cerca de su media justa de 20 días.")
+                        st.info(f"**Zona Neutral ({z_actual:.2f}):** El precio orbita cerca de su media justa de 20 días.")
                         tension = "neutral"
 
                 # 2. Timing de Giro (StochRSI)
@@ -225,19 +225,19 @@ def ejecutar_tecnico_y_opciones(ticker_input):
                     cruce_bajista_stoch = ultimo['Stoch_K'] < ultimo['Stoch_D'] and ayer['Stoch_K'] >= ayer['Stoch_D']
                     
                     if cruce_alcista_stoch and ultimo['Stoch_K'] < 40:
-                        st.success("🚀 **Gatillo Alcista:** Oscilador cruzando al alza desde zona baja.")
+                        st.success("**Gatillo Alcista:** Oscilador cruzando al alza desde zona baja.")
                         giro = "comprar"
                     elif cruce_bajista_stoch and ultimo['Stoch_K'] > 60:
-                        st.error("🩸 **Gatillo Bajista:** Oscilador cruzando a la baja desde la cima.")
+                        st.error("**Gatillo Bajista:** Oscilador cruzando a la baja desde la cima.")
                         giro = "vender"
                     elif ultimo['Stoch_K'] < 20:
-                        st.info("📉 Agotamiento bajista. Esperando cruce.")
+                        st.info("Agotamiento bajista. Esperando cruce.")
                         giro = "esperar_compra"
                     elif ultimo['Stoch_K'] > 80:
-                        st.info("📈 Agotamiento alcista. Esperando cruce.")
+                        st.info("Agotamiento alcista. Esperando cruce.")
                         giro = "esperar_venta"
                     else:
-                        st.warning("〰️ Sin momento direccional claro.")
+                        st.warning("〰Sin momento direccional claro.")
                         giro = "neutral"
 
                 # 3. Margen de Beneficio
@@ -245,18 +245,18 @@ def ejecutar_tecnico_y_opciones(ticker_input):
                     st.markdown("**3. Distancia a la Media**")
                     distancia_pct = ((ultimo['SMA_20'] - ultimo['Close']) / ultimo['Close']) * 100
                     if distancia_pct > 0:
-                        st.success(f"🎯 **Target Alcista:** Si el precio vuelve a la media (SMA 20), el margen de ganancia estimado es del **+{distancia_pct:.2f}%**.")
+                        st.success(f"**Target Alcista:** Si el precio vuelve a la media (SMA 20), el margen de ganancia estimado es del **+{distancia_pct:.2f}%**.")
                     else:
-                        st.error(f"📉 **Riesgo de Caída:** Si el precio revierte a la media, la corrección estimada sería del **{distancia_pct:.2f}%**.")
+                        st.error(f"**Riesgo de Caída:** Si el precio revierte a la media, la corrección estimada sería del **{distancia_pct:.2f}%**.")
 
                 # --- SÍNTESIS FINAL DE LA ESTRATEGIA ---
                 st.markdown("---")
                 if tension == "sobrevendido" and (giro == "comprar" or giro == "esperar_compra"):
                     st.success("✅ **SEÑAL DE SWING TRADING (COMPRA):** Máxima tensión bajista + giro detectado. Alta probabilidad matemática de que el precio 'rebote' hacia la línea naranja (SMA 20).")
                 elif tension == "sobrecomprado" and (giro == "vender" or giro == "esperar_venta"):
-                    st.error("🚨 **SEÑAL DE CORRECCIÓN INMINENTE (VENTA):** El mercado está sobrecalentado y el oscilador empieza a darse la vuelta. Es momento de asegurar ganancias, no de comprar.")
+                    st.error("**SEÑAL DE CORRECCIÓN INMINENTE (VENTA):** El mercado está sobrecalentado y el oscilador empieza a darse la vuelta. Es momento de asegurar ganancias, no de comprar.")
                 else:
-                    st.info("⏳ **SIN SEÑAL CLARA:** El precio no está en un extremo estadístico lo suficientemente violento como para justificar una operación de reversión a la media.")
+                    st.info("**SIN SEÑAL CLARA:** El precio no está en un extremo estadístico lo suficientemente violento como para justificar una operación de reversión a la media.")
             else:
                 st.warning("Datos insuficientes para calcular las desviaciones de reversión.")
     
@@ -285,13 +285,13 @@ def ejecutar_tecnico_y_opciones(ticker_input):
                     nube_inferior = min(ultimo['Senkou_A'], ultimo['Senkou_B'])
                     
                     if ultimo['Close'] > nube_superior:
-                        st.success("🟢 **Alcista Fuerte:** El precio navega por encima de la Nube. Cielos despejados para comprar.")
+                        st.success("**Alcista Fuerte:** El precio navega por encima de la Nube. Cielos despejados para comprar.")
                         kumo_ok = True
                     elif ultimo['Close'] < nube_inferior:
-                        st.error("🔴 **Bajista Fuerte:** El precio está hundido bajo la Nube. Prohibido operar en largo.")
+                        st.error("**Bajista Fuerte:** El precio está hundido bajo la Nube. Prohibido operar en largo.")
                         kumo_ok = False
                     else:
-                        st.warning("⚡ **Zona de Turbulencia:** El precio está dentro de la Nube. Consolidación e incertidumbre. No operar.")
+                        st.warning("**Zona de Turbulencia:** El precio está dentro de la Nube. Consolidación e incertidumbre. No operar.")
                         kumo_ok = False
 
                 # 2. Cruces de Conversión vs Base (Gatillo)
@@ -301,41 +301,41 @@ def ejecutar_tecnico_y_opciones(ticker_input):
                     cruce_bajista = ultimo['Tenkan'] < ultimo['Kijun'] and ayer['Tenkan'] >= ayer['Kijun']
                     
                     if cruce_alcista:
-                        st.success("🚀 **Señal Fresca:** Línea rápida (Azul) acaba de cruzar al alza la línea base (Naranja).")
+                        st.success("**Señal Fresca:** Línea rápida (Azul) acaba de cruzar al alza la línea base (Naranja).")
                         cruces_ok = True
                     elif ultimo['Tenkan'] > ultimo['Kijun']:
-                        st.info("🟢 **Momento Positivo:** Línea rápida sigue liderando por encima de la base.")
+                        st.info("**Momento Positivo:** Línea rápida sigue liderando por encima de la base.")
                         cruces_ok = True
                     elif cruce_bajista:
-                        st.error("🩸 **Corte Bajista:** Línea rápida cruzando a la baja. Cierre de posiciones.")
+                        st.error("**Corte Bajista:** Línea rápida cruzando a la baja. Cierre de posiciones.")
                         cruces_ok = False
                     else:
-                        st.warning("🔴 **Momento Negativo:** Línea rápida por debajo de la base.")
+                        st.warning("**Momento Negativo:** Línea rápida por debajo de la base.")
                         cruces_ok = False
 
                 # 3. Flujo Institucional (OBV)
                 with c3:
                     st.markdown("**3. Confirmación Institucional**")
                     if ultimo['OBV'] > ultimo['OBV_EMA'] and ayer['OBV'] <= ayer['OBV_EMA']:
-                        st.success("💰 **Entrada de Capital:** OBV cruzando su media al alza. Instituciones inyectando dinero.")
+                        st.success("**Entrada de Capital:** OBV cruzando su media al alza. Instituciones inyectando dinero.")
                         obv_ok = True
                     elif ultimo['OBV'] > ultimo['OBV_EMA']:
-                        st.info("📈 **Acumulación:** Flujo de dinero constante y respaldando el movimiento.")
+                        st.info("**Acumulación:** Flujo de dinero constante y respaldando el movimiento.")
                         obv_ok = True
                     else:
-                        st.error("📉 **Distribución (Riesgo):** Las instituciones están descargando acciones. El volumen no acompaña al precio.")
+                        st.error("**Distribución (Riesgo):** Las instituciones están descargando acciones. El volumen no acompaña al precio.")
                         obv_ok = False
 
                 # --- SÍNTESIS FINAL DE LA ESTRATEGIA ---
                 st.markdown("---")
                 if kumo_ok and cruces_ok and obv_ok:
-                    st.success("✅ **CONFLUENCIA JAPONESA (SEÑAL FUERTE):** Cielos despejados por encima de la nube, las líneas rápidas lideran la subida y el volumen confirma que es dinero real, no minorista. Gatillo de compra habilitado.")
+                    st.success("**CONFLUENCIA JAPONESA (SEÑAL FUERTE):** Cielos despejados por encima de la nube, las líneas rápidas lideran la subida y el volumen confirma que es dinero real, no minorista. Gatillo de compra habilitado.")
                 elif kumo_ok and cruces_ok and not obv_ok:
-                    st.warning("⚠️ **DIVERGENCIA DE VOLUMEN:** El sistema Ichimoku da compra fuerte, pero las instituciones están sacando dinero (OBV cayendo). Podría ser una trampa alcista (Bull Trap).")
+                    st.warning("**DIVERGENCIA DE VOLUMEN:** El sistema Ichimoku da compra fuerte, pero las instituciones están sacando dinero (OBV cayendo). Podría ser una trampa alcista (Bull Trap).")
                 elif not kumo_ok:
-                    st.info("⏳ **ZONA DE EXCLUSIÓN:** Mientras el precio no escape de la Nube (hacia arriba), la estrategia japonesa exige estricta paciencia.")
+                    st.info("**ZONA DE EXCLUSIÓN:** Mientras el precio no escape de la Nube (hacia arriba), la estrategia japonesa exige estricta paciencia.")
                 else:
-                    st.info("〰️ **MERCADO MIXTO:** No hay confluencia clara entre la tendencia macro (Nube) y el momentum a corto plazo. ")
+                    st.info("〰**MERCADO MIXTO:** No hay confluencia clara entre la tendencia macro (Nube) y el momentum a corto plazo. ")
             else:
                 st.warning("Datos insuficientes para dibujar el Ichimoku Cloud.")
 
@@ -414,4 +414,4 @@ def ejecutar_tecnico_y_opciones(ticker_input):
             use_container_width=True, height=400
         )
     except FileNotFoundError:
-        st.warning("⚠️ Todavía no hay datos del mercado. Ejecuta `python screener.py` en tu terminal para generarlos.")
+        st.warning("Todavía no hay datos del mercado. Ejecuta `python screener.py` en tu terminal para generarlos.")

@@ -34,13 +34,13 @@ def ejecutar_visor_gurus(ticker_input, res_is, res_bs, res_cf, res_val):
     
     with col_g3:
         if roic > 25 and ey > 8:
-            st.success("✅ **¡Acción Mágica!** La empresa es extraordinariamente rentable y cotiza a un precio muy atractivo.")
+            st.success("**¡Acción Mágica!** La empresa es extraordinariamente rentable y cotiza a un precio muy atractivo.")
         elif roic > 15 and ey > 5:
-            st.info("⚖️ **Atractiva:** Cumple los mínimos de rentabilidad y precio, pero no es una ganga absoluta.")
+            st.info("**Atractiva:** Cumple los mínimos de rentabilidad y precio, pero no es una ganga absoluta.")
         elif roic == 0 and ey == 0:
-            st.warning("⚠️ **Datos Incompletos:** No se pudo evaluar la Fórmula Mágica.")
+            st.warning("**Datos Incompletos:** No se pudo evaluar la Fórmula Mágica.")
         else:
-            st.error("❌ **Descartada:** La empresa o no es un negocio excepcional (ROIC bajo) o Wall Street ya la ha encarecido demasiado (EY bajo).")
+            st.error("**Descartada:** La empresa o no es un negocio excepcional (ROIC bajo) o Wall Street ya la ha encarecido demasiado (EY bajo).")
 
     # --- 2. PETER LYNCH (El modelo GARP) ---
     st.markdown("---")
@@ -58,11 +58,11 @@ def ejecutar_visor_gurus(ticker_input, res_is, res_bs, res_cf, res_val):
         if per > 0 and crecimiento > 0:
             peg = per / crecimiento
             if peg <= 1:
-                st.success(f"✅ **Aprobada:** PEG de {peg:.2f}. Peter Lynch compraría esta acción porque su crecimiento justifica con creces su múltiplo.")
+                st.success(f"**Aprobada:** PEG de {peg:.2f}. Peter Lynch compraría esta acción porque su crecimiento justifica con creces su múltiplo.")
             elif peg <= 1.5:
-                st.warning(f"⚠️ **Justa:** PEG de {peg:.2f}. Precio razonable, pero no ofrece un gran margen de seguridad.")
+                st.warning(f"**Justa:** PEG de {peg:.2f}. Precio razonable, pero no ofrece un gran margen de seguridad.")
             else:
-                st.error(f"❌ **Cara:** PEG de {peg:.2f}. El mercado es demasiado optimista y exige un PER muy superior al crecimiento real del negocio.")
+                st.error(f"**Cara:** PEG de {peg:.2f}. El mercado es demasiado optimista y exige un PER muy superior al crecimiento real del negocio.")
         else:
             st.info("Datos insuficientes para calcular el ratio PEG.")
 
@@ -80,11 +80,11 @@ def ejecutar_visor_gurus(ticker_input, res_is, res_bs, res_cf, res_val):
             
             with col_f2:
                 if media_3y > 15:
-                    st.success("✅ **Motor Intacto:** Crecimiento superior al 15% anual. Es una auténtica compounder en etapa de expansión.")
+                    st.success("**Motor Intacto:** Crecimiento superior al 15% anual. Es una auténtica compounder en etapa de expansión.")
                 elif media_3y > 5:
-                    st.info("⚖️ **Empresa Madura:** Crecimiento estable pero lento. Típico de empresas de gran capitalización consolidadas.")
+                    st.info("**Empresa Madura:** Crecimiento estable pero lento. Típico de empresas de gran capitalización consolidadas.")
                 else:
-                    st.error("❌ **Negocio Estancado:** La empresa no está logrando vender más que hace 3 años. Peligro de pérdida de cuota de mercado.")
+                    st.error("**Negocio Estancado:** La empresa no está logrando vender más que hace 3 años. Peligro de pérdida de cuota de mercado.")
         else:
             st.info("No hay suficientes datos históricos para calcular la media de crecimiento a 3 años.")
     else:

@@ -558,7 +558,7 @@ def _render_research_header(
         <div class="vq-ficha-cabecera">
             {html_logo(summary["ticker"], tamano=52)}
             <div>
-                <div class="vq-context-eyebrow">Research Core</div>
+                <div class="vq-context-eyebrow">Empresa analizada</div>
                 <div class="vq-ficha-ticker">{html.escape(str(summary["ticker"]))}</div>
             </div>
         </div>

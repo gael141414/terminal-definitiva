@@ -33,8 +33,8 @@ def ejecutar_maquina_del_tiempo(ticker_input):
     
     col1, col2 = st.columns([1, 2])
     with col1:
-        inversion_inicial = st.number_input("💰 Inversión Inicial ($)", min_value=1000, max_value=1000000, value=10000, step=1000)
-        anios_backtest = st.slider("📅 ¿Cuántos años atrás viajamos?", min_value=1, max_value=10, value=5)
+        inversion_inicial = st.number_input("Inversión Inicial ($)", min_value=1000, max_value=1000000, value=10000, step=1000)
+        anios_backtest = st.slider("¿Cuántos años atrás viajamos?", min_value=1, max_value=10, value=5)
         
     with st.spinner("Viajando en el tiempo y calculando rendimientos diarios..."):
         try:
@@ -49,7 +49,7 @@ def ejecutar_maquina_del_tiempo(ticker_input):
             df_spy = yf.download("SPY", start=fecha_inicio, progress=False)
             
             if df_ticker.empty or df_spy.empty:
-                st.error(f"⚠️ No hay suficientes datos para {ticker_input} en ese periodo.")
+                st.error(f"No hay suficientes datos para {ticker_input} en ese periodo.")
             else:
                 col_ticker = 'Adj Close' if 'Adj Close' in df_ticker.columns else 'Close'
                 col_spy = 'Adj Close' if 'Adj Close' in df_spy.columns else 'Close'

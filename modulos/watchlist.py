@@ -587,7 +587,7 @@ def _render_diagnostico_salida(ticker: str, ohlcv, entrada: float, stop: float) 
     except Exception:
         return
 
-    with st.expander(f"🔍 Estado técnico de la posición · {decision.etiqueta}"):
+    with st.expander(f"Estado técnico de la posición · {decision.etiqueta}"):
         for motivo in decision.motivos:
             if decision.accion == SALIR:
                 st.error(motivo)
@@ -704,7 +704,7 @@ def _render_gestion_por_ticker(db: dict[str, Any], cotizaciones: dict[str, Any])
                     m3.metric("Valor actual", f"{resultado.valor_actual:,.2f}€")
                     if resultado.stop_roto:
                         st.error(
-                            "🛑 El precio ha superado tu stop. La tesis con la que entraste ya no se "
+                            "El precio ha superado tu stop. La tesis con la que entraste ya no se "
                             "sostiene: toca decidir de forma consciente, no por inercia."
                         )
                     _render_diagnostico_salida(ticker, precios_hist.get(ticker), entrada, stop)
@@ -718,7 +718,7 @@ def _render_gestion_por_ticker(db: dict[str, Any], cotizaciones: dict[str, Any])
 
             col_g, col_an, col_del = st.columns([1.2, 1, 1])
             with col_g:
-                if st.button("💾 Guardar ficha", key=f"wl_save_{ticker}", use_container_width=True):
+                if st.button("Guardar ficha", key=f"wl_save_{ticker}", use_container_width=True):
                     item["estado"] = nuevo_estado
                     item["target"] = float(nuevo_compra)
                     item["target_venta"] = float(nuevo_venta)
@@ -734,10 +734,10 @@ def _render_gestion_por_ticker(db: dict[str, Any], cotizaciones: dict[str, Any])
                     st.success(f"Ficha de {ticker} guardada.")
                     st.rerun()
             with col_an:
-                if st.button("🔍 Analizar", key=f"wl_analizar_{ticker}", type="primary", use_container_width=True):
+                if st.button("Analizar", key=f"wl_analizar_{ticker}", type="primary", use_container_width=True):
                     _saltar_a_analisis(ticker)
             with col_del:
-                if st.button("🗑️ Eliminar", key=f"wl_del_{ticker}", use_container_width=True):
+                if st.button("Eliminar", key=f"wl_del_{ticker}", use_container_width=True):
                     db.pop(ticker, None)
                     guardar_watchlist(db)
                     st.warning(f"{ticker} eliminado de la watchlist.")
@@ -756,7 +756,7 @@ def ejecutar_watchlist():
     # -------------------------------------------------------------
     # 1. PANEL DE CONTROL (Añadir / Eliminar Tickers)
     # -------------------------------------------------------------
-    with st.expander("⚙️ Gestionar Watchlist", expanded=(len(db) == 0)):
+    with st.expander("Gestionar Watchlist", expanded=(len(db) == 0)):
         c1, c2, c3 = st.columns([2, 1, 1])
 
         with c1:
@@ -765,14 +765,14 @@ def ejecutar_watchlist():
             precio_objetivo = st.number_input("Precio Objetivo de Compra ($):", min_value=0.0, value=0.0, step=1.0)
         with c3:
             st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("➕ Añadir a Watchlist", type="primary", use_container_width=True):
+            if st.button("Añadir a Watchlist", type="primary", use_container_width=True):
                 if nuevo_ticker:
                     existing = _normalizar_item(db.get(nuevo_ticker, {}))
                     existing["target"] = precio_objetivo
                     existing.setdefault("source", "Manual")
                     db[nuevo_ticker] = existing
                     guardar_watchlist(db)
-                    st.success(f"✅ {nuevo_ticker} añadido.")
+                    st.success(f"{nuevo_ticker} añadido.")
                     st.rerun()
 
         st.markdown("---")
@@ -782,10 +782,10 @@ def ejecutar_watchlist():
                 ticker_borrar = st.selectbox("Selecciona un Ticker para eliminar:", list(db.keys()))
             with c_del2:
                 st.markdown("<br>", unsafe_allow_html=True)
-                if st.button("🗑️ Eliminar", use_container_width=True):
+                if st.button("Eliminar", use_container_width=True):
                     del db[ticker_borrar]
                     guardar_watchlist(db)
-                    st.warning(f"🗑️ {ticker_borrar} eliminado de la lista.")
+                    st.warning(f"{ticker_borrar} eliminado de la lista.")
                     st.rerun()
 
     st.markdown("---")
@@ -794,7 +794,7 @@ def ejecutar_watchlist():
     # 2. MOTOR DE DATOS
     # -------------------------------------------------------------
     if not db:
-        st.info("Tu Watchlist está vacía. Añade una acción manualmente o guarda un análisis desde 🧩 Research Core → 💾 Seguimiento.")
+        st.info("Tu Watchlist está vacía. Añade una acción manualmente o guarda un análisis desde Research Core Seguimiento.")
         return
 
     with st.spinner("Sincronizando precios, snapshots y alertas inteligentes..."):

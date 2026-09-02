@@ -190,7 +190,7 @@ def render_manual_telegram_panel(payloads: BriefingPayloads) -> None:
         max_deliveries_per_period=schedule_settings.max_deliveries_per_period,
     )
 
-    with st.expander("📲 Envío manual a Telegram", expanded=False):
+    with st.expander("Envío manual a Telegram", expanded=False):
         st.caption(
             "Envía el briefing compacto solo después de revisarlo y confirmar manualmente. "
             "No hay programación automática ni ejecución en segundo plano."
@@ -235,7 +235,7 @@ def render_manual_telegram_panel(payloads: BriefingPayloads) -> None:
 
         frequency_blocked = not frequency_decision.allowed and not override_frequency
         disabled = not status.configured or not confirm or not message.strip() or frequency_blocked
-        if st.button("📲 Enviar briefing a Telegram", disabled=disabled, use_container_width=True):
+        if st.button("Enviar briefing a Telegram", disabled=disabled, use_container_width=True):
             with st.spinner("Enviando briefing a Telegram..."):
                 result = send_telegram_text(message)
             if result.ok:

@@ -154,14 +154,14 @@ def _render_tabla(df: pd.DataFrame, max_per: float, min_roe: float, min_growth: 
 
     if df_filtrado.empty:
         st.error(
-            "🩸 Masacre cuantitativa: ninguna empresa de tu cesta ha superado los filtros. "
+            "Masacre cuantitativa: ninguna empresa de tu cesta ha superado los filtros. "
             "El mercado está caro o los umbrales son demasiado estrictos."
         )
         st.markdown("#### Datos crudos (antes de filtrar)")
         st.dataframe(df, use_container_width=True, hide_index=True)
         return df_filtrado
 
-    st.success(f"🏆 {len(df_filtrado)} de {len(df)} empresas superan el escáner de calidad institucional.")
+    st.success(f"{len(df_filtrado)} de {len(df)} empresas superan el escáner de calidad institucional.")
     st.dataframe(
         df_filtrado.style.format(
             {
@@ -275,7 +275,7 @@ def ejecutar_escaner_global():
     )
 
     tickers_input = st.text_area(
-        "📦 Cesta de Tickers a escanear (separados por comas):",
+        "Cesta de Tickers a escanear (separados por comas):",
         "AAPL, MSFT, GOOGL, META, TSLA, NVDA, AMZN, NFLX, AMD, INTC, CRM, ADBE",
         help="Escribe los tickers separados por coma.",
     )
@@ -283,17 +283,17 @@ def ejecutar_escaner_global():
     st.markdown("#### Configura tus Filtros (Reglas Quant)")
     col1, col2, col3 = st.columns(3)
     with col1:
-        max_per = st.number_input("📉 PER Máximo (Value)", min_value=1.0, max_value=200.0, value=30.0, step=1.0, help="Relación Precio/Beneficio. Menor es más barato.")
+        max_per = st.number_input("PER Máximo (Value)", min_value=1.0, max_value=200.0, value=30.0, step=1.0, help="Relación Precio/Beneficio. Menor es más barato.")
     with col2:
-        min_roe = st.number_input("📈 ROE Mínimo % (Calidad)", min_value=-50.0, max_value=100.0, value=15.0, step=1.0, help="Retorno sobre el Capital. Mayor a 15% es excelente.")
+        min_roe = st.number_input("ROE Mínimo % (Calidad)", min_value=-50.0, max_value=100.0, value=15.0, step=1.0, help="Retorno sobre el Capital. Mayor a 15% es excelente.")
     with col3:
-        min_growth = st.number_input("🚀 Crecimiento Ventas Mínimo %", min_value=-50.0, max_value=200.0, value=10.0, step=1.0, help="Crecimiento de ingresos YoY.")
+        min_growth = st.number_input("Crecimiento Ventas Mínimo %", min_value=-50.0, max_value=200.0, value=10.0, step=1.0, help="Crecimiento de ingresos YoY.")
 
     st.markdown("<br>", unsafe_allow_html=True)
-    if st.button("⚡ Ejecutar Escáner Global", type="primary", use_container_width=True):
+    if st.button("Ejecutar Escáner Global", type="primary", use_container_width=True):
         lista_tickers = [t.strip().upper() for t in tickers_input.split(",") if t.strip()]
         if not lista_tickers:
-            st.warning("⚠️ Introduce al menos un Ticker en la caja de texto para escanear.")
+            st.warning("Introduce al menos un Ticker en la caja de texto para escanear.")
         else:
             df, fallos = _recolectar(lista_tickers)
             st.session_state[_STATE_RESULTADOS] = {"df": df, "fallos": fallos}
@@ -308,7 +308,7 @@ def ejecutar_escaner_global():
 
     if fallos:
         detalle = ", ".join(f"{t} ({motivo})" for t, motivo in fallos.items())
-        st.warning(f"⚠️ No se pudo obtener información de {len(fallos)} ticker(s): {detalle}")
+        st.warning(f"No se pudo obtener información de {len(fallos)} ticker(s): {detalle}")
 
     if df.empty:
         st.error(

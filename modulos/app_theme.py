@@ -138,10 +138,13 @@ def inject_terminal_theme() -> None:
 
             .block-container {
                 padding-top: 5.4rem !important;
-                padding-left: clamp(1rem, 2vw, 2.4rem) !important;
-                padding-right: clamp(1rem, 2vw, 2.4rem) !important;
+                padding-left: 1.1rem !important;
+                padding-right: 1.1rem !important;
                 padding-bottom: 2rem !important;
-                max-width: 1560px !important;
+                /* Sin límite de ancho: es un terminal, no una web de lectura.
+                   El max-width de 1560px dejaba dos franjas muertas a los lados
+                   en cualquier monitor ancho. */
+                max-width: 100% !important;
             }
 
             h1, h2, h3, h4 {
@@ -185,7 +188,7 @@ def inject_terminal_theme() -> None:
                 display: inline-flex;
                 align-items: center;
                 min-width: max-content;
-                animation: vq-ticker-scroll 48s linear infinite;
+                animation: vq-ticker-scroll 30s linear infinite;
             }
 
             .vq-ticker-track:hover .vq-ticker-content {
@@ -476,7 +479,18 @@ def inject_terminal_theme() -> None:
                Al estilar el contenedor nativo, toda tarjeta de la aplicación
                hereda el sistema sin repetir CSS por componente.
                =============================================================== */
-            div[data-testid="stVerticalBlockBorderWrapper"] {
+            /* IMPORTANTE: Streamlit envuelve en stVerticalBlockBorderWrapper
+               TODO contenedor y TODA columna, no solo los que llevan borde (lo
+               único que los distingue es una clase emotion con hash inestable).
+               Estilarlos todos ponía un recuadro alrededor de cada columna y
+               sumaba el padding en cada nivel de anidamiento, hasta estrangular
+               el texto en columnas de una palabra por línea.
+
+               Así que la tarjeta se pide explícitamente con una marca. La
+               segunda regla desestila a cualquier antecesor que contenga otra
+               tarjeta más adentro, de modo que solo se pinta la más interna sin
+               depender de la profundidad del anidamiento. */
+            div[data-testid="stVerticalBlockBorderWrapper"]:has(.vq-marca-tarjeta) {
                 background: var(--vq-panel);
                 border: 1px solid var(--vq-border) !important;
                 border-radius: var(--vq-radius-lg) !important;
@@ -484,8 +498,19 @@ def inject_terminal_theme() -> None:
                 box-shadow: var(--vq-shadow-soft);
             }
 
+            div[data-testid="stVerticalBlockBorderWrapper"]:has(
+                div[data-testid="stVerticalBlockBorderWrapper"] .vq-marca-tarjeta) {
+                background: transparent;
+                border: none !important;
+                border-radius: 0 !important;
+                padding: 0;
+                box-shadow: none;
+            }
+
+            .vq-marca-tarjeta { display: none; }
+
             /* Hero de Research Core: la misma tarjeta con el filo iluminado. */
-            div[data-testid="stVerticalBlockBorderWrapper"]:has(.vq-hero-marca) {
+            div[data-testid="stVerticalBlockBorderWrapper"]:has(.vq-hero-marca):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .vq-hero-marca)) {
                 position: relative;
                 overflow: hidden;
                 margin: 1.4rem 0 1.7rem;
@@ -493,7 +518,7 @@ def inject_terminal_theme() -> None:
                 background: linear-gradient(160deg, rgba(20, 29, 43, .98), rgba(11, 17, 26, .98));
             }
 
-            div[data-testid="stVerticalBlockBorderWrapper"]:has(.vq-hero-marca)::before {
+            div[data-testid="stVerticalBlockBorderWrapper"]:has(.vq-hero-marca):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .vq-hero-marca))::before {
                 content: "";
                 position: absolute;
                 top: 0;
@@ -851,11 +876,11 @@ def inject_terminal_theme() -> None:
                     min-height: 380px;
                 }
 
-                div[data-testid="stVerticalBlockBorderWrapper"] {
+                div[data-testid="stVerticalBlockBorderWrapper"]:has(.vq-marca-tarjeta) {
                     padding: 1.1rem 1.15rem;
                 }
 
-                div[data-testid="stVerticalBlockBorderWrapper"]:has(.vq-hero-marca) {
+                div[data-testid="stVerticalBlockBorderWrapper"]:has(.vq-hero-marca):not(:has(div[data-testid="stVerticalBlockBorderWrapper"] .vq-hero-marca)) {
                     padding: 1.3rem 1.4rem;
                 }
 
@@ -1013,14 +1038,6 @@ def inject_terminal_theme() -> None:
             /* La primitiva de tarjeta se define una sola vez, más arriba. Aquí
                había una segunda regla que la pisaba con otro radio y sin
                padding: dos definiciones del mismo componente. */
-            [data-testid="stTabs"] [role="tab"] {
-                color: var(--vq-muted) !important;
-                font-weight: 600;
-            }
-            [data-testid="stTabs"] [role="tab"][aria-selected="true"] {
-                color: var(--vq-primary) !important;
-                border-bottom-color: var(--vq-primary) !important;
-            }
             .stTextInput input,
             .stNumberInput input,
             .stTextArea textarea,
@@ -1072,7 +1089,13 @@ def inject_terminal_theme() -> None:
             .stButton > button:active,
             .stDownloadButton > button:active,
             [data-testid="stFormSubmitButton"] > button:active {
-                transform: scale(.97);
+                transform: scale(.955);
+                filter: brightness(.92);
+            }
+
+            .stButton > button:hover,
+            .stDownloadButton > button:hover {
+                transform: translateY(-1px);
             }
 
             .stButton > button[kind="primary"]:hover,
@@ -1086,21 +1109,36 @@ def inject_terminal_theme() -> None:
                existe. */
             .vq-market-card,
             .vq-news-card,
-            .vq-group-card {
+            .vq-group-card,
+            .vq-kpi-card {
                 transition:
-                    transform .14s cubic-bezier(.2, 0, .2, 1),
-                    border-color .14s ease,
-                    box-shadow .14s ease;
+                    transform .16s cubic-bezier(.2, 0, .2, 1),
+                    border-color .16s ease,
+                    box-shadow .16s ease;
                 will-change: transform;
             }
 
             .vq-market-card:hover,
             .vq-news-card:hover,
-            .vq-group-card:hover {
-                transform: translateY(-2px);
-                border-color: rgba(59, 130, 246, .45);
-                box-shadow: var(--vq-shadow-card);
+            .vq-group-card:hover,
+            .vq-kpi-card:hover {
+                transform: translateY(-3px);
+                border-color: rgba(59, 130, 246, .55) !important;
+                box-shadow:
+                    0 10px 28px rgba(0, 0, 0, .45),
+                    0 0 26px rgba(59, 130, 246, .22);
             }
+
+            /* Las tiras de navegación también responden: son lo primero que se
+               toca en cada pantalla. */
+            .nav-link,
+            [data-testid="stTabs"] [role="tab"],
+            .stSelectbox [data-baseweb="select"] > div {
+                transition: background .16s ease, color .16s ease,
+                            border-color .16s ease, transform .1s ease !important;
+            }
+
+            .nav-link:active { transform: scale(.97); }
 
             /* --- Entrada: la rejilla se construye, no aparece de golpe ---- */
             @keyframes vq-entrada {
@@ -1108,10 +1146,16 @@ def inject_terminal_theme() -> None:
                 to   { opacity: 1; transform: none; }
             }
 
+            /* fill-mode "backwards" y no "both": con "both" el fotograma final
+               de la animación queda aplicado para siempre, y una animación CSS
+               gana en la cascada al :hover. Eso dejaba el transform congelado y
+               las tarjetas no se elevaban al pasar el cursor. Con "backwards"
+               se conserva el estado inicial antes de arrancar, pero al terminar
+               el elemento vuelve a la cascada normal y el hover funciona. */
             div[data-testid="stVerticalBlockBorderWrapper"],
             .vq-market-grid > *,
             .vq-news-grid > * {
-                animation: vq-entrada .32s cubic-bezier(.2, 0, .2, 1) both;
+                animation: vq-entrada .32s cubic-bezier(.2, 0, .2, 1) backwards;
             }
 
             /* Escalonado: 40ms por tarjeta. Lo justo para leerse como cascada
@@ -1168,6 +1212,68 @@ def inject_terminal_theme() -> None:
                 letter-spacing: -0.03em;
                 line-height: 1.1;
                 color: var(--vq-text);
+            }
+
+            /* --- Pestañas: control segmentado -----------------------------
+               Eran texto pequeño con un subrayado de 2px: no parecían pulsables
+               y el destino activo apenas se distinguía. Un segmentado dice a la
+               vez cuántas opciones hay, cuál está activa y que son alternativas
+               excluyentes entre sí. */
+            [data-testid="stTabs"] [data-baseweb="tab-list"] {
+                gap: 4px !important;
+                background: var(--vq-panel) !important;
+                border: 1px solid var(--vq-border-soft) !important;
+                border-radius: 12px !important;
+                padding: 5px !important;
+                display: inline-flex !important;
+                width: auto !important;
+                max-width: 100%;
+                overflow-x: auto;
+            }
+
+            [data-testid="stTabs"] [data-baseweb="tab-highlight"],
+            [data-testid="stTabs"] [data-baseweb="tab-border"] {
+                display: none !important;
+            }
+
+            [data-testid="stTabs"] [role="tab"] {
+                border: 1px solid transparent !important;
+                border-radius: 9px !important;
+                padding: 8px 18px !important;
+                margin: 0 !important;
+                color: var(--vq-muted) !important;
+                font-family: var(--vq-font-titulo) !important;
+                font-weight: 600 !important;
+                font-size: .88rem !important;
+                letter-spacing: -0.005em;
+                white-space: nowrap;
+                transition:
+                    background .16s cubic-bezier(.2, 0, .2, 1),
+                    color .16s ease,
+                    transform .1s cubic-bezier(.2, 0, .2, 1) !important;
+            }
+
+            [data-testid="stTabs"] [role="tab"]:hover {
+                background: rgba(59, 130, 246, .10) !important;
+                color: var(--vq-text) !important;
+            }
+
+            [data-testid="stTabs"] [role="tab"]:active {
+                transform: scale(.97);
+            }
+
+            [data-testid="stTabs"] [role="tab"][aria-selected="true"] {
+                background: linear-gradient(160deg, var(--vq-primary), #2f6fe0) !important;
+                border-color: rgba(255, 255, 255, .10) !important;
+                color: #ffffff !important;
+                box-shadow: 0 2px 10px rgba(59, 130, 246, .35);
+            }
+
+            [data-testid="stTabs"] [role="tab"] p {
+                font-size: inherit !important;
+                font-weight: inherit !important;
+                color: inherit !important;
+                margin: 0 !important;
             }
 
             /* --- Azulejo de icono: el nodo de la referencia --------------- */

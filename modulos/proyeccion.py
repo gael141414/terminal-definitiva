@@ -237,11 +237,11 @@ def ejecutar_proyeccion(ticker_input):
             with col_a:
                 st.markdown("#### Catalizadores")
                 for cat in modelo["catalizadores"]:
-                    st.success(f"✔️ {cat}")
+                    st.success(f"{cat}")
             with col_b:
                 st.markdown("#### Riesgos a vigilar")
                 for riesgo in modelo["riesgos"]:
-                    st.warning(f"⚠️ {riesgo}")
+                    st.warning(f"{riesgo}")
 
             st.markdown("#### Tesis del algoritmo")
             st.write(

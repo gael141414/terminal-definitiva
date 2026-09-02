@@ -132,7 +132,7 @@ def ejecutar_predictor_techos_suelos(ticker_input):
             
             st.plotly_chart(fig, use_container_width=True)
             
-            st.caption("ℹ️ El sombreado indica anomalías estadísticas fuera del 95% de los movimientos normales.")
+            st.caption("ℹEl sombreado indica anomalías estadísticas fuera del 95% de los movimientos normales.")
             
         else:
             st.warning("No hay suficientes datos históricos (200+ días) para calcular los ciclos de esta empresa.")

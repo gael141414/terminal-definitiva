@@ -178,7 +178,7 @@ def render_chatbot():
                     st.markdown(texto_respuesta)
 
                     if respuesta_obj.get("context"):
-                        with st.expander("📚 Ver documentos fuente utilizados"):
+                        with st.expander("Ver documentos fuente utilizados"):
                             for i, doc in enumerate(respuesta_obj["context"], start=1):
                                 origen = doc.metadata.get("source", "Documento local")
                                 st.caption(f"**Fuente {i}:** {origen}")

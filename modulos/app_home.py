@@ -94,7 +94,9 @@ def render_research_core_hero() -> None:
     # las columnas quedaban fuera, sin el padding que les correspondía. El
     # contenedor nativo sí contiene de verdad; el estilo se le aplica por CSS
     # a través de la marca .vq-hero-marca.
-    with st.container(border=True):
+    # border=False: el borde lo pinta el CSS a través de la marca. Con el
+    # nativo salían dos bordes superpuestos.
+    with st.container(border=False):
         st.markdown('<span class="vq-hero-marca"></span>', unsafe_allow_html=True)
         col_izquierda, col_derecha = st.columns([1.7, 1], gap="large")
 

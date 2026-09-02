@@ -493,11 +493,11 @@ def render_save_to_watchlist_panel(
     with st.expander("Ver datos que se guardarán", expanded=False):
         st.json(snapshot)
 
-    if st.button("💾 Guardar en watchlist inteligente", type="primary", use_container_width=True):
+    if st.button("Guardar en watchlist inteligente", type="primary", use_container_width=True):
         try:
             save_analysis_snapshot(snapshot)
             st.success(f"{ticker.upper()} guardado en watchlist inteligente.")
-            st.info("Puedes revisarlo en 💼 Cartera y Decisión → 📋 Mi Watchlist (Cartera).")
+            st.info("Puedes revisarlo en Cartera y Decisión Mi Watchlist (Cartera).")
         except Exception as exc:
             st.error(f"No se pudo guardar el análisis: {exc}")
 
@@ -510,7 +510,7 @@ def render_saved_research_dashboard() -> None:
 
     rows = latest_snapshots()
     if not rows:
-        st.info("Todavía no hay análisis guardados. Abre 🧩 Research Core y usa la pestaña 💾 Seguimiento.")
+        st.info("Todavía no hay análisis guardados. Abre Research Core y usa la pestaña Seguimiento.")
         return
 
     df = pd.DataFrame(

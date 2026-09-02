@@ -46,7 +46,7 @@ def ejecutar_radar_multibagger(ticker_input):
         try:
             info = _obtener_info_multibagger(ticker_input)
             if not info:
-                st.error("⚠️ No se pudieron obtener datos de Yahoo Finance (rate limit temporal o ticker inválido). Inténtalo de nuevo en unos minutos.")
+                st.error("No se pudieron obtener datos de Yahoo Finance (rate limit temporal o ticker inválido). Inténtalo de nuevo en unos minutos.")
                 return
 
             # 1. Extracción de Métricas Críticas (El ADN del pelotazo)

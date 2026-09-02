@@ -301,7 +301,7 @@ def ejecutar_visor_smallcaps():
         st.warning("Selecciona al menos un segmento o introduce tickers manuales.")
         return
 
-    ejecutar = st.button("🔎 Ejecutar escaneo startup-like", type="primary", use_container_width=True)
+    ejecutar = st.button("Ejecutar escaneo startup-like", type="primary", use_container_width=True)
     auto_ejecutar = historico is None
 
     if ejecutar or auto_ejecutar:

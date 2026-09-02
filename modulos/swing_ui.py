@@ -133,7 +133,7 @@ def _render_banner_regimen(regimen: Regimen) -> None:
               help="Multiplicador sobre el riesgo normal por operación, según lo hostil que sea el contexto.")
 
     for aviso in regimen.avisos:
-        st.caption(f"⚠️ {aviso}")
+        st.caption(f"{aviso}")
 
 
 # --------------------------------------------------------------------------
@@ -242,7 +242,7 @@ def _render_escaner() -> None:
     if origen == "Mi watchlist":
         tickers = _universo_watchlist()
         if not tickers:
-            st.info("Tu watchlist está vacía. Añade valores desde «📋 Mi Watchlist» o escanea una muestra del mercado.")
+            st.info("Tu watchlist está vacía. Añade valores desde «Mi Watchlist» o escanea una muestra del mercado.")
     elif origen == "Mercado (muestra)":
         limite = st.select_slider("Tamaño de la muestra", options=[100, 250, 500, 750], value=250)
         tickers = _universo_mercado(limite)
@@ -258,7 +258,7 @@ def _render_escaner() -> None:
         direcciones = st.multiselect("Dirección", ["Largo", "Corto"], default=["Largo"])
         if "Corto" in direcciones:
             st.warning(
-                "⚠️ Las estrategias cortas de este catálogo tienen expectativa **negativa** en la "
+                "Las estrategias cortas de este catálogo tienen expectativa **negativa** en la "
                 "validación histórica (−0,14R y −0,20R). Se muestran para investigación, no como "
                 "recomendación."
             )
@@ -266,7 +266,7 @@ def _render_escaner() -> None:
         nombres = {e.nombre: e.id for e in ESTRATEGIAS}
         elegidas = st.multiselect("Estrategias", list(nombres), default=list(nombres))
 
-    if st.button("⚡ Escanear mercado", type="primary", use_container_width=True, disabled=not tickers):
+    if st.button("Escanear mercado", type="primary", use_container_width=True, disabled=not tickers):
         barra = st.progress(0.0, text="Iniciando...")
         ids = tuple(nombres[n] for n in elegidas) or None
         resultado = escanear(tickers, estrategias=ids, progreso=barra)
@@ -327,7 +327,7 @@ def _render_escaner() -> None:
             regimen_actual=resultado.regimen.etiqueta if resultado.regimen else "",
         )
 
-    with st.expander("📄 Ver tabla completa"):
+    with st.expander("Ver tabla completa"):
         st.dataframe(df.drop(columns=["_motivos", "_id_estrategia"]), use_container_width=True, hide_index=True)
 
 
@@ -440,7 +440,7 @@ def _render_validacion() -> None:
 
     tickers = tuple(t.strip().upper() for t in texto.split(",") if t.strip())
 
-    if st.button("🧪 Ejecutar validación", type="primary", use_container_width=True, disabled=not tickers):
+    if st.button("Ejecutar validación", type="primary", use_container_width=True, disabled=not tickers):
         with st.spinner(f"Descargando {len(tickers)} valores y simulando operaciones..."):
             precios = descargar_universo(tickers, periodo=periodo)
             resultados = {e.id: backtest_estrategia(e.id, precios) for e in ESTRATEGIAS}
@@ -487,7 +487,7 @@ es la trampa clásica: se gana pequeño muchas veces y se pierde grande unas poc
         "en el segundo tramo, la regla describía el pasado en lugar de capturar un comportamiento estable."
     )
 
-    if st.button("🔬 Ejecutar validación fuera de muestra", use_container_width=True):
+    if st.button("Ejecutar validación fuera de muestra", use_container_width=True):
         with st.spinner("Partiendo el histórico y midiendo ambos tramos..."):
             precios = descargar_universo(tickers, periodo=estado["periodo"])
             resultados_oos = [validar_out_of_sample(e.id, precios) for e in ESTRATEGIAS]

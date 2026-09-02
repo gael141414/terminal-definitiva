@@ -129,7 +129,7 @@ def ejecutar_monitor_liquidez():
             fig.update_yaxes(title_text="S&P 500 (Puntos)", color="white", secondary_y=True)
             st.plotly_chart(fig, use_container_width=True)
 
-            with st.expander("📖 Formula y componentes"):
+            with st.expander("Formula y componentes"):
                 st.markdown(
                     """
                     **Liquidez Neta = Balance Total FED - TGA - RRP**

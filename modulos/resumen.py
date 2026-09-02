@@ -147,7 +147,7 @@ def ejecutar_resumen_ejecutivo(ticker_input, is_df, bs_df, cf_df, res_is, res_bs
     else:
         estado_precio = "Datos insuficientes"
     
-    st.subheader("🧠 Veredicto del Algoritmo")
+    st.subheader("Veredicto del Algoritmo")
     
     nota_global = valuequant_score.final_score if valuequant_score is not None else nota_buffett
     confianza = valuequant_score.confidence if valuequant_score is not None else 1.0
@@ -193,7 +193,7 @@ def ejecutar_resumen_ejecutivo(ticker_input, is_df, bs_df, cf_df, res_is, res_bs
     alertas_detectadas = escanear_vulnerabilidades(res_is, res_bs, res_cf)
     
     if len(alertas_detectadas) == 0:
-        st.success("✅ **Foso Económico Intacto:** El escáner no ha detectado vulnerabilidades estructurales graves a nivel contable en el último año.")
+        st.success("**Foso Económico Intacto:** El escáner no ha detectado vulnerabilidades estructurales graves a nivel contable en el último año.")
     else:
         st.error(f"Se han detectado **{len(alertas_detectadas)} vulnerabilidades críticas** que debes investigar:")
         for alerta in alertas_detectadas:

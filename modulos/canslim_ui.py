@@ -137,11 +137,11 @@ def _render_candidato(resultado: ResultadoCanSlim, capital: float, riesgo_pct: f
 
             if ruptura is not None:
                 if ruptura.fallida:
-                    st.error(f"⚠️ {ruptura.estado}. No es una compra.")
+                    st.error(f"{ruptura.estado}. No es una compra.")
                 elif ruptura.extendida:
-                    st.warning(f"⚠️ {ruptura.estado}. Perseguir una ruptura extendida es una causa clásica de stop.")
+                    st.warning(f"{ruptura.estado}. Perseguir una ruptura extendida es una causa clásica de stop.")
                 else:
-                    st.success(f"✅ {ruptura.estado}, con volumen {ruptura.volumen_relativo:.1f}x la media.")
+                    st.success(f"{ruptura.estado}, con volumen {ruptura.volumen_relativo:.1f}x la media.")
 
             # Plan de riesgo con los parámetros del propio O'Neil para swing.
             precio = ruptura.precio if ruptura is not None else base.pivote
@@ -221,7 +221,7 @@ def render_canslim() -> None:
         exigir_ruptura = st.checkbox("Sólo rupturas confirmadas", value=False,
                                      help="Exige que el precio haya roto el pivote de una base con volumen.")
 
-    if st.button("🎯 Buscar candidatos CAN SLIM", type="primary", use_container_width=True, disabled=not tickers):
+    if st.button("Buscar candidatos CAN SLIM", type="primary", use_container_width=True, disabled=not tickers):
         barra = st.progress(0.0, text="Iniciando...")
         resultado = escanear_canslim(
             tickers, rs_minimo=float(rs_minimo), exigir_ruptura=exigir_ruptura,
@@ -255,7 +255,7 @@ def render_canslim() -> None:
     for candidato in resultado.candidatos:
         _render_candidato(candidato, capital, riesgo_pct)
 
-    with st.expander("📄 Tabla resumen"):
+    with st.expander("Tabla resumen"):
         df = candidatos_a_dataframe(resultado)
         if not df.empty:
             st.dataframe(df, use_container_width=True, hide_index=True)

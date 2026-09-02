@@ -108,7 +108,7 @@ def _render_analisis(df: pd.DataFrame) -> None:
 
 
 def _render_registro_manual() -> None:
-    with st.expander("✍️ Anotar una operación a mano"):
+    with st.expander("Anotar una operación a mano"):
         st.caption("Para operaciones que no vengan del escáner.")
         c1, c2, c3 = st.columns(3)
         with c1:
@@ -170,7 +170,7 @@ def render_diario() -> None:
         st.markdown("---")
         _render_analisis(df)
 
-        with st.expander("📄 Historial completo"):
+        with st.expander("Historial completo"):
             columnas = [c for c in ["Fecha", "ticker", "estado", "estrategia", "precio",
                                     "stop", "acciones", "resultado_r", "motivo", "motivo_cierre"]
                         if c in df.columns]

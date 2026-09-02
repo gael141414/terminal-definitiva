@@ -169,9 +169,9 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
         c5.metric("Tasa Libre de Riesgo (Bono 10Y)", f"{tasa_riesgo*100:.2f}%")
         c6.metric("Prima de Riesgo (Spread)", f"{spread:+.2f} pts", delta_color=color_spread)
         if spread < 0:
-            st.error(f"🚨 **Alerta Value:** El Bono del Tesoro ({tasa_riesgo*100:.2f}%) rinde más que los beneficios de esta empresa ({earnings_yield*100:.2f}%). Asumes riesgo para ganar menos que un activo garantizado.")
+            st.error(f"**Alerta Value:** El Bono del Tesoro ({tasa_riesgo*100:.2f}%) rinde más que los beneficios de esta empresa ({earnings_yield*100:.2f}%). Asumes riesgo para ganar menos que un activo garantizado.")
         else:
-            st.success(f"✅ **Favorable:** La empresa ofrece una prima de riesgo positiva frente a la renta fija.")
+            st.success(f"**Favorable:** La empresa ofrece una prima de riesgo positiva frente a la renta fija.")
     st.markdown("---")
     st.markdown("#### Score institucional")
     score_col_1, score_col_2 = st.columns([1, 2])
@@ -237,9 +237,9 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
             if total_yield >= 8.0:
                 st.success(f"✅ **Veredicto (Máquina de Efectivo):** Excepcional. La empresa te está devolviendo un **{total_yield:.2f}%** de tu inversión anual de forma 'invisible' (sumando su FCF Yield y las recompras). Está destruyendo acciones a buen ritmo y generando muchísima caja.")
             elif total_yield >= 4.0:
-                st.info(f"⚖️ **Veredicto (Sano):** Razonable. Un rendimiento de efectivo total del **{total_yield:.2f}%**, en línea con empresas sólidas y estables. El dinero fluye correctamente hacia el accionista.")
+                st.info(f"**Veredicto (Sano):** Razonable. Un rendimiento de efectivo total del **{total_yield:.2f}%**, en línea con empresas sólidas y estables. El dinero fluye correctamente hacia el accionista.")
             else:
-                st.warning(f"⚠️ **Veredicto (Caja Pobre):** Un rendimiento del **{total_yield:.2f}%** significa que la empresa está muy cara respecto al dinero real que genera, o bien que su negocio requiere reinvertir todo lo que gana (muy intensivo en capital) dejando poco para ti.")
+                st.warning(f"**Veredicto (Caja Pobre):** Un rendimiento del **{total_yield:.2f}%** significa que la empresa está muy cara respecto al dinero real que genera, o bien que su negocio requiere reinvertir todo lo que gana (muy intensivo en capital) dejando poco para ti.")
         else:
             st.info("No hay datos suficientes de FCF y/o recompras para calcular el retorno de efectivo total.")
 
@@ -255,7 +255,7 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
         
         if sector_empresa and sector_empresa != 'Desconocido':
             st.caption(f"**Sector Detectado:** {sector_empresa} | **Métrica Institucional Asignada:** {metrica_optima}")
-            st.info(f"💡 **Racionalidad:** {explicacion}")
+            st.info(f"**Racionalidad:** {explicacion}")
             
             c_rel1, c_rel2, c_rel3, c_rel4 = st.columns(4)
             
@@ -331,11 +331,11 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
 
     st.write("")
     if dupont_apalan > 3.0:
-        st.error(f"🚨 **Veredicto (Riesgo Oculto):** ¡Cuidado! El ROE parece alto, pero es una ilusión creada por el endeudamiento. La empresa asume un apalancamiento peligroso (**{dupont_apalan:.2f}x**). Si los tipos de interés suben, sus beneficios se hundirán.")
+        st.error(f"**Veredicto (Riesgo Oculto):** ¡Cuidado! El ROE parece alto, pero es una ilusión creada por el endeudamiento. La empresa asume un apalancamiento peligroso (**{dupont_apalan:.2f}x**). Si los tipos de interés suben, sus beneficios se hundirán.")
     elif dupont_margen > 15.0:
-        st.success(f"✅ **Veredicto (Foso Económico):** El ROE es de máxima calidad. Está impulsado por unos excelentes márgenes de beneficio neto (**{dupont_margen:.1f}%**). La empresa tiene poder de fijación de precios y no depende de deudas masivas.")
+        st.success(f"**Veredicto (Foso Económico):** El ROE es de máxima calidad. Está impulsado por unos excelentes márgenes de beneficio neto (**{dupont_margen:.1f}%**). La empresa tiene poder de fijación de precios y no depende de deudas masivas.")
     else:
-        st.info(f"⚖️ **Veredicto (Modelo de Rotación):** La rentabilidad de la empresa no viene de tener grandes márgenes de beneficio, sino de vender mucho volumen y rotar sus activos rápidamente (**{dupont_rotacion:.2f}x**). Es el clásico modelo de un supermercado como Walmart.")
+        st.info(f"**Veredicto (Modelo de Rotación):** La rentabilidad de la empresa no viene de tener grandes márgenes de beneficio, sino de vender mucho volumen y rotar sus activos rápidamente (**{dupont_rotacion:.2f}x**). Es el clásico modelo de un supermercado como Walmart.")
     
     st.markdown("---")
 
@@ -382,9 +382,9 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
     with c_f1:
         color_str = "#2ca02c" if score >= 7 else "#ff7f0e" if score >= 4 else "#d62728"
         st.markdown(f"<h1 style='text-align: center; color: {color_str}; font-size: 5rem; margin-bottom: 0;'>{score}/9</h1>", unsafe_allow_html=True)
-        if score >= 7: st.success("🟢 Blindaje Total")
-        elif score >= 4: st.warning("🟡 Calidad Media")
-        else: st.error("🔴 Riesgo Financiero")
+        if score >= 7: st.success("Blindaje Total")
+        elif score >= 4: st.warning("Calidad Media")
+        else: st.error("Riesgo Financiero")
         
     with c_f2:
         cols_grid = st.columns(3)
@@ -484,7 +484,7 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
                         ev_actual = market_cap_b - ultimos_caja.iloc[-1]
                         multiplo_actual = ev_actual / ultimos_fcf.iloc[-1]
                         
-                        st.info(f"💡 **Interpretación:** Hoy pagas **{multiplo_actual:.1f}x** su caja libre. Si este número está muy por debajo de la línea punteada naranja (su media histórica), históricamente estás comprando con descuento. Si está muy por encima, Wall Street está pagando una prima exigente.")
+                        st.info(f"**Interpretación:** Hoy pagas **{multiplo_actual:.1f}x** su caja libre. Si este número está muy por debajo de la línea punteada naranja (su media histórica), históricamente estás comprando con descuento. Si está muy por encima, Wall Street está pagando una prima exigente.")
                 except: pass
         else:
             st.info("No se pudo calcular el EV/FCF por falta de datos de acciones en circulación.")
@@ -671,7 +671,7 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
                         )
                         if fig_radar:
                             st.plotly_chart(fig_radar, use_container_width=True)
-                            st.info("💡 **Foso Actual:** El radar muestra quién tiene los fundamentales más fuertes en el último año reportado.")
+                            st.info("**Foso Actual:** El radar muestra quién tiene los fundamentales más fuertes en el último año reportado.")
                             
                     with col_comp2:
                         # Comparativa histórica de ROIC (El foso económico en el tiempo)
@@ -692,7 +692,7 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
                         if fig_hist2:
                             st.plotly_chart(fig_hist2, use_container_width=True)
                             
-                        st.caption("📈 **Consistencia:** Buffett prefiere una empresa con un 15% estable durante 10 años, que una con picos del 30% y caídas al 5%.")
+                        st.caption("**Consistencia:** Buffett prefiere una empresa con un 15% estable durante 10 años, que una con picos del 30% y caídas al 5%.")
 
             else:
                 st.error(f"No se pudieron descargar los datos del competidor {ticker_competidor}. Comprueba el ticker.")
@@ -700,7 +700,7 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
         st.info("🥊 **El Ring está vacío.** Introduce un ticker rival en el panel lateral (Ej: 'MSFT', 'PEP', 'AMD') para activar la batalla de calidad empresarial.")
 
     # ======== MODELOS DE VALORACIÓN ========
-    st.subheader(f"⚖️ Triangulación de Valor Intrínseco — {ticker_input}")
+    st.subheader(f"Triangulación de Valor Intrínseco — {ticker_input}")
 
     if res_val:
         precio_actual = res_val.get('precio_actual')
@@ -776,7 +776,7 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
         tasa_desc_usr = st.slider("Tasa de Descuento (WACC) %", min_value=5.0, max_value=20.0, value=float(wacc_real_sugerido), step=0.5)
         wacc_nota = res_val.get('wacc_nota') or ""
         if wacc_nota:
-            st.caption(f"ℹ️ {wacc_nota}")
+            st.caption(f"ℹ{wacc_nota}")
         
     with col_slider3:
         margen_seguridad_usr = st.slider("Margen de Seguridad %", min_value=0, max_value=50, value=25, step=5)

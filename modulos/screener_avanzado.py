@@ -261,7 +261,7 @@ def render_screener_avanzado() -> None:
         limit=int(limit),
     )
 
-    if not st.button("⚡ Ejecutar Screener Avanzado", type="primary", use_container_width=True):
+    if not st.button("Ejecutar Screener Avanzado", type="primary", use_container_width=True):
         st.info("Ajusta los filtros en la barra lateral y pulsa el botón para escanear el universo FMP + Yahoo. No se hacen peticiones a los proveedores de datos hasta que lo ejecutes.")
         return
 
