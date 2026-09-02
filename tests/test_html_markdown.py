@@ -232,3 +232,64 @@ def test_ningun_bloque_html_de_la_app_puede_romperse():
         "Bloques HTML que Markdown puede romper; pásalos por "
         f"modulos.html_markdown.escribir_html: {ofensores}"
     )
+
+def test_ninguna_llamada_abre_un_div_que_cierra_otra_llamada():
+    """Un <div> abierto en una llamada y cerrado en otra no envuelve nada.
+
+    Streamlit pinta cada elemento en su propio contenedor hermano, así que el
+    navegador autocierra el <div> al final del primero: la tarjeta sale VACÍA y
+    los widgets que debía envolver quedan fuera, pegados al margen y sin su
+    padding. Era la causa del recuadro vacío del hero de Research Core y del
+    texto que se salía de su caja.
+
+    Para envolver widgets hay que usar un contenedor real (``st.container``) y
+    estilarlo por CSS, no HTML suelto.
+    """
+
+    def literales(nodo):
+        if isinstance(nodo, ast.Constant) and isinstance(nodo.value, str):
+            yield nodo.value
+        elif isinstance(nodo, ast.JoinedStr):
+            yield "".join(str(v.value) if isinstance(v, ast.Constant) else ""
+                          for v in nodo.values)
+        elif isinstance(nodo, ast.BinOp):
+            for lado in (nodo.left, nodo.right):
+                yield from literales(lado)
+
+    import re
+
+    ofensores = []
+    for ruta in sorted(PROJECT_ROOT.rglob("*.py")):
+        if ".venv" in str(ruta) or "/tests/" in str(ruta) or "/scripts/" in str(ruta):
+            continue
+        try:
+            arbol = ast.parse(ruta.read_text(encoding="utf-8"))
+        except SyntaxError:
+            continue
+        for n in ast.walk(arbol):
+            if not isinstance(n, ast.Call) or not n.args:
+                continue
+            nombre = getattr(n.func, "attr", None) or getattr(n.func, "id", None)
+            if nombre not in ("markdown", "escribir_html"):
+                continue
+            if nombre == "markdown" and not any(
+                k.arg == "unsafe_allow_html" for k in n.keywords
+            ):
+                continue
+            for txt in literales(n.args[0]):
+                # Los bloques <style> son CSS: cualquier "<div>" ahí es prosa de
+                # un comentario o un selector, no una etiqueta abierta.
+                if "<style" in txt:
+                    continue
+                abre = len(re.findall(r"<div\b", txt))
+                cierra = len(re.findall(r"</div>", txt))
+                if abre != cierra:
+                    ofensores.append(
+                        f"{ruta.relative_to(PROJECT_ROOT)}:{n.lineno} "
+                        f"(<div>={abre}, </div>={cierra})"
+                    )
+
+    assert not ofensores, (
+        "HTML con <div> descompensados: no envolverá a los widgets siguientes. "
+        f"Usa st.container() y estílalo por CSS: {ofensores}"
+    )

@@ -83,35 +83,43 @@ render_ticker_tape()
 
 logo_uri_nav = asset_to_data_uri(LOGO_PATH)
 logo_tag_nav = f"<img src='{logo_uri_nav}' alt='ValueQuant Terminal'>" if logo_uri_nav else ""
-st.markdown(
-    f"""
-    <div class="vq-nav-shell">
-        <div class="vq-brand-row">
-            <div class="vq-brand">{logo_tag_nav}<span>ValueQuant Terminal</span></div>
-            <div class="vq-session-pill"><i class="bi bi-broadcast-pin"></i> Research desk active</div>
-        </div>
-    """,
-    unsafe_allow_html=True,
-)
-
 modos_navegacion = obtener_modos_navegacion()
 modo_labels = [modo["label"] for modo in modos_navegacion]
 modo_keys = [modo["key"] for modo in modos_navegacion]
 modo_default_idx = modo_keys.index("mvp") if "mvp" in modo_keys else 0
 
-with st.sidebar:
-    st.markdown("### Modo de producto")
-    modo_label = st.radio(
-        "Modo de navegación",
-        modo_labels,
-        index=modo_default_idx,
-        key="vq_navigation_mode",
-        label_visibility="collapsed",
-        help="MVP muestra solo el producto principal. Consolidado agrupa herramientas por arquitectura objetivo. Completo muestra todo.",
-    )
+# La cabecera es un contenedor REAL. Antes se abría <div class="vq-nav-shell">
+# en un st.markdown y se cerraba en otro, con el menú en medio: eso no envuelve
+# nada, porque Streamlit pinta cada elemento en un contenedor hermano y el
+# navegador autocierra el <div>.
+#
+# El selector de modo vivía en una barra lateral que existía solo para él, y su
+# valor se repetía además en un panel del cuerpo. Ahora es un desplegable en la
+# propia cabecera: un control de producto, no una sección de la aplicación.
+contenedor_cabecera = st.container()
+with contenedor_cabecera:
+    st.markdown('<span class="vq-nav-marca"></span>', unsafe_allow_html=True)
+    col_marca, col_modo = st.columns([5, 1], gap="small")
+
+    with col_marca:
+        escribir_html(f"""
+            <div class="vq-brand-row">
+                <div class="vq-brand">{logo_tag_nav}<span>ValueQuant Terminal</span></div>
+                <div class="vq-session-pill"><i class="bi bi-broadcast-pin"></i> Research desk active</div>
+            </div>
+        """)
+
+    with col_modo:
+        with st.popover("Modo", use_container_width=True):
+            modo_label = st.radio(
+                "Modo de navegación",
+                modo_labels,
+                index=modo_default_idx,
+                key="vq_navigation_mode",
+                help="MVP muestra solo el producto principal. Consolidado agrupa herramientas por arquitectura objetivo. Completo muestra todo.",
+            )
 
 modo_navegacion = modo_keys[modo_labels.index(modo_label)] if modo_label in modo_labels else "mvp"
-modo_meta = next((modo for modo in modos_navegacion if modo["key"] == modo_navegacion), modos_navegacion[0])
 
 bloques_internos = list(obtener_bloques_por_modo(modo_navegacion))
 if not bloques_internos:
@@ -126,24 +134,12 @@ bloques_internos = [b for b in bloques_internos if b != "🧩 Research Core"]
 menu_interno = ["__home__"] + bloques_internos
 menu_labels = ["Home"] + [BLOQUE_UI.get(b, (strip_visual_prefix(b), "grid"))[0] for b in bloques_internos]
 menu_icons = ["house"] + [BLOQUE_UI.get(b, (strip_visual_prefix(b), "grid"))[1] for b in bloques_internos]
-seleccion_menu = render_option_menu_safe(menu_labels, menu_icons, key=f"vq_main_nav_{modo_navegacion}")
-st.markdown("</div>", unsafe_allow_html=True)
+# El menú principal va dentro del contenedor de cabecera abierto arriba.
+with contenedor_cabecera:
+    seleccion_menu = render_option_menu_safe(menu_labels, menu_icons, key=f"vq_main_nav_{modo_navegacion}")
 
-st.markdown(
-    f"""
-    <div class="vq-control-panel" style="padding:.75rem 1rem; margin-bottom:.85rem;">
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
-            <div>
-                <div class="vq-context-eyebrow">Modo de navegación</div>
-                <div style="color:#FFFFFF; font-weight:800;">{html.escape(str(modo_meta.get('label', 'MVP')))}</div>
-                <div style="color:var(--vq-muted); font-size:.86rem; margin-top:.15rem;">{html.escape(str(modo_meta.get('caption', '')))}</div>
-            </div>
-            <span class="vq-badge vq-badge-success"><i class="bi bi-layers"></i> {html.escape(str(modo_meta.get('badge', 'Producto')))}</span>
-        </div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+# Aquí se pintaba un panel que solo repetía el modo ya elegido en el selector de
+# la cabecera. Dos controles para el mismo dato es ruido, no redundancia útil.
 
 seleccion_idx = menu_labels.index(seleccion_menu) if seleccion_menu in menu_labels else 0
 en_home = menu_interno[seleccion_idx] == "__home__"
@@ -157,9 +153,24 @@ if en_home and not research_core_activo:
     st.stop()
 
 if research_core_activo:
-    if st.button("← Volver a Home", key="vq_volver_home"):
-        st.session_state["vq_research_core_activo"] = False
-        st.rerun()
+    # Un botón suelto flotando sobre el contenido no dice dónde estás. La miga
+    # de pan responde a la vez a "dónde estoy" y "cómo salgo", que es lo que
+    # tiene que resolver la navegación.
+    col_ruta, col_salir = st.columns([6, 1], gap="small")
+    with col_ruta:
+        escribir_html(f"""
+            <nav class="vq-ruta" aria-label="Ruta de navegación">
+                <span class="vq-ruta-paso">Home</span>
+                <i class="bi bi-chevron-right vq-ruta-sep"></i>
+                <span class="vq-ruta-paso">Research Core</span>
+                <i class="bi bi-chevron-right vq-ruta-sep"></i>
+                <span class="vq-ruta-actual">{html.escape(str(st.session_state.get("ticker_analizado", "")))}</span>
+            </nav>
+        """)
+    with col_salir:
+        if st.button("Salir", key="vq_volver_home", use_container_width=True):
+            st.session_state["vq_research_core_activo"] = False
+            st.rerun()
 
 bloque_actual = "🧩 Research Core" if research_core_activo else menu_interno[seleccion_idx]
 herramientas_bloque = obtener_herramientas_por_bloque_y_modo(bloque_actual, modo_navegacion)
@@ -167,14 +178,15 @@ etiquetas_bloque = [h["label"] for h in herramientas_bloque]
 tool_labels = [strip_visual_prefix(label) for label in etiquetas_bloque]
 tool_icons = [TOOL_UI_ICONS.get(label, "circle") for label in etiquetas_bloque]
 
-escribir_html(f"""
-    <div class="vq-control-panel">
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-bottom:.75rem;">
+# El panel de trabajo es un contenedor real: antes se abría el <div> aquí y se
+# cerraba 90 líneas más abajo, con los widgets en medio. Nunca los envolvió.
+contenedor_trabajo = st.container(border=True)
+with contenedor_trabajo:
+    escribir_html(f"""
+        <div class="vq-panel-cabecera">
             <div>
                 <div class="vq-context-eyebrow">Área de trabajo</div>
-                <div style="color:#FFFFFF; font-weight:800; font-size:1.05rem;">
-                    {html.escape(strip_visual_prefix(bloque_actual))}
-                </div>
+                <div class="vq-panel-titulo">{html.escape(strip_visual_prefix(bloque_actual))}</div>
             </div>
             <span class="vq-badge vq-badge-primary">
                 <i class="bi bi-command"></i> Command Center
@@ -182,86 +194,85 @@ escribir_html(f"""
         </div>
     """)
 
-seleccion_herramienta = render_option_menu_safe(
-    tool_labels,
-    tool_icons,
-    key=f"vq_tool_nav_{seleccion_idx}"
-)
+    seleccion_herramienta = render_option_menu_safe(
+        tool_labels,
+        tool_icons,
+        key=f"vq_tool_nav_{seleccion_idx}"
+    )
 
-seleccion_tool_idx = tool_labels.index(seleccion_herramienta) if seleccion_herramienta in tool_labels else 0
-seccion_actual = etiquetas_bloque[seleccion_tool_idx]
-herramienta_actual = HERRAMIENTAS_POR_LABEL[seccion_actual]
+    seleccion_tool_idx = tool_labels.index(seleccion_herramienta) if seleccion_herramienta in tool_labels else 0
+    seccion_actual = etiquetas_bloque[seleccion_tool_idx]
+    herramienta_actual = HERRAMIENTAS_POR_LABEL[seccion_actual]
 
-st.markdown(
-    f"<div class='vq-tool-caption'>{html.escape(herramienta_actual['descripcion'])}</div>",
-    unsafe_allow_html=True,
-)
+    st.markdown(
+        f"<div class='vq-tool-caption'>{html.escape(herramienta_actual['descripcion'])}</div>",
+        unsafe_allow_html=True,
+    )
 
-# Variables contextuales compartidas por el router
-ticker_input = "AAPL"
-etf_input = "SPY"
-ticker_competidor = ""
-años_hist = 10
-analizar_btn = False
+    # Variables contextuales compartidas por el router
+    ticker_input = "AAPL"
+    etf_input = "SPY"
+    ticker_competidor = ""
+    años_hist = 10
+    analizar_btn = False
 
-if herramienta_actual["input_mode"] == "etf":
-    col_a, col_b = st.columns([1.3, 2.7])
-    with col_a:
-        st.caption("Análisis de fondos")
-        busqueda_etf = st.text_input("Buscar ETF", value="", placeholder="Vanguard, SPY, QQQ...", label_visibility="collapsed")
-    with col_b:
-        if busqueda_etf:
-            try:
-                resultados_busqueda = buscar_etf_yahoo(busqueda_etf)
-                if resultados_busqueda:
-                    seleccion = st.selectbox("Selecciona fondo", resultados_busqueda, label_visibility="collapsed")
-                    etf_input = seleccion.split(" ➔ ")[0].strip()
-                else:
+    if herramienta_actual["input_mode"] == "etf":
+        col_a, col_b = st.columns([1.3, 2.7])
+        with col_a:
+            st.caption("Análisis de fondos")
+            busqueda_etf = st.text_input("Buscar ETF", value="", placeholder="Vanguard, SPY, QQQ...", label_visibility="collapsed")
+        with col_b:
+            if busqueda_etf:
+                try:
+                    resultados_busqueda = buscar_etf_yahoo(busqueda_etf)
+                    if resultados_busqueda:
+                        seleccion = st.selectbox("Selecciona fondo", resultados_busqueda, label_visibility="collapsed")
+                        etf_input = seleccion.split(" ➔ ")[0].strip()
+                    else:
+                        etf_input = busqueda_etf.upper().strip()
+                        st.info(f"Usando ticker exacto: {etf_input}")
+                except Exception:
                     etf_input = busqueda_etf.upper().strip()
-                    st.info(f"Usando ticker exacto: {etf_input}")
-            except Exception:
-                etf_input = busqueda_etf.upper().strip()
-        else:
-            st.info("Introduce un ETF para iniciar la radiografía.")
-elif herramienta_actual["input_mode"] == "standalone":
-    st.caption("Herramienta independiente. Los controles específicos aparecen en el panel central.")
-else:
-    try:
-        lista_tickers_sec = obtener_tickers_filtrados()
-    except Exception:
-        lista_tickers_sec = ["AAPL - Apple Inc.", "MSFT - Microsoft Corp."]
+            else:
+                st.info("Introduce un ETF para iniciar la radiografía.")
+    elif herramienta_actual["input_mode"] == "standalone":
+        st.caption("Herramienta independiente. Los controles específicos aparecen en el panel central.")
+    else:
+        try:
+            lista_tickers_sec = obtener_tickers_filtrados()
+        except Exception:
+            lista_tickers_sec = ["AAPL - Apple Inc.", "MSFT - Microsoft Corp."]
 
-    indice_aapl = next((i for i, item in enumerate(lista_tickers_sec) if item.startswith("AAPL -")), 0)
-    indice_default = indice_aapl
-    if research_core_activo:
-        # Llegamos aquí desde la tarjeta hero de Home con un ticker ya resuelto
-        # (modulos.app_home._activar_research_core) — el selectbox debe arrancar
-        # en ese ticker, no en AAPL por defecto.
-        ticker_buscado_hero = st.session_state.get("ticker_analizado")
-        if ticker_buscado_hero:
-            indice_default = next(
-                (
-                    i
-                    for i, item in enumerate(lista_tickers_sec)
-                    if item.split(" - ")[0].strip().upper() == str(ticker_buscado_hero).upper()
-                ),
-                indice_aapl,
-            )
-    col_1, col_2, col_3, col_4 = st.columns([2.2, 2.2, 1, 1])
-    with col_1:
-        seleccion_principal = st.selectbox("Empresa", options=lista_tickers_sec, index=indice_default)
-        ticker_input = seleccion_principal.split(" - ")[0]
-    with col_2:
-        lista_competidores = [""] + lista_tickers_sec
-        seleccion_competidor = st.selectbox("Comparador", options=lista_competidores, index=0)
-        ticker_competidor = seleccion_competidor.split(" - ")[0] if seleccion_competidor else ""
-    with col_3:
-        años_hist = st.slider("Años FMP", 1, 5, 5)
-    with col_4:
-        st.markdown("<div style='height:1.72rem;'></div>", unsafe_allow_html=True)
-        analizar_btn = st.button("Analizar", use_container_width=True, type="primary")
+        indice_aapl = next((i for i, item in enumerate(lista_tickers_sec) if item.startswith("AAPL -")), 0)
+        indice_default = indice_aapl
+        if research_core_activo:
+            # Llegamos aquí desde la tarjeta hero de Home con un ticker ya resuelto
+            # (modulos.app_home._activar_research_core) — el selectbox debe arrancar
+            # en ese ticker, no en AAPL por defecto.
+            ticker_buscado_hero = st.session_state.get("ticker_analizado")
+            if ticker_buscado_hero:
+                indice_default = next(
+                    (
+                        i
+                        for i, item in enumerate(lista_tickers_sec)
+                        if item.split(" - ")[0].strip().upper() == str(ticker_buscado_hero).upper()
+                    ),
+                    indice_aapl,
+                )
+        col_1, col_2, col_3, col_4 = st.columns([2.2, 2.2, 1, 1])
+        with col_1:
+            seleccion_principal = st.selectbox("Empresa", options=lista_tickers_sec, index=indice_default)
+            ticker_input = seleccion_principal.split(" - ")[0]
+        with col_2:
+            lista_competidores = [""] + lista_tickers_sec
+            seleccion_competidor = st.selectbox("Comparador", options=lista_competidores, index=0)
+            ticker_competidor = seleccion_competidor.split(" - ")[0] if seleccion_competidor else ""
+        with col_3:
+            años_hist = st.slider("Años FMP", 1, 5, 5)
+        with col_4:
+            st.markdown("<div style='height:1.72rem;'></div>", unsafe_allow_html=True)
+            analizar_btn = st.button("Analizar", use_container_width=True, type="primary")
 
-st.markdown('</div>', unsafe_allow_html=True)
 
 render_context_header(
     bloque=bloque_actual,

@@ -88,47 +88,52 @@ def render_research_core_hero() -> None:
     vez de tratar Research Core como una pestaña más."""
     recientes = st.session_state.get("vq_recent_tickers", [])
 
-    st.markdown('<div class="vq-research-hero"><div class="vq-research-hero-inner">', unsafe_allow_html=True)
-    col_izquierda, col_derecha = st.columns([1.7, 1], gap="large")
+    # Un <div> abierto en un st.markdown NO envuelve a los widgets siguientes:
+    # Streamlit pinta cada elemento en su propio contenedor y el navegador
+    # autocierra el <div>. La tarjeta salía vacía (ese rectángulo con borde) y
+    # las columnas quedaban fuera, sin el padding que les correspondía. El
+    # contenedor nativo sí contiene de verdad; el estilo se le aplica por CSS
+    # a través de la marca .vq-hero-marca.
+    with st.container(border=True):
+        st.markdown('<span class="vq-hero-marca"></span>', unsafe_allow_html=True)
+        col_izquierda, col_derecha = st.columns([1.7, 1], gap="large")
 
-    with col_izquierda:
-        st.markdown(
-            """
-            <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
-                <span style="font-size:10.5px; font-weight:700; letter-spacing:0.14em; color:var(--vq-cyan); text-transform:uppercase;">Experiencia principal</span>
-                <span style="height:1px; width:36px; background:rgba(34,211,238,0.4); display:inline-block;"></span>
-            </div>
-            <div style="font-size:1.7rem; font-weight:800; letter-spacing:-0.01em; color:#FFFFFF;">Research Core</div>
-            <div style="font-size:.92rem; color:var(--vq-text-soft); max-width:520px; line-height:1.5; margin-top:6px;">
-                Análisis fundamental completo de una empresa: score global, valoración, calidad, riesgo y veredicto en una sola mesa de trabajo.
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        if recientes:
+        with col_izquierda:
             st.markdown(
-                "<div style='font-size:.72rem; color:var(--vq-muted); margin:.7rem 0 .3rem;'>Recientes:</div>",
+                """
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
+                    <span style="font-size:10.5px; font-weight:700; letter-spacing:0.14em; color:var(--vq-cyan); text-transform:uppercase;">Experiencia principal</span>
+                    <span style="height:1px; width:36px; background:rgba(34,211,238,0.4); display:inline-block;"></span>
+                </div>
+                <div style="font-size:1.7rem; font-weight:800; letter-spacing:-0.01em; color:#FFFFFF;">Research Core</div>
+                <div style="font-size:.92rem; color:var(--vq-text-soft); max-width:520px; line-height:1.5; margin-top:6px;">
+                    Análisis fundamental completo de una empresa: score global, valoración, calidad, riesgo y veredicto en una sola mesa de trabajo.
+                </div>
+                """,
                 unsafe_allow_html=True,
             )
-            cols_pills = st.columns(len(recientes))
-            for i, tk in enumerate(recientes):
-                with cols_pills[i]:
-                    if st.button(tk, key=f"vq_hero_recent_{tk}", use_container_width=True):
-                        _activar_research_core(tk)
+            if recientes:
+                st.markdown(
+                    "<div style='font-size:.72rem; color:var(--vq-muted); margin:.7rem 0 .3rem;'>Recientes:</div>",
+                    unsafe_allow_html=True,
+                )
+                cols_pills = st.columns(len(recientes))
+                for i, tk in enumerate(recientes):
+                    with cols_pills[i]:
+                        if st.button(tk, key=f"vq_hero_recent_{tk}", use_container_width=True):
+                            _activar_research_core(tk)
 
-    with col_derecha:
-        with st.form("vq_hero_search_form", border=False):
-            query = st.text_input(
-                "Ticker o nombre de empresa",
-                placeholder="Ticker o nombre de empresa…",
-                label_visibility="collapsed",
-            )
-            submitted = st.form_submit_button("Analizar", type="primary", use_container_width=True)
-        st.caption("Enter para abrir el resumen ejecutivo")
-        if submitted and query.strip():
-            _activar_research_core(query)
-
-    st.markdown("</div></div>", unsafe_allow_html=True)
+        with col_derecha:
+            with st.form("vq_hero_search_form", border=False):
+                query = st.text_input(
+                    "Ticker o nombre de empresa",
+                    placeholder="Ticker o nombre de empresa…",
+                    label_visibility="collapsed",
+                )
+                submitted = st.form_submit_button("Analizar", type="primary", use_container_width=True)
+            st.caption("Enter para abrir el resumen ejecutivo")
+            if submitted and query.strip():
+                _activar_research_core(query)
 
 
 def render_module_showcase(limit: int = 9) -> None:

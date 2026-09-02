@@ -59,11 +59,25 @@ def _safe_yahoo_history(
 
 
 def _safe_fast_market_cap(yf_ticker: Any) -> float | None:
-    """Obtiene market cap desde fast_info sin caer a quoteSummary/info."""
+    """Obtiene market cap desde fast_info sin caer a quoteSummary/info.
+
+    yfinance sirve esta métrica con DOS nombres según cómo se pida: ``.keys()``
+    y ``.get()`` la exponen como ``marketCap``, mientras que el acceso por
+    atributo acepta ``market_cap``. Pedir solo ``get("market_cap")`` devolvía
+    None para todos los tickers sin lanzar ningún error, así que el mapa de
+    calor de la Home se quedaba permanentemente vacío mostrando "No hay datos
+    suficientes". Se prueban las tres formas.
+    """
 
     try:
         fast_info = getattr(yf_ticker, "fast_info", {}) or {}
-        value = fast_info.get("market_cap") if hasattr(fast_info, "get") else None
+        value = None
+        if hasattr(fast_info, "get"):
+            value = fast_info.get("marketCap")
+            if value is None:
+                value = fast_info.get("market_cap")
+        if value is None:
+            value = getattr(fast_info, "market_cap", None)
         if value is None:
             return None
         numeric = float(value)
@@ -185,11 +199,14 @@ def render_ticker_tape() -> None:
 @st.cache_data(ttl=86400)
 def analizar_rotacion_sectores():
     """Descarga el rendimiento de los 11 sectores del S&P 500 usando sus ETFs."""
+    # Los nombres van sin emoji: son un dato, no presentación. Con el emoji
+    # dentro acababa en el eje del gráfico, en cualquier exportación y en toda
+    # comparación de cadenas. La iconografía se aplica al pintar.
     etfs = {
-        "💻 Tecnología": "XLK", "💊 Salud": "XLV", "🏦 Finanzas": "XLF",
-        "🛍️ Cons. Discrecional": "XLY", "🍞 Cons. Básico": "XLP", "🛢️ Energía": "XLE",
-        "🏭 Industriales": "XLI", "🧱 Materiales": "XLB", "🏠 Inmobiliario": "XLRE",
-        "⚡ Utilities": "XLU", "📡 Comunicaciones": "XLC",
+        "Tecnología": "XLK", "Salud": "XLV", "Finanzas": "XLF",
+        "Cons. Discrecional": "XLY", "Cons. Básico": "XLP", "Energía": "XLE",
+        "Industriales": "XLI", "Materiales": "XLB", "Inmobiliario": "XLRE",
+        "Utilities": "XLU", "Comunicaciones": "XLC",
     }
     datos = []
     for sector, ticker_etf in etfs.items():

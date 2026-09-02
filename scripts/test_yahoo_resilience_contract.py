@@ -53,7 +53,10 @@ def run_contract_checks() -> list[str]:
     class FastInfoOnlyTicker:
         def __init__(self, ticker: str):
             self.ticker = ticker
-            self.fast_info = {"market_cap": 123_000_000_000}
+            # Forma REAL de yfinance: .get() expone camelCase. El mock usaba
+            # "market_cap" y por eso este contrato daba por bueno un treemap
+            # que en producción salía siempre vacío.
+            self.fast_info = {"marketCap": 123_000_000_000}
 
         @property
         def info(self):

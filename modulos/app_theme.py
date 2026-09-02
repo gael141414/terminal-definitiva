@@ -411,19 +411,117 @@ def inject_terminal_theme() -> None:
                 line-height: 1.65;
             }
 
-            .vq-research-hero {
-                position: relative;
-                border-radius: var(--vq-radius-lg);
-                padding: 1px;
-                margin: 1.4rem 0 1.7rem;
-                background: linear-gradient(120deg, rgba(59, 130, 246, .65), rgba(34, 211, 238, .45) 45%, rgba(59, 130, 246, .12));
+            /* ===============================================================
+               TARJETA: el contenedor nativo de Streamlit es la primitiva.
+
+               Antes la tarjeta se dibujaba abriendo un <div> en un st.markdown
+               y cerrándolo en otro, con los widgets en medio. Eso no envuelve
+               nada: Streamlit pinta cada elemento en su propio contenedor
+               hermano y el navegador autocierra el <div>. La tarjeta salía
+               VACÍA y el contenido quedaba fuera, pegado al margen y sin el
+               padding que le tocaba. st.container(border=True) sí contiene.
+
+               Al estilar el contenedor nativo, toda tarjeta de la aplicación
+               hereda el sistema sin repetir CSS por componente.
+               =============================================================== */
+            div[data-testid="stVerticalBlockBorderWrapper"] {
+                background: var(--vq-panel);
+                border: 1px solid var(--vq-border) !important;
+                border-radius: var(--vq-radius-lg) !important;
+                padding: 1.35rem 1.6rem;
                 box-shadow: var(--vq-shadow-soft);
             }
 
-            .vq-research-hero-inner {
-                border-radius: calc(var(--vq-radius-lg) - 1px);
-                background: linear-gradient(160deg, rgba(20, 29, 43, .98), rgba(11, 17, 26, .98));
+            /* Hero de Research Core: la misma tarjeta con el filo iluminado. */
+            div[data-testid="stVerticalBlockBorderWrapper"]:has(.vq-hero-marca) {
+                position: relative;
+                overflow: hidden;
+                margin: 1.4rem 0 1.7rem;
                 padding: 1.7rem 2rem;
+                background: linear-gradient(160deg, rgba(20, 29, 43, .98), rgba(11, 17, 26, .98));
+            }
+
+            div[data-testid="stVerticalBlockBorderWrapper"]:has(.vq-hero-marca)::before {
+                content: "";
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: 1px;
+                background: linear-gradient(90deg, transparent, var(--vq-primary) 30%, var(--vq-cyan) 70%, transparent);
+            }
+
+            .vq-hero-marca {
+                display: none;
+            }
+
+            /* --- Cabecera de la aplicación ------------------------------- */
+            .vq-nav-marca { display: none; }
+
+            div[data-testid="stVerticalBlockBorderWrapper"]:has(.vq-nav-marca),
+            div[data-testid="stVerticalBlock"]:has(> div > .vq-nav-marca) {
+                padding-bottom: .2rem;
+            }
+
+            /* --- Miga de pan ------------------------------------------------
+               Sustituye al botón suelto "Volver a Home": dice a la vez dónde
+               estás y cómo salir, que es lo que la navegación debe resolver. */
+            .vq-ruta {
+                display: flex;
+                align-items: center;
+                gap: .5rem;
+                font-size: .82rem;
+                padding: .45rem 0;
+            }
+
+            .vq-ruta-paso { color: var(--vq-muted); }
+
+            .vq-ruta-sep {
+                color: var(--vq-border);
+                font-size: .7rem;
+            }
+
+            .vq-ruta-actual {
+                color: var(--vq-text);
+                font-weight: 700;
+                font-family: "JetBrains Mono", ui-monospace, monospace;
+            }
+
+            /* --- Cabecera del panel de trabajo --------------------------- */
+            .vq-panel-cabecera {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 1rem;
+                flex-wrap: wrap;
+                margin-bottom: .75rem;
+            }
+
+            .vq-panel-titulo {
+                color: var(--vq-text);
+                font-weight: 800;
+                font-size: 1.05rem;
+                letter-spacing: -0.01em;
+            }
+
+            /* --- Barras de desplazamiento internas -------------------------
+               Las tiras horizontales (menú principal, menú de herramientas,
+               pestañas) desbordan cuando hay muchos elementos y Streamlit les
+               pinta su propia barra. Se sigue pudiendo desplazar con rueda y
+               gesto; solo desaparece la barra, que no aporta nada y ensucia.
+               La barra de la página se conserva intacta. */
+            [data-testid="stTabs"] [data-baseweb="tab-list"],
+            .vq-nav-strip,
+            nav.navbar,
+            iframe[title="streamlit_option_menu.option_menu"] {
+                scrollbar-width: none;
+                -ms-overflow-style: none;
+            }
+
+            [data-testid="stTabs"] [data-baseweb="tab-list"]::-webkit-scrollbar,
+            .vq-nav-strip::-webkit-scrollbar,
+            nav.navbar::-webkit-scrollbar {
+                display: none;
             }
 
             .vq-section-title {
@@ -701,7 +799,11 @@ def inject_terminal_theme() -> None:
                     min-height: 380px;
                 }
 
-                .vq-research-hero-inner {
+                div[data-testid="stVerticalBlockBorderWrapper"] {
+                    padding: 1.1rem 1.15rem;
+                }
+
+                div[data-testid="stVerticalBlockBorderWrapper"]:has(.vq-hero-marca) {
                     padding: 1.3rem 1.4rem;
                 }
 

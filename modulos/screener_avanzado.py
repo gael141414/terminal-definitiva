@@ -103,7 +103,7 @@ def _fallback_universe_dataframe(filters: ScreenerFilters) -> pd.DataFrame:
                 ticker = yf.Ticker(symbol)
                 info = safe_yfinance_info(yf, symbol, context=f"screener_avanzado:fallback:{symbol}")
                 fast = getattr(ticker, "fast_info", {}) or {}
-                market_cap = _safe_float(info.get("marketCap") or fast.get("market_cap"))
+                market_cap = _safe_float(info.get("marketCap") or fast.get("marketCap") or fast.get("market_cap"))
                 price = _safe_float(info.get("currentPrice") or fast.get("last_price") or fast.get("lastPrice"))
                 beta = _safe_float(info.get("beta"), 1.0)
                 dividend_yield = _safe_float(info.get("dividendYield"), 0.0)
