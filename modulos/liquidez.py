@@ -69,7 +69,7 @@ def obtener_datos_liquidez():
 
 
 def ejecutar_monitor_liquidez():
-    st.markdown("### 🚰 Monitor de Liquidez Global (The FED Tracker)")
+    st.markdown("### Monitor de Liquidez Global (The FED Tracker)")
     st.markdown("El verdadero motor del mercado no son los beneficios empresariales, es la **Liquidez Neta**. Si la línea azul (Liquidez) sube, compra acciones. Si baja, el mercado caerá tarde o temprano. *Don't fight the FED.*")
 
     with st.spinner("Conectando con los servidores oficiales de FRED..."):
@@ -97,7 +97,7 @@ def ejecutar_monitor_liquidez():
             else:
                 c3.warning("⚖️ Liquidez Neutral")
 
-            st.markdown("#### 📈 Correlación Histórica (Liquidez vs S&P 500)")
+            st.markdown("#### Correlación Histórica (Liquidez vs S&P 500)")
             fig = make_subplots(specs=[[{"secondary_y": True}]])
 
             fig.add_trace(

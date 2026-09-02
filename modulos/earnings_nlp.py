@@ -96,7 +96,7 @@ def _resumir_con_ia(ticker: str, transcript: str) -> str | None:
 
 
 def ejecutar_earnings_nlp(ticker_input: str):
-    st.markdown(f"### 🧠 Earnings Call NLP: {ticker_input}")
+    st.markdown(f"### Earnings Call NLP: {ticker_input}")
     st.caption("Analiza el lenguaje de la directiva: tono, problemas mencionados y guidance.")
 
     current_year = date.today().year

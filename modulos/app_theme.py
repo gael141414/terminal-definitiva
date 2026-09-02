@@ -1144,6 +1144,32 @@ def inject_terminal_theme() -> None:
                 border-top-color: var(--vq-primary) !important;
             }
 
+            /* --- Identidad de la empresa analizada ----------------------- */
+            .vq-ficha-cabecera {
+                display: flex;
+                align-items: center;
+                gap: var(--vq-esp-4);
+                margin-bottom: var(--vq-esp-2);
+            }
+
+            .vq-logo-empresa {
+                border-radius: 12px;
+                background: var(--vq-panel-elevated);
+                border: 1px solid var(--vq-border-soft);
+                object-fit: contain;
+                padding: 4px;
+                flex: 0 0 auto;
+            }
+
+            .vq-ficha-ticker {
+                font-family: var(--vq-font-dato);
+                font-size: 1.9rem;
+                font-weight: 800;
+                letter-spacing: -0.03em;
+                line-height: 1.1;
+                color: var(--vq-text);
+            }
+
             /* --- Azulejo de icono: el nodo de la referencia --------------- */
             .vq-azulejo {
                 display: inline-flex;

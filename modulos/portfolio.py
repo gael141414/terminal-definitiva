@@ -181,7 +181,7 @@ def render_portfolio_manager(lista_tickers_watchlist: Sequence[str] | None = Non
     Args:
         lista_tickers_watchlist: Optional tickers from current watchlist.
     """
-    st.markdown("### ⚖️ Portfolio Manager & Correlaciones")
+    st.markdown("### Portfolio Manager & Correlaciones")
     st.caption("Evalúa diversificación real y calcula una asignación Markowitz con liquidez.")
 
     defaults = list(lista_tickers_watchlist or ["AAPL", "MSFT", "NVDA", "AMD"])

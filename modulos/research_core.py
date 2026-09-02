@@ -16,12 +16,22 @@ from typing import Any
 import streamlit as st
 
 from modulos.analysis_store import render_save_to_watchlist_panel
-from modulos.investment_thesis import render_investment_thesis
+from modulos.investment_thesis import (
+    build_investment_thesis,
+    render_tesis_entrada_salida,
+    render_tesis_exportar,
+    render_tesis_riesgos,
+    render_tesis_valoracion,
+    render_tesis_veredicto,
+)
 from modulos.module_loader import safe_call
 from modulos.research_report import render_research_report_export
 from modulos.relative_comparison import render_relative_comparison
 from modulos.scoring_engine import _score_linear
 from modulos.ui_components import render_pillar_card
+from modulos.branding import html_logo
+from modulos.ui_components import render_titulo_seccion
+from modulos.html_markdown import escribir_html
 
 
 def _score_attr(valuequant_score: Any, attr: str, default: Any = None) -> Any:
@@ -541,7 +551,18 @@ def _render_research_header(
         valuequant_score=valuequant_score,
     )
 
-    st.markdown(f"## 🧩 Research Core — {summary['ticker']}")
+    # El logotipo identifica la empresa antes de leer una sola cifra. Se pide
+    # desde el navegador, con monograma de respaldo, así que no añade ninguna
+    # espera de red al pintado de la página (ver modulos/branding.py).
+    escribir_html(f"""
+        <div class="vq-ficha-cabecera">
+            {html_logo(summary["ticker"], tamano=52)}
+            <div>
+                <div class="vq-context-eyebrow">Research Core</div>
+                <div class="vq-ficha-ticker">{html.escape(str(summary["ticker"]))}</div>
+            </div>
+        </div>
+    """)
     st.caption(
         "Panel principal de decisión: score, confianza, riesgos, tesis, seguimiento e informe en una sola ruta."
     )
@@ -590,51 +611,30 @@ def ejecutar_research_core(
 
     _render_research_header(ticker_input, ticker_competidor, nota_buffett, valuequant_score, res_val)
 
+    # Cinco destinos en un solo nivel. Antes eran nueve pestañas arriba y otras
+    # cinco anidadas dentro de "Tesis": catorce destinos en dos niveles, que es
+    # lo que hacía imposible saber dónde estaba cada cosa. No cambia ningún
+    # cálculo; solo dónde vive cada bloque.
     tabs = st.tabs(
         [
-            "🧭 Tesis",
-            "💾 Seguimiento",
-            "📄 Informe",
-            "📊 Resumen",
-            "🔎 Fundamental",
-            "🧠 Forense",
-            "🔮 Proyección",
-            "🧾 Earnings NLP",
-            "⚖️ Comparativa",
+            "Veredicto",
+            "Valoración",
+            "Finanzas",
+            "Riesgo",
+            "Proyección e informe",
         ]
     )
 
+    # La tesis se construye una vez y sus secciones se reparten entre destinos.
+    thesis = build_investment_thesis(
+        ticker_input, valuequant_score, res_val, nota_buffett
+    )
+
     with tabs[0]:
-        render_investment_thesis(
-            ticker=ticker_input,
-            valuequant_score=valuequant_score,
-            res_val=res_val,
-            nota_buffett=nota_buffett,
-            ticker_competidor=ticker_competidor,
-        )
+        render_tesis_veredicto(thesis)
 
-    with tabs[1]:
-        render_save_to_watchlist_panel(
-            ticker=ticker_input,
-            competitor=ticker_competidor,
-            valuequant_score=valuequant_score,
-            res_val=res_val,
-            nota_buffett=nota_buffett,
-        )
-
-    with tabs[2]:
-        render_research_report_export(
-            ticker=ticker_input,
-            ticker_competidor=ticker_competidor,
-            valuequant_score=valuequant_score,
-            res_val=res_val,
-            nota_buffett=nota_buffett,
-            res_is=res_is,
-            res_bs=res_bs,
-            res_cf=res_cf,
-        )
-
-    with tabs[3]:
+        st.divider()
+        render_titulo_seccion("Resumen ejecutivo", icono="clipboard-data")
         safe_call(
             "modulos.resumen",
             "ejecutar_resumen_ejecutivo",
@@ -650,7 +650,22 @@ def ejecutar_research_core(
             valuequant_score,
         )
 
-    with tabs[4]:
+        st.divider()
+        render_titulo_seccion("Guardar en seguimiento", icono="bookmark-star")
+        render_save_to_watchlist_panel(
+            ticker=ticker_input,
+            competitor=ticker_competidor,
+            valuequant_score=valuequant_score,
+            res_val=res_val,
+            nota_buffett=nota_buffett,
+        )
+
+    with tabs[1]:
+        render_tesis_valoracion(thesis)
+        st.divider()
+        render_tesis_entrada_salida(thesis)
+
+    with tabs[2]:
         safe_call(
             "modulos.fundamental",
             "ejecutar_analisis_fundamental",
@@ -667,7 +682,22 @@ def ejecutar_research_core(
             valuequant_score,
         )
 
-    with tabs[5]:
+        st.divider()
+        render_titulo_seccion("Comparativa relativa", icono="bar-chart-steps")
+        render_relative_comparison(
+            ticker=ticker_input,
+            competitor=ticker_competidor,
+            valuequant_score=valuequant_score,
+            res_val=res_val,
+            nota_buffett=nota_buffett,
+            years=years,
+        )
+
+    with tabs[3]:
+        render_tesis_riesgos(thesis)
+
+        st.divider()
+        render_titulo_seccion("Auditoría forense", icono="search")
         safe_call(
             "modulos.forense",
             "ejecutar_auditoria_forense",
@@ -679,18 +709,26 @@ def ejecutar_research_core(
             res_bs,
         )
 
-    with tabs[6]:
-        safe_call("modulos.proyeccion", "ejecutar_proyeccion", ticker_input)
-
-    with tabs[7]:
+        st.divider()
+        render_titulo_seccion("Lenguaje de los resultados", icono="chat-quote")
         safe_call("modulos.nlp_analyzer", "render_nlp_dashboard", ticker_input)
 
-    with tabs[8]:
-        render_relative_comparison(
+    with tabs[4]:
+        safe_call("modulos.proyeccion", "ejecutar_proyeccion", ticker_input)
+
+        st.divider()
+        render_titulo_seccion("Informe exportable", icono="file-earmark-arrow-down")
+        render_research_report_export(
             ticker=ticker_input,
-            competitor=ticker_competidor,
+            ticker_competidor=ticker_competidor,
             valuequant_score=valuequant_score,
             res_val=res_val,
             nota_buffett=nota_buffett,
-            years=years,
+            res_is=res_is,
+            res_bs=res_bs,
+            res_cf=res_cf,
         )
+
+        st.divider()
+        render_titulo_seccion("Tesis en Markdown", icono="markdown")
+        render_tesis_exportar(thesis, ticker_input, ticker_competidor)

@@ -92,7 +92,7 @@ def plot_cuadrante_reloj(crec_score, inf_score, regimen):
     return fig
 
 def ejecutar_reloj_macro():
-    st.markdown("### 🕰️ El Reloj Económico (Macro Regime Tracker)")
+    st.markdown("### El Reloj Económico (Macro Regime Tracker)")
     st.markdown("El mercado no premia a las empresas buenas todo el tiempo. Premia a los activos que mejor sobreviven a la fase macroeconómica actual. El algoritmo lee los mercados de bonos y materias primas para posicionar la economía en tiempo real.")
 
     with st.spinner("Calculando el momentum del Cobre, Oro y Bonos del Tesoro (3 meses)..."):
@@ -106,7 +106,7 @@ def ejecutar_reloj_macro():
             st.markdown("---")
             
             # 2. Recomendaciones Tácticas según el Régimen
-            st.markdown(f"#### 🎯 Diagnóstico Actual: **{regimen}**")
+            st.markdown(f"#### Diagnóstico Actual: **{regimen}**")
             
             col_rec1, col_rec2, col_rec3 = st.columns(3)
             

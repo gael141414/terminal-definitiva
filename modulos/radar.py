@@ -39,7 +39,7 @@ def _veredicto_multibagger_local(score, ticker, sector, revenue_growth, gross_ma
 def ejecutar_radar_multibagger(ticker_input):
     """Escáner de ADN matemático para Small/Mid Caps (Crecimiento, Márgenes, Insiders)"""
 
-    st.markdown(f"### 🚀 Radar de Diamantes en Bruto: {ticker_input}")
+    st.markdown(f"### Radar de Diamantes en Bruto: {ticker_input}")
     st.markdown("Evalúa si esta empresa tiene el ADN matemático y cualitativo de una 'Multibagger' (capacidad de multiplicar su valor por 10x). Basado en los criterios cuantitativos de hipercrecimiento y escalabilidad.")
 
     with st.spinner("Extrayendo métricas de crecimiento, márgenes y alineación de la directiva..."):
@@ -101,7 +101,7 @@ def ejecutar_radar_multibagger(ticker_input):
                 puntos_detalle['Riesgo de Ampliación de Capital (Falta liquidez)'] = 0
 
             st.markdown("---")
-            st.markdown(f"### 🧬 Multibagger Score: {score}/100")
+            st.markdown(f"### Multibagger Score: {score}/100")
             st.progress(score / 100)
             st.caption(
                 "Limitaciones: mide encaje cuantitativo con un patrón histórico de tamaño, "
@@ -149,7 +149,7 @@ def ejecutar_radar_multibagger(ticker_input):
 
             # 4. Auditoría Cualitativa IA (El Foso Defensivo)
             st.markdown("---")
-            st.markdown("### 🧠 Veredicto de Disrupción (TAM & Moat)")
+            st.markdown("### Veredicto de Disrupción (TAM & Moat)")
             with st.spinner("La IA está evaluando el Total Addressable Market (TAM) y los riesgos existenciales..."):
                 
                 prompt_startup = f"""

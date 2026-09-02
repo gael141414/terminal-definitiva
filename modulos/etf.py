@@ -13,7 +13,7 @@ def _obtener_info_etf(ticker: str) -> dict:
 
 
 def ejecutar_radiografia_etf(ticker_input):
-    st.markdown(f"### 🩻 ETF X-Ray: Radiografía del Fondo {ticker_input}")
+    st.markdown(f"### ETF X-Ray: Radiografía del Fondo {ticker_input}")
     st.markdown("Audita el interior de los ETFs. Descubre en qué invierten realmente tu dinero, si están demasiado concentrados y si las comisiones que te cobran están justificadas.")
 
     with st.spinner("Desempaquetando holdings, sectores y folletos del fondo..."):
@@ -40,7 +40,7 @@ def ejecutar_radiografia_etf(ticker_input):
 
             # Tarjetas de Resumen
             st.markdown("---")
-            st.markdown(f"#### 🏦 {nombre_fondo}")
+            st.markdown(f"#### {nombre_fondo}")
             
             c1, c2, c3, c4 = st.columns(4)
             
@@ -74,7 +74,7 @@ def ejecutar_radiografia_etf(ticker_input):
             # Gráfico de Holdings (Top 10)
             datos_holdings = ""
             with col_graficos_1:
-                st.markdown("#### 🔝 Top 10 Posiciones (Concentración)")
+                st.markdown("#### Top 10 Posiciones (Concentración)")
                 if holdings and len(holdings) > 0:
                     df_holdings = pd.DataFrame(holdings)
                     # Normalizar nombres de columnas si vienen raros de Yahoo
@@ -96,7 +96,7 @@ def ejecutar_radiografia_etf(ticker_input):
             # Gráfico de Sectores
             datos_sectores = ""
             with col_graficos_2:
-                st.markdown("#### 🍕 Exposición Sectorial")
+                st.markdown("#### Exposición Sectorial")
                 if sectores and len(sectores) > 0:
                     # yfinance devuelve a veces una lista de diccionarios con claves raras
                     sectores_limpios = {list(s.keys())[0]: list(s.values())[0] * 100 for s in sectores if isinstance(s, dict)}
@@ -116,7 +116,7 @@ def ejecutar_radiografia_etf(ticker_input):
 
             # 3. Veredicto Forense de la IA
             st.markdown("---")
-            st.markdown("### 🧠 Auditoría Cualitativa (Analista de Fondos)")
+            st.markdown("### Auditoría Cualitativa (Analista de Fondos)")
             with st.spinner("La IA está leyendo el folleto del fondo y buscando riesgos ocultos de concentración..."):
                 prompt_etf = f"""
                 Actúa como un Auditor de Fondos de Inversión Institucional (crítico y objetivo).

@@ -19,7 +19,7 @@ from charts import plot_dashboard_interactivo, plot_calidad_beneficios
 
 def ejecutar_resumen_ejecutivo(ticker_input, is_df, bs_df, cf_df, res_is, res_bs, res_cf, res_val, nota_buffett, valuequant_score=None):
     """Muestra la vista general, KPIs principales y dashboard interactivo de la empresa."""
-    st.markdown(f"### 📊 Resumen Ejecutivo: {ticker_input}")
+    st.markdown(f"### Resumen Ejecutivo: {ticker_input}")
 
     # El registro va ANTES de pintar el badge: así "Última revisión" compara
     # contra el análisis anterior y no contra el que se acaba de guardar.
@@ -68,7 +68,7 @@ def ejecutar_resumen_ejecutivo(ticker_input, is_df, bs_df, cf_df, res_is, res_bs
             )
             st.plotly_chart(fig_score_hero, use_container_width=True)
     
-    st.markdown("#### 📊 Scorecard Ejecutivo")
+    st.markdown("#### Scorecard Ejecutivo")
     
     # Función auxiliar rápida para el scorecard
     def get_last(df, col):
@@ -132,7 +132,7 @@ def ejecutar_resumen_ejecutivo(ticker_input, is_df, bs_df, cf_df, res_is, res_bs
     except Exception:
         pass
 
-    st.markdown("### 📈 Gráfico Interactivo Pro")
+    st.markdown("### Gráfico Interactivo Pro")
     renderizar_grafico_tradingview(ticker_input)
 
     # ======== VEREDICTO ========
@@ -188,7 +188,7 @@ def ejecutar_resumen_ejecutivo(ticker_input, is_df, bs_df, cf_df, res_is, res_bs
     st.markdown("<br>", unsafe_allow_html=True) # Espacio antes de las pestañas
 
     # ======== VULNERABILIDADES ========
-    st.markdown("### 🔎 Auditoría de Puntos Débiles (Bear Case)")
+    st.markdown("### Auditoría de Puntos Débiles (Bear Case)")
     
     alertas_detectadas = escanear_vulnerabilidades(res_is, res_bs, res_cf)
     

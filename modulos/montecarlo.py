@@ -124,7 +124,7 @@ def build_fan_chart(percentiles: MonteCarloPercentiles) -> go.Figure:
 
 def render_montecarlo() -> None:
     """Render Streamlit Monte Carlo simulator."""
-    st.markdown("### 🎲 Simulador de Monte Carlo")
+    st.markdown("### Simulador de Monte Carlo")
     st.caption("Proyecta futuros posibles con Movimiento Browniano Geométrico y mide VaR de jubilación/cartera.")
 
     c1, c2, c3, c4 = st.columns(4)

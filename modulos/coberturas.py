@@ -47,7 +47,7 @@ def calcular_correlaciones_cobertura(ticker):
         return None
 
 def ejecutar_radar_coberturas(ticker_input):
-    st.markdown(f"### 🛡️ Radar de Coberturas (Hedging Finder): {ticker_input}")
+    st.markdown(f"### Radar de Coberturas (Hedging Finder): {ticker_input}")
     st.markdown("Encuentra el activo perfecto para proteger tu cartera. Buscamos correlaciones inversas (cercanas a -1.0): activos matemáticamente probados que tienden a subir los días que tu acción cae.")
 
     with st.spinner(f"Analizando miles de retornos diarios cruzados para {ticker_input}..."):
@@ -59,7 +59,7 @@ def ejecutar_radar_coberturas(ticker_input):
             mejor_cobertura = df_corr.iloc[0]['Activo Refugio']
             mejor_score = df_corr.iloc[0]['Correlación']
             
-            st.markdown("#### 🎯 El Seguro Óptimo")
+            st.markdown("#### El Seguro Óptimo")
             c1, c2 = st.columns([1, 2])
             
             with c1:
@@ -75,7 +75,7 @@ def ejecutar_radar_coberturas(ticker_input):
 
             # --- GRÁFICO VISUAL (ESCALA DE COLOR) ---
             st.markdown("---")
-            st.markdown("#### 📊 Mapa de Descorrelación Institucional")
+            st.markdown("#### Mapa de Descorrelación Institucional")
             
             # Formateo de colores: Verde (Negativo/Bueno para cubrir), Rojo (Positivo/Malo para cubrir)
             fig = px.bar(

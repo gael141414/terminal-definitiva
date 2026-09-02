@@ -127,7 +127,7 @@ def plot_equity_curves(result: BacktestResult) -> go.Figure:
 
 def render_backtesting_engine(ticker: str) -> None:
     """Render Streamlit backtesting module."""
-    st.markdown(f"### 🧪 Backtesting Engine: {ticker}")
+    st.markdown(f"### Backtesting Engine: {ticker}")
     st.caption("Estrategia de Reversión a la Media por Z-Score con vectorbt.")
 
     initial_cash = st.number_input("Capital inicial", min_value=1_000.0, value=10_000.0, step=1_000.0)

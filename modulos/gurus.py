@@ -1,7 +1,7 @@
 import streamlit as st
 
 def ejecutar_visor_gurus(ticker_input, res_is, res_bs, res_cf, res_val):
-    st.markdown(f"### 🎓 Cónclave de Gurús: Análisis de {ticker_input}")
+    st.markdown(f"### Cónclave de Gurús: Análisis de {ticker_input}")
     st.markdown("Hemos programado los algoritmos de selección de los mejores gestores de la historia. Descubre si esta empresa pasaría sus estrictos filtros de inversión.")
     
     # --- ESCUDOS DE SEGURIDAD (ANTI-CRASH) ---
@@ -22,7 +22,7 @@ def ejecutar_visor_gurus(ticker_input, res_is, res_bs, res_cf, res_val):
 
     # --- 1. JOEL GREENBLATT (La Fórmula Mágica) ---
     st.markdown("---")
-    st.markdown("#### 🪄 Joel Greenblatt: La Fórmula Mágica")
+    st.markdown("#### Joel Greenblatt: La Fórmula Mágica")
     st.caption("Busca dos cosas simples: Empresas buenas (Alto ROIC) a precios baratos (Alto Earnings Yield).")
     
     roic = get_last(res_bs["ratios"], "ROIC %")
@@ -44,7 +44,7 @@ def ejecutar_visor_gurus(ticker_input, res_is, res_bs, res_cf, res_val):
 
     # --- 2. PETER LYNCH (El modelo GARP) ---
     st.markdown("---")
-    st.markdown("#### 🏃‍♂️ Peter Lynch: Crecimiento a Precio Razonable (GARP)")
+    st.markdown("#### Peter Lynch: Crecimiento a Precio Razonable (GARP)")
     st.caption("Si el PER de una empresa es menor a su tasa de crecimiento de beneficios (Ratio PEG < 1), es una ganga. Si es el doble, está sobrevalorada.")
     
     per = safe_get(res_val, 'per_asumido', 1) # Usamos el escudo aquí
@@ -68,7 +68,7 @@ def ejecutar_visor_gurus(ticker_input, res_is, res_bs, res_cf, res_val):
 
     # --- 3. PHILIP FISHER (Crecimiento en Ventas) ---
     st.markdown("---")
-    st.markdown("#### 📈 Philip Fisher: El Motor de Ventas")
+    st.markdown("#### Philip Fisher: El Motor de Ventas")
     st.caption("Fisher ignoraba los márgenes a corto plazo y se centraba en empresas capaces de crecer sus ventas año tras año de forma agresiva.")
     
     if res_is is not None and "Crecimiento Ventas %" in res_is["ratios"].columns:

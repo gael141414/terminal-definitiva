@@ -38,7 +38,7 @@ def calcular_z_score(ticker):
         return None
 
 def ejecutar_predictor_techos_suelos(ticker_input):
-    st.markdown(f"### 📊 Extremos de Volatilidad (Z-Score): {ticker_input}")
+    st.markdown(f"### Extremos de Volatilidad (Z-Score): {ticker_input}")
     
     with st.spinner("Calculando zonas de probabilidad estadística..."):
         df = calcular_z_score(ticker_input)
@@ -47,7 +47,7 @@ def ejecutar_predictor_techos_suelos(ticker_input):
             z_actual = df['Z_Score'].iloc[-1]
             
             # 1. Diagnóstico de un vistazo
-            st.markdown("#### 🎯 Situación de Mercado")
+            st.markdown("#### Situación de Mercado")
             c1, c2, c3 = st.columns([1, 1, 2])
             
             c1.metric("Z-Score Actual", f"{z_actual:.2f} σ")
@@ -84,7 +84,7 @@ def ejecutar_predictor_techos_suelos(ticker_input):
                     st.info("El precio oscila dentro de su volatilidad normal.")
 
             # 2. Gráfico Profesional con Zonas de Intervalo
-            st.markdown("#### 📊 Mapa de Desviación Estándar (5 Años)")
+            st.markdown("#### Mapa de Desviación Estándar (5 Años)")
             
             fig = go.Figure()
 

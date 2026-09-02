@@ -505,7 +505,7 @@ def render_save_to_watchlist_panel(
 def render_saved_research_dashboard() -> None:
     """Panel independiente de análisis guardados."""
 
-    st.markdown("### 📚 Análisis Guardados")
+    st.markdown("### Análisis Guardados")
     st.caption("Últimos snapshots guardados desde Research Core. Persistencia local en JSON.")
 
     rows = latest_snapshots()

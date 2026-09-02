@@ -46,7 +46,7 @@ def _grafico_curva(df: pd.DataFrame):
 
 def _render_abiertas() -> None:
     abiertas = operaciones_abiertas()
-    st.markdown("#### 📌 Operaciones abiertas")
+    st.markdown("#### Operaciones abiertas")
     if not abiertas:
         st.info("No hay operaciones abiertas anotadas. Se registran desde el escáner de swing.")
         return
@@ -79,7 +79,7 @@ def _render_abiertas() -> None:
 
 
 def _render_analisis(df: pd.DataFrame) -> None:
-    st.markdown("#### 📊 Qué te funciona a ti")
+    st.markdown("#### Qué te funciona a ti")
     st.caption(
         "La expectativa que publica el backtest es la de la regla ejecutada mecánicamente, y nadie "
         "opera así. Esto mide lo que realmente pasó cuando la operaste tú."
@@ -134,7 +134,7 @@ def _render_registro_manual() -> None:
 
 
 def render_diario() -> None:
-    st.markdown("### 📓 Diario de decisiones")
+    st.markdown("### Diario de decisiones")
     st.markdown(
         "El resto del terminal responde a «qué hago». Esto responde a «qué me funciona a mí», "
         "que a la larga es la pregunta más rentable. Se anotan también las operaciones **descartadas**: "

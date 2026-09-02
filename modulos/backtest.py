@@ -29,7 +29,7 @@ def _retro_analisis_local(ticker: str, fecha_pasada: str, rentabilidad_real: flo
 def ejecutar_maquina_del_tiempo(ticker_input):
     """Simulador histórico comparativo contra el S&P 500 y retro-auditoría IA"""
     
-    st.markdown(f"### ⏳ Máquina del Tiempo: Backtesting de {ticker_input}")
+    st.markdown(f"### Máquina del Tiempo: Backtesting de {ticker_input}")
     
     col1, col2 = st.columns([1, 2])
     with col1:
@@ -103,7 +103,7 @@ def ejecutar_maquina_del_tiempo(ticker_input):
     # --- MOTOR DE RETRO-ANÁLISIS IA ---
     if 'backtest_data' in st.session_state:
         st.markdown("---")
-        st.markdown("### 🕵️‍♂️ Auditoría Forense del Pasado (Retro-Análisis)")
+        st.markdown("### Auditoría Forense del Pasado (Retro-Análisis)")
         st.markdown(f"¿Habría detectado nuestro algoritmo esta oportunidad (o trampa) si estuviéramos exactamente en **{st.session_state['backtest_data']['fecha']}**?")
         
         with st.spinner("Desconectando datos futuros... Simulando análisis en el pasado..."):

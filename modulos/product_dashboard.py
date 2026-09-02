@@ -81,7 +81,7 @@ def _metric_card(label: str, value: int | str, caption: str) -> None:
 
 
 def _render_header(total_tools: int, mvp_tools: int, core_tools: int, merge_tools: int) -> None:
-    st.markdown("## 🧭 Mapa del Producto")
+    st.markdown("## Mapa del Producto")
     st.caption(
         "Vista interna para convertir ValueQuant Terminal en un producto: módulos core, herramientas a fusionar, MVP y post-MVP."
     )

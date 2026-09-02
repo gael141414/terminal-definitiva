@@ -214,7 +214,7 @@ def _style_congress(row: pd.Series) -> list[str]:
 
 def render_alt_data(ticker: str) -> None:
     """Render alternative data dashboard."""
-    st.markdown(f"### 🕵️ Alt Data & Insider Congress — {ticker}")
+    st.markdown(f"### Alt Data & Insider Congress — {ticker}")
     st.caption("Flujo político y sentimiento mediático para detectar señales de alpha no tradicionales.")
 
     with st.spinner("Descargando operaciones políticas y noticias FMP..."):

@@ -15,6 +15,12 @@ import pandas as pd
 import streamlit as st
 
 from modulos.valuation_sensitivity import render_valuation_sensitivity
+from modulos.ui_components import (
+    render_aviso,
+    render_kpi_card,
+    render_lista_puntos,
+    render_titulo_seccion,
+)
 
 
 @dataclass
@@ -645,6 +651,126 @@ def _scenario_dataframe(thesis: InvestmentThesis) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def render_tesis_veredicto(thesis: InvestmentThesis) -> None:
+    """Acción operativa, cifras clave y la lectura cualitativa.
+
+    Las cifras se pintan con la tarjeta del sistema en vez de con st.metric:
+    doce métricas nativas en tres filas de cuatro se leían como una hoja de
+    cálculo, sin distinguir lo que exige una decisión de lo que solo informa.
+    """
+    render_aviso(
+        f"{thesis.action}. {thesis.action_detail}",
+        tono="accion",
+        titulo="Acción operativa",
+    )
+
+    render_titulo_seccion("Puntuación", icono="speedometer2")
+    cols = st.columns(4)
+    for col, (etiqueta, valor) in zip(
+        cols,
+        (
+            ("ValueQuant", thesis.final_score),
+            ("Calidad", thesis.quality_score),
+            ("Valoración", thesis.valuation_score),
+            ("Riesgo", thesis.risk_score),
+        ),
+    ):
+        with col:
+            render_kpi_card(etiqueta, _fmt_score(valor))
+
+    render_titulo_seccion("Precio y valor", icono="cash-stack")
+    cols = st.columns(4)
+    for col, (etiqueta, valor, detalle) in zip(
+        cols,
+        (
+            ("Precio actual", _fmt_money(thesis.current_price), "Cotización de mercado."),
+            ("Valor razonable", _fmt_money(thesis.intrinsic_value), "Estimación del modelo."),
+            ("Margen seguridad", _fmt_pct(thesis.margin_of_safety), "Distancia entre precio y valor."),
+            ("FCF Yield", _fmt_pct(thesis.fcf_yield), "Caja libre sobre capitalización."),
+        ),
+    ):
+        with col:
+            render_kpi_card(etiqueta, valor, detail=detalle)
+
+    render_titulo_seccion("Referencias de entrada", icono="bullseye")
+    cols = st.columns(4)
+    for col, (etiqueta, valor, detalle) in zip(
+        cols,
+        (
+            ("Entrada razonable", _fmt_money(thesis.reasonable_entry_price), "Precio con margen suficiente."),
+            ("Entrada conservadora", _fmt_money(thesis.conservative_entry_price), "Exige un descuento mayor."),
+            ("PER", _fmt_ratio(thesis.pe_actual), "Precio sobre beneficio."),
+            ("P/FCF", _fmt_ratio(thesis.pfcf_actual), "Precio sobre caja libre."),
+        ),
+    ):
+        with col:
+            render_kpi_card(etiqueta, valor, detail=detalle)
+
+    st.caption(f"**Régimen de valoración:** {thesis.valuation_regime}. {thesis.valuation_comment}")
+
+    col_a, col_b = st.columns(2)
+    for col, seccion in ((col_a, thesis.sections[0]), (col_b, thesis.sections[1])):
+        with col:
+            render_titulo_seccion(seccion.title, icono="journal-text")
+            render_lista_puntos(seccion.bullets)
+
+
+def render_tesis_valoracion(thesis: InvestmentThesis) -> None:
+    """Escenarios, sensibilidad y lectura de valoración."""
+    render_titulo_seccion("Escenarios de valoración", icono="diagram-3")
+    st.dataframe(_scenario_dataframe(thesis), use_container_width=True, hide_index=True)
+
+    render_valuation_sensitivity(thesis)
+
+    render_titulo_seccion("Lectura de valoración", icono="rulers")
+    render_lista_puntos(thesis.sections[2].bullets)
+
+
+def render_tesis_entrada_salida(thesis: InvestmentThesis) -> None:
+    """Las dos secciones que definen cuándo entrar y cuándo salir."""
+    col_a, col_b = st.columns(2)
+    for col, seccion in ((col_a, thesis.sections[3]), (col_b, thesis.sections[4])):
+        with col:
+            render_titulo_seccion(seccion.title, icono="sign-turn-right")
+            render_lista_puntos(seccion.bullets)
+
+
+def render_tesis_riesgos(thesis: InvestmentThesis) -> None:
+    """Banderas rojas y puntos débiles."""
+    if thesis.red_flags:
+        render_aviso(
+            "Revisar antes de cualquier decisión.",
+            tono="riesgo",
+            titulo="Banderas rojas detectadas",
+        )
+        render_lista_puntos(thesis.red_flags, tono="riesgo")
+    else:
+        render_aviso(
+            "El score agregado no encuentra banderas rojas principales. "
+            "No equivale a ausencia de riesgo: solo a que este modelo no lo detecta.",
+            tono="favorable",
+            titulo="Sin banderas rojas principales",
+        )
+
+    if thesis.negatives:
+        render_titulo_seccion("Puntos débiles", icono="dash-circle")
+        render_lista_puntos(thesis.negatives, tono="aviso")
+
+
+def render_tesis_exportar(thesis: InvestmentThesis, ticker: str,
+                          ticker_competidor: str | None = None) -> None:
+    """Descarga de la tesis en Markdown."""
+    markdown = thesis_to_markdown(thesis, ticker_competidor)
+    st.download_button(
+        "Descargar tesis en Markdown",
+        data=markdown,
+        file_name=f"tesis_{ticker.lower()}.md",
+        mime="text/markdown",
+    )
+    with st.expander("Ver el texto que se descarga", expanded=False):
+        st.code(markdown, language="markdown")
+
+
 def render_investment_thesis(
     ticker: str,
     valuequant_score: Any,
@@ -652,8 +778,13 @@ def render_investment_thesis(
     nota_buffett: float | None = None,
     ticker_competidor: str | None = None,
 ) -> InvestmentThesis:
-    """Renderiza la tesis profesional dentro de Streamlit."""
+    """Tesis completa en una sola vista.
 
+    Se conserva para quien quiera la tesis entera de una vez. El Research Core
+    ya no la usa: coloca cada sección en su destino, porque estas cinco
+    pestañas vivían DENTRO de otra pestaña y el usuario se encontraba con
+    catorce destinos repartidos en dos niveles.
+    """
     thesis = build_investment_thesis(ticker, valuequant_score, res_val, nota_buffett)
 
     st.markdown("### Tesis de inversión")
@@ -662,86 +793,10 @@ def render_investment_thesis(
         "Debe validarse manualmente antes de cualquier decisión real."
     )
 
-    st.info(f"**Acción operativa:** {thesis.action}. {thesis.action_detail}")
-
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("ValueQuant", _fmt_score(thesis.final_score))
-    c2.metric("Calidad", _fmt_score(thesis.quality_score))
-    c3.metric("Valoración", _fmt_score(thesis.valuation_score))
-    c4.metric("Riesgo", _fmt_score(thesis.risk_score))
-
-    c5, c6, c7, c8 = st.columns(4)
-    c5.metric("Precio actual", _fmt_money(thesis.current_price))
-    c6.metric("Valor razonable", _fmt_money(thesis.intrinsic_value))
-    c7.metric("Margen seguridad", _fmt_pct(thesis.margin_of_safety))
-    c8.metric("FCF Yield", _fmt_pct(thesis.fcf_yield))
-
-    c9, c10, c11, c12 = st.columns(4)
-    c9.metric("Entrada razonable", _fmt_money(thesis.reasonable_entry_price))
-    c10.metric("Entrada conservadora", _fmt_money(thesis.conservative_entry_price))
-    c11.metric("PER", _fmt_ratio(thesis.pe_actual))
-    c12.metric("P/FCF", _fmt_ratio(thesis.pfcf_actual))
-
-    st.caption(f"**Régimen de valoración:** {thesis.valuation_regime}. {thesis.valuation_comment}")
-
-    tabs = st.tabs(["Tesis", "Valoración", "Entrada/Salida", "Riesgos", "Exportar"])
-
-    with tabs[0]:
-        col_a, col_b = st.columns(2)
-        with col_a:
-            section = thesis.sections[0]
-            st.markdown(f"#### {section.title}")
-            for bullet in section.bullets:
-                st.write(f"- {bullet}")
-        with col_b:
-            section = thesis.sections[1]
-            st.markdown(f"#### {section.title}")
-            for bullet in section.bullets:
-                st.write(f"- {bullet}")
-
-    with tabs[1]:
-        st.markdown("#### Escenarios de valoración")
-        st.dataframe(_scenario_dataframe(thesis), use_container_width=True, hide_index=True)
-
-        render_valuation_sensitivity(thesis)
-        st.markdown("#### Lectura de valoración")
-        for bullet in thesis.sections[2].bullets:
-            st.write(f"- {bullet}")
-
-    with tabs[2]:
-        col_a, col_b = st.columns(2)
-        with col_a:
-            section = thesis.sections[3]
-            st.markdown(f"#### {section.title}")
-            for bullet in section.bullets:
-                st.write(f"- {bullet}")
-        with col_b:
-            section = thesis.sections[4]
-            st.markdown(f"#### {section.title}")
-            for bullet in section.bullets:
-                st.write(f"- {bullet}")
-
-    with tabs[3]:
-        if thesis.red_flags:
-            st.error("Banderas rojas detectadas")
-            for flag in thesis.red_flags:
-                st.write(f"- {flag}")
-        else:
-            st.success("No hay banderas rojas principales en el score agregado.")
-
-        if thesis.negatives:
-            st.markdown("#### Puntos débiles")
-            for item in thesis.negatives:
-                st.write(f"- {item}")
-
-    with tabs[4]:
-        markdown = thesis_to_markdown(thesis, ticker_competidor)
-        st.download_button(
-            "Descargar tesis en Markdown",
-            data=markdown,
-            file_name=f"tesis_{ticker.lower()}.md",
-            mime="text/markdown",
-        )
-        st.code(markdown, language="markdown")
+    render_tesis_veredicto(thesis)
+    render_tesis_valoracion(thesis)
+    render_tesis_entrada_salida(thesis)
+    render_tesis_riesgos(thesis)
+    render_tesis_exportar(thesis, ticker, ticker_competidor)
 
     return thesis

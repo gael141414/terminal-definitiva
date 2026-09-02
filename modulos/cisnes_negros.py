@@ -43,7 +43,7 @@ def _max_drawdown_periodo(precios: pd.Series) -> float:
 
 
 def ejecutar_simulador_crisis(ticker_input):
-    st.markdown(f"### 🦢 Simulador de Cisnes Negros: {ticker_input}")
+    st.markdown(f"### Simulador de Cisnes Negros: {ticker_input}")
     st.markdown("¿Tienes estómago para aguantar esta acción? Sometemos a la empresa a las peores crisis de la historia reciente para medir su **Resiliencia Extrema** y su pérdida máxima histórica (Max Drawdown).")
 
     with st.spinner(f"Simulando colapsos de mercado para {ticker_input}..."):
@@ -86,7 +86,7 @@ def ejecutar_simulador_crisis(ticker_input):
 
             df_res = pd.DataFrame(resultados)
 
-            st.markdown("#### 🩸 Sangrado Máximo por Crisis (Drawdown)")
+            st.markdown("#### Sangrado Máximo por Crisis (Drawdown)")
             df_res_filtrado = df_res[df_res["Caída Máxima (%)"] < 0].copy()
 
             if not df_res_filtrado.empty:

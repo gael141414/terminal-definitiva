@@ -159,7 +159,7 @@ def build_volatility_smile(calls: pd.DataFrame, puts: pd.DataFrame, spot: float)
 
 def render_derivados(ticker: str) -> None:
     """Render advanced options dashboard."""
-    st.markdown(f"### 🧮 Opciones Avanzadas: Black-Scholes & Griegas — {ticker}")
+    st.markdown(f"### Opciones Avanzadas: Black-Scholes & Griegas — {ticker}")
     st.caption("Pricing teórico, griegas y sonrisa de volatilidad implícita con cadena real de opciones.")
 
     spot = _current_price(ticker)

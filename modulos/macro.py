@@ -85,10 +85,10 @@ def analizar_macro_avanzado():
 # 🛠️ CORRECCIÓN DE SYNTAX: Retirado el ="" del ticker_competidor
 def ejecutar_radar_macro(ticker_input, ticker_competidor, df_sectores=None):
     """Analiza el entorno macroeconómico, comparativas sectoriales y head-to-head."""
-    st.markdown(f"### 🌍 Radar Macro y Sectores: {ticker_input}")
+    st.markdown(f"### Radar Macro y Sectores: {ticker_input}")
 
     if df_sectores is not None and not df_sectores.empty:
-        st.markdown("#### 🔄 Rotación Sectorial (Último Mes)")
+        st.markdown("#### Rotación Sectorial (Último Mes)")
         st.dataframe(df_sectores, use_container_width=True)
     else:
         st.info("Datos de rotación sectorial no disponibles en este momento.")
@@ -116,7 +116,7 @@ def ejecutar_radar_macro(ticker_input, ticker_competidor, df_sectores=None):
             st.info(f"💡 **Insight Macro:** En los últimos 30 días, el capital institucional está rotando agresivamente hacia **{mejor_sector}**, mientras abandona **{peor_sector}**.")
 
     # ======== TAB 9: ESTACIONALIDAD ========
-    st.markdown("### 🎲 Probabilidad y Estacionalidad (Los últimos 20 años)")
+    st.markdown("### Probabilidad y Estacionalidad (Los últimos 20 años)")
     st.caption("Los fondos Quant no adivinan, cuentan cartas. Este mapa de calor analiza la historia completa de la acción para decirte en qué meses tienes las probabilidades matemáticas a tu favor.")
     
     with st.spinner(f"Procesando miles de velas históricas de {ticker_input}..."):
@@ -136,7 +136,7 @@ def ejecutar_radar_macro(ticker_input, ticker_competidor, df_sectores=None):
             st.warning(diagnostico_estacional)
 
     # ======== TAB 6: FRONTERA EFICIENTE ========
-    st.markdown("### ⚖️ Laboratorio Quant: Optimización de Cartera")
+    st.markdown("### Laboratorio Quant: Optimización de Cartera")
     st.caption("Introduce al menos 3 tickers separados por comas. El algoritmo simulará 2,000 combinaciones para encontrar los pesos exactos que maximizan tu rentabilidad (Modelo Markowitz).")
     
     tickers_cartera = st.text_input("Tickers de tu Cartera (Ej: AAPL, KO, JNJ, V, XOM):", value="AAPL, MSFT, KO, JNJ, V")
@@ -157,7 +157,7 @@ def ejecutar_radar_macro(ticker_input, ticker_competidor, df_sectores=None):
                         st.plotly_chart(fig_mark, use_container_width=True)
                         
                     with c_opt2:
-                        st.markdown("#### 🎯 Asignación Óptima")
+                        st.markdown("#### Asignación Óptima")
                         st.success("Para conseguir el mejor Ratio Sharpe, el modelo matemático recomienda:")
                         for tick, peso in pesos_rec.items():
                             if peso > 1.0:
@@ -165,7 +165,7 @@ def ejecutar_radar_macro(ticker_input, ticker_competidor, df_sectores=None):
                                 st.progress(peso / 100)
 
     # ======== TAB 7: MACRO INSTITUCIONAL ========
-    st.markdown("### 🌍 Visión Macro Institucional")
+    st.markdown("### Visión Macro Institucional")
     st.caption("Analizando el flujo del 'Smart Money'. Los grandes fondos no miran las noticias, miran cómo se mueve el capital.")
     
     with st.spinner("Descargando métricas globales e índices adelantados..."):
@@ -177,7 +177,7 @@ def ejecutar_radar_macro(ticker_input, ticker_competidor, df_sectores=None):
             datos_macro = analizar_macro_avanzado()
             
             st.markdown("---")
-            st.markdown("#### 🧭 Dinámicas de Mercado (Smart Money Ratios)")
+            st.markdown("#### Dinámicas de Mercado (Smart Money Ratios)")
             col_r1, col_r2, col_r3, col_r4 = st.columns(4)
             
             spread = datos_macro['spread_curva']
@@ -193,7 +193,7 @@ def ejecutar_radar_macro(ticker_input, ticker_competidor, df_sectores=None):
             col_r4.metric("Amplitud (RSP/SPY)", f"{amplitud:.2f}x", "Sano 🌲" if amplitud > 0.30 else "Peligro ⚠️", delta_color="normal" if amplitud > 0.30 else "inverse")
 
             st.markdown("---")
-            st.markdown("#### 🛢️ Inflación y Costes de Capital")
+            st.markdown("#### Inflación y Costes de Capital")
             col_i1, col_i2, col_i3, col_i4 = st.columns(4)
             col_i1.metric("Oro (Refugio)", f"${datos_macro['oro']:,.2f}" if datos_macro['oro'] else "N/A")
             col_i2.metric("Cobre (Industria)", f"${datos_macro['cobre']:,.2f}" if datos_macro['cobre'] else "N/A")
@@ -201,7 +201,7 @@ def ejecutar_radar_macro(ticker_input, ticker_competidor, df_sectores=None):
             col_i4.metric("Índice Dólar DXY", f"{datos_macro['dxy']:,.2f}" if datos_macro['dxy'] else "N/A")
             
             st.markdown("---")
-            st.markdown("#### 🤖 Procesamiento de Noticias (Wall Street Newsfeed)")
+            st.markdown("#### Procesamiento de Noticias (Wall Street Newsfeed)")
             
             c_mac1, c_mac2 = st.columns([1, 2.5])
             pol = datos_macro['polaridad']
@@ -225,7 +225,7 @@ def ejecutar_radar_macro(ticker_input, ticker_competidor, df_sectores=None):
 
     # ======== ORÁCULO TÁCTICO IA ========
     st.markdown("---")
-    st.markdown("### 🔮 Oráculo Táctico: Playbook de Inversión IA")
+    st.markdown("### Oráculo Táctico: Playbook de Inversión IA")
 
     if st.button("🧠 Generar Playbook Estratégico", use_container_width=True):
         with st.spinner("La IA está cruzando los datos macroeconómicos..."):

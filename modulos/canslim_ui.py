@@ -169,7 +169,7 @@ def _render_candidato(resultado: ResultadoCanSlim, capital: float, riesgo_pct: f
 
 
 def render_canslim() -> None:
-    st.markdown("#### 🎯 Escáner CAN SLIM")
+    st.markdown("#### Escáner CAN SLIM")
     st.markdown(
         "Los siete criterios de William O'Neil aplicados sobre el mercado: crecimiento de beneficios "
         "(**C**, **A**), ruptura de una base con nuevos máximos (**N**), oferta y volumen (**S**), "

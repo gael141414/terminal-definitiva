@@ -432,7 +432,7 @@ def _render_score_evolution_panel(df_watch: pd.DataFrame) -> None:
 def _render_alerts_panel(df_alerts: pd.DataFrame) -> None:
     """Panel visual de alertas priorizadas."""
 
-    st.markdown("### 🚨 Alertas inteligentes")
+    st.markdown("### Alertas inteligentes")
     st.caption(
         "Prioriza la watchlist según precio vs target, margen de seguridad, ValueQuant Score, régimen de valoración y antigüedad del análisis."
     )
@@ -552,7 +552,7 @@ def _precios_historicos_watchlist(tickers: tuple[str, ...]) -> dict[str, Any]:
 def _render_embudo(db: dict[str, Any]) -> None:
     """Cabecera con el reparto de la watchlist por fase de decisión."""
     conteo = resumen_embudo(db)
-    st.markdown("### 🧭 Embudo de decisión")
+    st.markdown("### Embudo de decisión")
     st.caption(
         "Una watchlist plana mezcla ideas recién descubiertas con posiciones ya abiertas, "
         "y en la práctica sólo se acaban mirando siempre las mismas. Cada fase tiene una "
@@ -605,7 +605,7 @@ def _render_diagnostico_salida(ticker: str, ohlcv, entrada: float, stop: float) 
 def _render_gestion_por_ticker(db: dict[str, Any], cotizaciones: dict[str, Any]) -> None:
     """Ficha editable por ticker: fase, alertas, posición, tesis y acciones."""
 
-    st.markdown("### 🎯 Fichas de seguimiento")
+    st.markdown("### Fichas de seguimiento")
     st.caption(
         "Cada ficha guarda su fase, sus alertas de precio y técnicas, la posición abierta si la hay "
         "y tu tesis, en `data/watchlist.json`. «Analizar» abre el Research Core con el ticker cargado."
@@ -745,7 +745,7 @@ def _render_gestion_por_ticker(db: dict[str, Any], cotizaciones: dict[str, Any])
 
 
 def ejecutar_watchlist():
-    st.markdown("### 📋 Mi Watchlist Institucional")
+    st.markdown("### Mi Watchlist Institucional")
     st.markdown(
         "Monitoriza tus acciones favoritas, precios objetivo y snapshots guardados desde Research Core. "
         "La watchlist funciona en local con `data/watchlist.json`."

@@ -24,7 +24,7 @@ def _interpretacion_insiders_local(compras_totales, ventas_totales):
     return "Señal local: neutral. La actividad insider no muestra una lectura clara por sí sola."
 
 def ejecutar_rastreador_insiders(ticker_input):
-    st.markdown(f"### 🕵️‍♂️ Rastreador de 'Smart Money' (SEC Form 4): {ticker_input}")
+    st.markdown(f"### Rastreador de 'Smart Money' (SEC Form 4): {ticker_input}")
     st.markdown("Analiza las compras y ventas recientes de los directivos (CEOs, CFOs, Board). Si los que dirigen la empresa compran agresivamente, es la señal alcista más fuerte que existe.")
 
     with st.spinner("Conectando con bases de datos regulatorias y extrayendo transacciones..."):
@@ -54,12 +54,12 @@ def ejecutar_rastreador_insiders(ticker_input):
                 c1.metric("🟢 Operaciones de Compra Recientes", compras_totales)
                 c2.metric("🔴 Operaciones de Venta Recientes", ventas_totales)
                 
-                st.markdown("#### 📋 Últimas Transacciones (Filtro SEC)")
+                st.markdown("#### Últimas Transacciones (Filtro SEC)")
                 st.dataframe(df_insiders[['Insider', 'Position', 'Tipo de Operación', 'Shares', 'Value', 'Start Date']], use_container_width=True)
 
                 # --- ANÁLISIS DE IA SOBRE EL SENTIMIENTO INSIDER ---
                 st.markdown("---")
-                st.markdown("### 🧠 Interpretación de la IA (Sentiment Analysis)")
+                st.markdown("### Interpretación de la IA (Sentiment Analysis)")
                 
                 # Preparamos un resumen de datos para no saturar el prompt
                 resumen_datos = df_insiders.head(10).to_string()

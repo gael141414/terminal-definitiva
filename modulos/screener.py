@@ -268,7 +268,7 @@ def _render_mapa(df_filtrado: pd.DataFrame) -> None:
 
 
 def ejecutar_escaner_global():
-    st.markdown("### 🌐 Escáner Cuantitativo de Oportunidades")
+    st.markdown("### Escáner Cuantitativo de Oportunidades")
     st.markdown(
         "Introduce una cesta de acciones y aplica filtros institucionales estrictos para separar "
         "las empresas excepcionales de las mediocres."
@@ -280,7 +280,7 @@ def ejecutar_escaner_global():
         help="Escribe los tickers separados por coma.",
     )
 
-    st.markdown("#### ⚙️ Configura tus Filtros (Reglas Quant)")
+    st.markdown("#### Configura tus Filtros (Reglas Quant)")
     col1, col2, col3 = st.columns(3)
     with col1:
         max_per = st.number_input("📉 PER Máximo (Value)", min_value=1.0, max_value=200.0, value=30.0, step=1.0, help="Relación Precio/Beneficio. Menor es más barato.")
@@ -319,7 +319,7 @@ def ejecutar_escaner_global():
         return
 
     st.markdown("---")
-    tab_tabla, tab_mapa = st.tabs(["📋 Tabla de resultados", "🗺️ Mapa de Mercado"])
+    tab_tabla, tab_mapa = st.tabs(["Tabla de resultados", "Mapa de mercado"])
     with tab_tabla:
         df_filtrado = _render_tabla(df, max_per, min_roe, min_growth)
     with tab_mapa:

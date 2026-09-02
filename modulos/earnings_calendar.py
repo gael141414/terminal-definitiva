@@ -178,7 +178,7 @@ def _estilo_fila(fila: pd.Series, inminente: bool) -> list[str]:
 def mostrar_calendario_earnings(tickers: Iterable[str] | None = None) -> None:
     """Subsección de calendario de resultados dentro de «Mi Watchlist»."""
 
-    st.markdown("### 🗓️ Calendario de resultados")
+    st.markdown("### Calendario de resultados")
 
     lista = [str(t).strip().upper() for t in (tickers or []) if str(t).strip()]
     if not lista:

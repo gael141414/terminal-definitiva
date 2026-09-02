@@ -217,7 +217,7 @@ def _render_ficha_senal(fila: pd.Series, motivos: list[str], *, capital: float =
 
 
 def _render_escaner() -> None:
-    st.markdown("#### 🎯 Escáner de oportunidades")
+    st.markdown("#### Escáner de oportunidades")
     st.caption(
         "Descarga el histórico de todo el universo en lotes, calcula los indicadores en local y "
         "evalúa las seis estrategias sobre cada valor. Cada señal sale con su plan completo."
@@ -337,7 +337,7 @@ def _render_escaner() -> None:
 
 
 def _render_catalogo(regimen: Regimen | None) -> None:
-    st.markdown("#### 📋 Las seis estrategias")
+    st.markdown("#### Las seis estrategias")
     st.caption(
         "Ninguna es una invención: cada una recoge un comportamiento del mercado documentado. "
         "La ventaja no está en la regla, sino en aplicarla sobre cientos de valores, sólo en su "
@@ -420,7 +420,7 @@ def _grafico_expectativa(df: pd.DataFrame):
 
 
 def _render_validacion() -> None:
-    st.markdown("#### 🧪 Validación histórica")
+    st.markdown("#### Validación histórica")
     st.caption(
         "Recorre el histórico buscando cada señal y simula la operación completa: entrada en la "
         "apertura del día siguiente, stop a 2 ATR, objetivo a 2R y cierre por horizonte. Si el stop "
@@ -479,7 +479,7 @@ es la trampa clásica: se gana pequeño muchas veces y se pierde grande unas poc
     )
 
     st.markdown("---")
-    st.markdown("##### 🔬 Fuera de muestra")
+    st.markdown("##### Fuera de muestra")
     st.caption(
         "Las cifras de arriba se miden sobre los mismos años con los que se escribieron las reglas, "
         "así que incluyen algo de ajuste al pasado. Aquí el histórico se parte en dos: el primer 60% "
@@ -513,7 +513,7 @@ es la trampa clásica: se gana pequeño muchas veces y se pierde grande unas poc
 
 
 def _render_calculadora(regimen: Regimen | None) -> None:
-    st.markdown("#### 🧮 Calculadora de posición")
+    st.markdown("#### Calculadora de posición")
     st.caption(
         "Convierte una idea en una operación concreta. La regla es siempre la misma: se decide "
         "cuánto se está dispuesto a perder antes de entrar, y de ahí sale el número de acciones."
@@ -570,7 +570,7 @@ def _render_calculadora(regimen: Regimen | None) -> None:
 
 
 def render_swing_trading() -> None:
-    st.markdown("### ⚡ Swing Trading")
+    st.markdown("### Swing Trading")
     st.markdown(
         "Operaciones de días a semanas, al alza y a la baja. A diferencia del núcleo de valoración "
         "del terminal, aquí no se busca la mejor empresa a diez años sino el mejor **momento** en un "
@@ -587,7 +587,7 @@ def render_swing_trading() -> None:
         _render_banner_regimen(regimen)
 
     tab_escaner, tab_canslim, tab_estrategias, tab_validacion, tab_calc = st.tabs(
-        ["🎯 Escáner", "🏆 CAN SLIM", "📋 Estrategias", "🧪 Validación", "🧮 Calculadora"]
+        ["Escáner", "CAN SLIM", "Estrategias", "Validación", "Calculadora"]
     )
     with tab_escaner:
         _render_escaner()

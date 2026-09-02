@@ -13,7 +13,7 @@ WORKFLOW_PATH = PROJECT_ROOT / ".github" / "workflows" / "daily_scan.yml"
 
 
 def ejecutar_panel_automatizacion():
-    st.markdown("### 🤖 Automatización Telegram y Cron Job")
+    st.markdown("### Automatización Telegram y Cron Job")
     st.caption("Ejecución headless para enviar un resumen diario al cierre de Wall Street.")
 
     c1, c2, c3 = st.columns(3)

@@ -975,7 +975,7 @@ def _render_bucket(df: pd.DataFrame, bucket: str, empty_message: str) -> None:
 def render_opportunity_briefing() -> None:
     """Panel Streamlit de briefing ejecutivo de oportunidades."""
 
-    st.markdown("### 📌 Briefing de Oportunidades")
+    st.markdown("### Briefing de Oportunidades")
     st.caption(
         "Convierte la watchlist inteligente en una cola de decisión: revisar hoy, vigilar caída, recalcular o descartar temporalmente."
     )

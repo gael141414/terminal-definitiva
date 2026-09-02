@@ -33,7 +33,7 @@ def renderizar_grafico_tradingview(ticker):
 # -------------------------------------------------------------------
 def ejecutar_tecnico_y_opciones(ticker_input):
     """Muestra el gráfico interactivo, visores quant y datos de derivados."""
-    st.markdown(f"### 📈 Terminal de Análisis Técnico y Flujos: {ticker_input}")
+    st.markdown(f"### Terminal de Análisis Técnico y Flujos: {ticker_input}")
     
     # 1. Gráfico General (TradingView)
     st.caption("Visor interactivo global. Utiliza las herramientas de la izquierda para trazar soportes y resistencias manuales.")
@@ -43,7 +43,7 @@ def ejecutar_tecnico_y_opciones(ticker_input):
     # 2. CAJA DE CAMBIOS: VISORES CUANTITATIVOS (NUEVO)
     # ==========================================================
     st.markdown("---")
-    st.markdown("### 🤖 Motores Algorítmicos de Trading")
+    st.markdown("### Motores Algorítmicos de Trading")
     st.markdown("Selecciona un visor estratégico. Cada algoritmo está diseñado para cazar un comportamiento específico del mercado mediante confluencia matemática.")
     
     visor_seleccionado = st.radio(
@@ -58,7 +58,7 @@ def ejecutar_tecnico_y_opciones(ticker_input):
     )
     
     if "Visor 1" in visor_seleccionado:
-        st.markdown("#### 🌊 Sistema de Seguimiento de Tendencias")
+        st.markdown("#### Sistema de Seguimiento de Tendencias")
         st.caption("Filtra el ruido diario. Busca subir a olas institucionales confirmando que hay tendencia (EMAs), aceleración (MACD) y margen de subida (RSI < 70).")
         
         with st.spinner("Compilando algoritmo Trend Following..."):
@@ -68,7 +68,7 @@ def ejecutar_tecnico_y_opciones(ticker_input):
                 st.plotly_chart(fig, use_container_width=True)
                 
                 # --- LECTOR DE SEÑALES INTELIGENTE ---
-                st.markdown("##### 🤖 Veredicto Algorítmico del Visor")
+                st.markdown("##### Veredicto Algorítmico del Visor")
                 ultimo = df.iloc[-1]
                 ayer = df.iloc[-2]
                 
@@ -119,7 +119,7 @@ def ejecutar_tecnico_y_opciones(ticker_input):
                 st.warning("No hay suficientes datos históricos para ejecutar este visor.")
 
     elif "Visor 2" in visor_seleccionado:
-        st.markdown("#### 💥 Sistema de Breakout (Compresión de Volatilidad)")
+        st.markdown("#### Sistema de Breakout (Compresión de Volatilidad)")
         st.caption("Detecta explosiones inminentes de precio. Busca momentos donde las Bandas de Bollinger se estrechan dentro de los Canales de Keltner (Squeeze), indicando que el dinero institucional está acumulando antes de un movimiento brusco.")
         
         with st.spinner("Midiendo desviación estándar y rangos de volatilidad..."):
@@ -129,7 +129,7 @@ def ejecutar_tecnico_y_opciones(ticker_input):
                 st.plotly_chart(fig_vol, use_container_width=True)
                 
                 # --- LECTOR DE SEÑALES INTELIGENTE ---
-                st.markdown("##### 🤖 Veredicto Algorítmico del Visor")
+                st.markdown("##### Veredicto Algorítmico del Visor")
                 
                 ultimo = df_vol.iloc[-1]
                 ayer = df_vol.iloc[-2]
@@ -187,7 +187,7 @@ def ejecutar_tecnico_y_opciones(ticker_input):
                 st.warning("Datos insuficientes para calcular la volatilidad (Se requieren 50 sesiones).")
     
     elif "Visor 3" in visor_seleccionado:
-        st.markdown("#### 🧲 Sistema de Reversión a la Media (Swing Trading)")
+        st.markdown("#### Sistema de Reversión a la Media (Swing Trading)")
         st.caption("Aprovecha los extremos psicológicos. Busca el pánico irracional para comprar barato y la euforia desmedida para vender. El precio siempre tiende a volver a su media institucional (SMA 20).")
         
         with st.spinner("Calculando desviaciones estándar y StochRSI..."):
@@ -197,7 +197,7 @@ def ejecutar_tecnico_y_opciones(ticker_input):
                 st.plotly_chart(fig_rev, use_container_width=True)
                 
                 # --- LECTOR DE SEÑALES INTELIGENTE ---
-                st.markdown("##### 🤖 Veredicto Algorítmico del Visor")
+                st.markdown("##### Veredicto Algorítmico del Visor")
                 
                 ultimo = df_rev.iloc[-1]
                 ayer = df_rev.iloc[-2]
@@ -261,7 +261,7 @@ def ejecutar_tecnico_y_opciones(ticker_input):
                 st.warning("Datos insuficientes para calcular las desviaciones de reversión.")
     
     elif "Visor 4" in visor_seleccionado:
-        st.markdown("#### 🏯 Sistema Ichimoku (Equilibrio y Soportes Futuros)")
+        st.markdown("#### Sistema Ichimoku (Equilibrio y Soportes Futuros)")
         st.caption("Un ecosistema holístico. Si el precio está por encima de la Nube (Kumo), estamos en territorio alcista seguro. Comprueba los cruces de las líneas Tenkan y Kijun para el 'Timing' de entrada, y vigila que el Flujo Institucional (OBV) acompañe la subida.")
         
         with st.spinner("Proyectando soportes y resistencias 26 días en el futuro..."):
@@ -271,7 +271,7 @@ def ejecutar_tecnico_y_opciones(ticker_input):
                 st.plotly_chart(fig_ichi, use_container_width=True)
                 
                 # --- LECTOR DE SEÑALES INTELIGENTE ---
-                st.markdown("##### 🤖 Veredicto Algorítmico del Visor")
+                st.markdown("##### Veredicto Algorítmico del Visor")
                 
                 ultimo = df_ichi.iloc[-1]
                 ayer = df_ichi.iloc[-2]
@@ -343,7 +343,7 @@ def ejecutar_tecnico_y_opciones(ticker_input):
     # 3. MERCADO DE OPCIONES Y DERIVADOS (TU CÓDIGO ORIGINAL)
     # ==========================================================
     st.markdown("---")
-    st.markdown("#### 🕵️ El Rastro del Dinero: Mercado de Derivados (Opciones)")
+    st.markdown("#### El Rastro del Dinero: Mercado de Derivados (Opciones)")
     st.caption("Los inversores institucionales compran opciones (Calls para apostar al alza, Puts para protegerse). Analizamos el sentimiento de Wall Street.")
 
     with st.spinner("Descargando la cadena de derivados de Wall Street..."):
@@ -364,7 +364,7 @@ def ejecutar_tecnico_y_opciones(ticker_input):
     # 4. ANÁLISIS DE LA DIRECTIVA (TU CÓDIGO ORIGINAL)
     # ==========================================================
     st.markdown("---")
-    st.markdown("#### 👔 Análisis de la Directiva y Sentimiento del Mercado")
+    st.markdown("#### Análisis de la Directiva y Sentimiento del Mercado")
     st.caption("Verificamos si los directivos tienen 'Skin in the Game' y sus movimientos recientes de compra/venta (Formulario 4).")
     
     insiders, inst, short = obtener_datos_directiva(ticker_input)
@@ -396,7 +396,7 @@ def ejecutar_tecnico_y_opciones(ticker_input):
     # 5. RANKING DE MERCADO (TU CÓDIGO ORIGINAL MOVIDO AL FINAL)
     # ==========================================================
     st.markdown("---")
-    st.markdown("### 🏆 Las Mejores Empresas del Mercado (Buffett Ranking)")
+    st.markdown("### Las Mejores Empresas del Mercado (Buffett Ranking)")
     st.caption("Esta lista se genera automáticamente analizando cientos de empresas mediante el script `screener.py` en segundo plano.")
     
     try:

@@ -237,7 +237,7 @@ def apply_multifactor_score(df: pd.DataFrame, filters: ScreenerFilters) -> pd.Da
 
 def render_screener_avanzado() -> None:
     """Render the institutional multi-factor screener."""
-    st.markdown("### 🌐 Screener Global Multi-Factor")
+    st.markdown("### Screener Global Multi-Factor")
     st.caption("Filtra acciones por fundamentales y ordena por una aproximación de Magic Formula: Earnings Yield + ROIC.")
 
     with st.sidebar.expander("Filtros Screener Avanzado", expanded=True):

@@ -94,7 +94,7 @@ def _renderizar_verificacion_sec(ticker_input: str, is_df, bs_df, cf_df) -> None
 def ejecutar_auditoria_forense(ticker_input, is_df, bs_df, cf_df, res_val, res_bs):
     """Detector de manipulación contable y riesgo de quiebra (Altman Z-Score y Beneish M-Score)"""
 
-    st.markdown("#### ⚖️ Salud del Balance (Termómetro de Deuda)")
+    st.markdown("#### Salud del Balance (Termómetro de Deuda)")
     st.caption("Una deuda/capital superior a 0.8 indica que la empresa depende excesivamente de financiación externa.")
     
     # Extraer el último dato válido de Deuda/Capital de res_bs
@@ -107,7 +107,7 @@ def ejecutar_auditoria_forense(ticker_input, is_df, bs_df, cf_df, res_val, res_b
         st.info("Datos de deuda insuficientes para generar el termómetro.")
 
     st.markdown("---")
-    st.markdown("#### 🚨 Auditoría Forense y Riesgo de Quiebra (Altman Z-Score)")
+    st.markdown("#### Auditoría Forense y Riesgo de Quiebra (Altman Z-Score)")
     st.caption("Un modelo institucional para detectar estrés financiero y manipulación antes de que Wall Street se dé cuenta.")
     
     if res_val and res_val.get('precio_actual') and res_val.get('acciones_actuales'):
@@ -131,7 +131,7 @@ def ejecutar_auditoria_forense(ticker_input, is_df, bs_df, cf_df, res_val, res_b
                         st.success("**ZONA SEGURA:** Balance acorazado. Riesgo de quiebra prácticamente nulo.")
                         
                 with col_z2:
-                    st.markdown("##### 🚩 Banderas Rojas Detectadas")
+                    st.markdown("##### Banderas Rojas Detectadas")
                     if not alertas_forenses:
                         st.success("✅ **Auditoría Limpia:** No se han detectado anomalías graves de liquidez, dividendos o cobertura de intereses. Los estados financieros parecen íntegros.")
                     else:
@@ -147,7 +147,7 @@ def ejecutar_auditoria_forense(ticker_input, is_df, bs_df, cf_df, res_val, res_b
         st.info("Faltan datos de precio o acciones en circulación para calcular el Z-Score.")
 
     st.markdown("---")
-    st.markdown("#### 🕵️ Módulo Forense Avanzado: Beneish M-Score (Manipulación Contable)")
+    st.markdown("#### Módulo Forense Avanzado: Beneish M-Score (Manipulación Contable)")
     st.caption("Mientras el Z-Score mide la probabilidad de quiebra, el M-Score busca anomalías entre los devengos, la depreciación y las cuentas por cobrar para detectar si la directiva está inflando los beneficios artificialmente (Caso Enron).")
     
     with st.spinner("Cruzando las matrices contables de los últimos 24 meses..."):
@@ -169,7 +169,7 @@ def ejecutar_auditoria_forense(ticker_input, is_df, bs_df, cf_df, res_val, res_b
                     st.success(diag_mscore)
                     
                 if detalles_mscore:
-                    st.markdown("##### 🚩 Banderas Ocultas Detectadas:")
+                    st.markdown("##### Banderas Ocultas Detectadas:")
                     for alerta in detalles_mscore:
                         st.write(alerta)
                 else:
@@ -178,7 +178,7 @@ def ejecutar_auditoria_forense(ticker_input, is_df, bs_df, cf_df, res_val, res_b
             st.info(diag_mscore)
 
     st.markdown("---")
-    st.markdown("#### 🤖 Escáner de Sentimiento con IA (Módulo NLP)")
+    st.markdown("#### Escáner de Sentimiento con IA (Módulo NLP)")
     st.caption("El algoritmo lee las noticias financieras de los últimos días y analiza la lingüística de los titulares para detectar optimismo institucional o pánico mediático.")
     
     with st.spinner("Leyendo las últimas noticias con Inteligencia Artificial..."):
@@ -199,7 +199,7 @@ def ejecutar_auditoria_forense(ticker_input, is_df, bs_df, cf_df, res_val, res_b
                 st.caption("Barra hacia la derecha = Noticias Positivas. Hacia la izquierda = Noticias Negativas.")
                 
             with c_nlp2:
-                st.markdown("##### 📰 Titulares Analizados en Tiempo Real:")
+                st.markdown("##### Titulares Analizados en Tiempo Real:")
                 for noti in noticias_nlp:
                     titulo = noti.get("Titular") or "Titular no disponible"
                     enlace = noti.get("Link") or "#"
@@ -209,7 +209,7 @@ def ejecutar_auditoria_forense(ticker_input, is_df, bs_df, cf_df, res_val, res_b
             st.info("No se encontraron noticias recientes en inglés para procesar el sentimiento.")
 
     st.markdown("---")
-    st.markdown("#### 🔍 Modo Auditoría: Verificación Cruzada SEC EDGAR")
+    st.markdown("#### Modo Auditoría: Verificación Cruzada SEC EDGAR")
     st.caption(
         "Recalcula los mismos ratios (Margen Bruto/Neto, SG&A, ROE...) a partir de los 10-K "
         "reales presentados en SEC EDGAR y los contrasta con los de FMP. Opcional: la consulta "

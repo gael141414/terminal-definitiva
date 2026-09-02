@@ -61,10 +61,10 @@ def ejecutar_apartado_consejos():
         
         # Estética de tarjeta de profesor
         with st.container(border=True):
-            st.markdown(f"#### 📜 La Sentencia del Maestro")
+            st.markdown(f"#### La Sentencia del Maestro")
             st.info(f"*\"{p['cita']}\"* — **{p['autor']}**")
             
-            st.markdown("#### 🔬 El Conocimiento Oculto")
+            st.markdown("#### El Conocimiento Oculto")
             st.write(p['pildora_tecnica'])
             
             st.divider()

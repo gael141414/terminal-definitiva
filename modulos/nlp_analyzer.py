@@ -218,7 +218,7 @@ def render_nlp_dashboard(ticker: str) -> None:
     Args:
         ticker: Stock ticker selected in the main app.
     """
-    st.markdown(f"### 🧠 NLP Earnings Calls: {ticker}")
+    st.markdown(f"### NLP Earnings Calls: {ticker}")
     st.caption("Descarga la última transcripción de resultados y extrae tono, red flags y guidance.")
 
     if not st.button("Analizar última earnings call", type="primary", use_container_width=True):

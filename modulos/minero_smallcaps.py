@@ -268,7 +268,7 @@ def _universo_desde_ui() -> tuple[str, ...]:
 
 
 def ejecutar_visor_smallcaps():
-    st.markdown("### ⛏️ Minero de Small Caps (Joyas Ocultas)")
+    st.markdown("### Minero de Small Caps (Joyas Ocultas)")
     st.caption(
         "Busca empresas cotizadas de perfil startup: crecimiento alto, balance financiable, liquidez suficiente, "
         "momentum sano y señales de alineación directiva. Es un filtro de ideas, no una recomendación de compra."

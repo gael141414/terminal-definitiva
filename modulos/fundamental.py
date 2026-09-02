@@ -150,7 +150,7 @@ def _crear_tabla_revenue_visual(is_df: pd.DataFrame) -> pd.DataFrame | None:
 
 def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res_bs, res_cf, res_val, nota_buffett, ticker_competidor, valuequant_score=None):
     """Analiza los estados financieros, márgenes, deuda y valoración intrínseca."""
-    st.markdown(f"### 🔎 Análisis Fundamental y Valoración: {ticker_input}")
+    st.markdown(f"### Análisis Fundamental y Valoración: {ticker_input}")
 
     if res_val is None:
         res_val = {}
@@ -160,7 +160,7 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
     precio_actual = res_val.get('precio_actual', 0) if res_val else 0
 
     # ======== ANÁLISIS BUFFET ========
-    st.markdown("#### ⚖️ Test de Coste de Oportunidad (Buffett)")
+    st.markdown("#### Test de Coste de Oportunidad (Buffett)")
     c4, c5, c6 = st.columns(3)
     if earnings_yield and tasa_riesgo:
         spread = (earnings_yield - tasa_riesgo) * 100
@@ -193,7 +193,7 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
 
     st.markdown("---")
 
-    st.markdown("#### 💵 Retorno de Efectivo Real (Caja vs Precio de Mercado)")
+    st.markdown("#### Retorno de Efectivo Real (Caja vs Precio de Mercado)")
     
     acciones = res_val.get('acciones_actuales')
     if precio_actual and acciones and "Free Cash Flow (B USD)" in res_cf["ratios"].columns:
@@ -248,7 +248,7 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
         
     st.markdown("---")
 
-    st.markdown("#### 🏭 Valoración Relativa (Múltiplos de Mercado)")
+    st.markdown("#### Valoración Relativa (Múltiplos de Mercado)")
     
     with st.spinner("Determinando múltiplo sectorial óptimo..."):
         sector_empresa, metrica_optima, valor_metrica, explicacion, todos_multiplos, umbral = obtener_valoracion_sectorial(ticker_input)
@@ -281,7 +281,7 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
     st.markdown("---")
 
     # --- Fila 4: Análisis DuPont (Calidad del ROE) ---
-    st.markdown("#### 🔬 Análisis DuPont: Desmontando el ROE")
+    st.markdown("#### Análisis DuPont: Desmontando el ROE")
     st.caption("Charlie Munger dice: 'Un ROE alto es inútil si se logra a base de deudas'. Aquí vemos de dónde viene realmente el ROE del último año.")
     
     # Función escudo: un dato ausente sigue siendo None (no un 0.0 que se
@@ -340,7 +340,7 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
     st.markdown("---")
 
     # --- Fila 5: Test Piotroski Modificado (Salud Value) ---
-    st.markdown("#### 🛡️ Test de Resistencia: Piotroski F-Score (Adaptación Value)")
+    st.markdown("#### Test de Resistencia: Piotroski F-Score (Adaptación Value)")
     st.caption("Sistema de 9 puntos que evalúa la solidez financiera y la tendencia operativa. Un 7-9 indica una empresa blindada. Menos de 4 indica peligro estructural.")
 
     # Unimos todos los datos para evaluarlos cómodamente
@@ -394,7 +394,7 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
             
     st.markdown("---")
     
-    st.markdown("#### 🏆 Retorno Histórico vs Mercado (S&P 500)")
+    st.markdown("#### Retorno Histórico vs Mercado (S&P 500)")
     fig_tsr = plot_tsr_vs_sp500(ticker_input)
     if fig_tsr:
         st.plotly_chart(fig_tsr, use_container_width=True)
@@ -444,14 +444,14 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
     col_caja1, col_caja2 = st.columns(2)
     
     with col_caja1:
-        st.markdown("#### 💸 Asignación de Capital (10 Años)")
+        st.markdown("#### Asignación de Capital (10 Años)")
         st.caption("Suma de todos los flujos de caja de la década.")
         fig_waterfall = plot_capital_allocation_waterfall(res_cf["ratios"], ticker_input)
         if fig_waterfall:
             st.plotly_chart(fig_waterfall, use_container_width=True)
             
     with col_caja2:
-        st.markdown("#### 👑 Beneficios del Dueño (Owner Earnings)")
+        st.markdown("#### Beneficios del Dueño (Owner Earnings)")
         st.caption("Ajuste de Buffett: Separa el CAPEX de mantenimiento del de crecimiento.")
         fig_oe = plot_owner_earnings(res_cf["ratios"], ticker_input)
         if fig_oe:
@@ -462,13 +462,13 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
     col_graf1, col_graf2 = st.columns(2)
     
     with col_graf1:
-        st.markdown("#### 🎁 Retribución al Accionista")
+        st.markdown("#### Retribución al Accionista")
         fig_sy = plot_shareholder_yield_historico(res_cf["ratios"], ticker_input)
         if fig_sy:
             st.plotly_chart(fig_sy, use_container_width=True)
             
     with col_graf2:
-        st.markdown("#### 📊 Valoración Real (EV / FCF)")
+        st.markdown("#### Valoración Real (EV / FCF)")
         st.caption("Compara el precio actual (limpio de deuda y caja) contra su media histórica.")
         if res_val and res_val.get('acciones_actuales'):
             fig_ev = plot_ev_fcf_historico(ticker_input, res_bs["ratios"], res_cf["ratios"], res_val['acciones_actuales'])
@@ -490,7 +490,7 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
             st.info("No se pudo calcular el EV/FCF por falta de datos de acciones en circulación.")
 
         st.markdown("---")
-        st.markdown("#### ⏳ Fair Value Timeline (Bandas de PER Históricas)")
+        st.markdown("#### Fair Value Timeline (Bandas de PER Históricas)")
         st.caption("La reversión a la media en estado puro. Comprar cuando la línea del precio toca la banda inferior (pesimismo) e ignorar la acción cuando toca la banda superior (euforia).")
     
         with st.spinner("Construyendo el túnel de valoración histórica..."):
@@ -508,14 +508,14 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
             except Exception as e:
                 st.error(f"Error al generar el gráfico de bandas PER: {e}")
 
-    st.markdown("#### 🔎 Calidad del Beneficio (Filtro Anti-Fraude)")
+    st.markdown("#### Calidad del Beneficio (Filtro Anti-Fraude)")
     st.caption("Si la barra azul (Beneficio) es sistemáticamente mayor que la verde (Caja), la empresa no está cobrando lo que vende o maquilla sus cuentas.")
     fig_calidad = plot_calidad_beneficios(ticker_input)
     if fig_calidad:
         st.plotly_chart(fig_calidad, use_container_width=True)
 
     # ======== TAB 2 ========
-    st.markdown("### 📝 Calidad Fundamental y ADN Financiero")
+    st.markdown("### Calidad Fundamental y ADN Financiero")
     
     # --- CÁLCULO RÁPIDO DE PIOTROSPI PARA EL ANILLO ---
     df_all = pd.concat([res_is["ratios"], res_bs["ratios"], res_cf["ratios"]], axis=1)
@@ -556,7 +556,7 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
             st.plotly_chart(fig_adn, use_container_width=True)
     
     st.markdown("---")
-    st.markdown("#### 📑 Histórico de Ratios y Reglas Inquebrantables")
+    st.markdown("#### Histórico de Ratios y Reglas Inquebrantables")
             
     # 1. Unimos todos los ratios
     df_completo = pd.concat(
@@ -636,9 +636,9 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
                 
                 if res_is2 and res_bs2 and res_cf2:
                     # 1. MARCADOR HEAD-TO-HEAD
-                    st.markdown(f"### 🥊 {ticker_input} vs {ticker_competidor}")
+                    st.markdown(f"### {ticker_input} vs {ticker_competidor}")
                     
-                    st.markdown("#### 🗺️ Mapa de Mercado Relativo")
+                    st.markdown("#### Mapa de Mercado Relativo")
                     fig_treemap = plot_treemap_competidores(ticker_input, ticker_competidor)
                     if fig_treemap:
                         st.plotly_chart(fig_treemap, use_container_width=True)
@@ -716,7 +716,7 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
         v_epv = res_val.get('epv_value', 0)
         
         # --- SECCIÓN 1: MODELOS MATEMÁTICOS ESTÁTICOS ---
-        st.markdown("#### 🏛️ Modelos Institucionales (Suelo y Techo)")
+        st.markdown("#### Modelos Institucionales (Suelo y Techo)")
         st.caption("Diferentes metodologías de inversión aplicadas a los beneficios actuales de la empresa.")
         
         col_m1, col_m2, col_m3 = st.columns(3)
@@ -762,7 +762,7 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
         col_m3.metric("EPV (Cero Crecimiento)", f"${v_epv:.2f}")
         col_m3.caption("Valor de capacidad de beneficios sin crecimiento, usando FCF/owner earnings por acción.")
 
-    st.markdown("#### 🎛️ Tu Modelo DCF (Flujos de Caja Descontados)")
+    st.markdown("#### Tu Modelo DCF (Flujos de Caja Descontados)")
     st.caption("Crea tu propio escenario. Los valores por defecto han sido calculados por nuestro algoritmo.")
     
     col_slider1, col_slider2, col_slider3 = st.columns(3)
@@ -805,7 +805,7 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
     c2.metric("Valor Justo (Tu DCF)", f"${v_dcf:.2f}", f"FCF/acc. ${fcf_por_accion:.2f}")
     c3.metric(f"Precio Seguro (-{margen_seguridad_usr}%)", f"${precio_compra:.2f}")
 
-    st.markdown("#### 🧠 Reverse DCF: ¿Qué crecimiento asume el mercado hoy?")
+    st.markdown("#### Reverse DCF: ¿Qué crecimiento asume el mercado hoy?")
     st.caption("En lugar de adivinar el futuro, calculamos qué crecimiento anual (CAGR) exige el precio actual de la acción para justificar su cotización en bolsa.")
 
     if precio_actual and fcf_por_accion and fcf_por_accion > 0:
@@ -840,7 +840,7 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
         st.info("Se necesita un Precio de Mercado actual y FCF por acción positivo para realizar la ingeniería inversa.")
 
     # ====== Matriz de Sensibilidad DCF (Heatmap) =======
-    st.markdown("#### 🗺️ Matriz de Sensibilidad (Precio Seguro)")
+    st.markdown("#### Matriz de Sensibilidad (Precio Seguro)")
     st.caption("Esta matriz muestra a qué precio deberías comprar la acción dependiendo de si el crecimiento futuro (Eje Y) y la rentabilidad exigida (Eje X) cambian. Las celdas verdes son precios más seguros.")
     
     # Generar variaciones de +/- 2% alrededor de lo que el usuario ha puesto en los sliders
@@ -889,7 +889,7 @@ def ejecutar_analisis_fundamental(ticker_input, is_df, bs_df, cf_df, res_is, res
     st.markdown("---")
 
     # ======== TAB 8 ========
-    st.markdown("### 💸 Estrategia de Dividendos Crecientes (DGI)")
+    st.markdown("### Estrategia de Dividendos Crecientes (DGI)")
     st.caption("No mires el dividendo actual, mira el futuro. El *Yield on Cost* (Rentabilidad sobre Coste) te dice cuánto dinero te pagará la empresa anualmente respecto a lo que pagaste por ella el día que la compraste.")
     
     if precio_actual:

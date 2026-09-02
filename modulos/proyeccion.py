@@ -188,7 +188,7 @@ def _pct(valor: float) -> str:
 def ejecutar_proyeccion(ticker_input):
     """Modelo probabilistico de 3 escenarios y catalizadores sin dependencia obligatoria de IA externa."""
 
-    st.markdown(f"### 🔮 Proyección Cuantitativa y Catalizadores: {ticker_input}")
+    st.markdown(f"### Proyección Cuantitativa y Catalizadores: {ticker_input}")
     st.markdown("Modelo probabilístico: combina fundamentales FMP, volatilidad, sentimiento de noticias y calidad financiera para trazar 3 escenarios de precio a 12 meses.")
 
     with st.spinner("Calculando escenarios y catalizadores..."):
@@ -209,7 +209,7 @@ def ejecutar_proyeccion(ticker_input):
             ret_oso = ((p_oso / precio_actual) - 1) * 100
 
             st.markdown("---")
-            st.markdown(f"### 🎯 Precio Objetivo a 12 Meses (Probabilidad Alcista: {prob_alcista:.0f}%)")
+            st.markdown(f"### Precio Objetivo a 12 Meses (Probabilidad Alcista: {prob_alcista:.0f}%)")
             c1, c2, c3 = st.columns(3)
             c1.metric("🟢 Caso Toro", f"${p_toro:,.2f}", f"{ret_toro:+.2f}%")
             c2.metric("🟡 Caso Base", f"${p_base:,.2f}", f"{ret_base:+.2f}%")
@@ -235,15 +235,15 @@ def ejecutar_proyeccion(ticker_input):
 
             col_a, col_b = st.columns(2)
             with col_a:
-                st.markdown("#### ⚡ Catalizadores")
+                st.markdown("#### Catalizadores")
                 for cat in modelo["catalizadores"]:
                     st.success(f"✔️ {cat}")
             with col_b:
-                st.markdown("#### 🛡️ Riesgos a vigilar")
+                st.markdown("#### Riesgos a vigilar")
                 for riesgo in modelo["riesgos"]:
                     st.warning(f"⚠️ {riesgo}")
 
-            st.markdown("#### 🧠 Tesis del algoritmo")
+            st.markdown("#### Tesis del algoritmo")
             st.write(
                 f"El escenario base asume retorno esperado de **{ret_base:+.1f}%** con sentimiento "
                 f"**{float(modelo['sentimiento']):+.2f}**, sector **{modelo['sector']}** y valoración "

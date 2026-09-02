@@ -557,3 +557,79 @@ def format_last_sec_validation_caption(summary: dict) -> str:
         f"Última validación nocturna: {summary.get('last_successful_check_at')}, {detalle}{aviso_fallo} "
         "— pulsa el interruptor para re-verificar en vivo."
     )
+
+# ==========================================================================
+# AVISOS Y LISTAS DEL SISTEMA
+# ==========================================================================
+
+_TONOS_AVISO = {
+    "neutro": ("#93a4bb", "rgba(147,164,187,.10)", "rgba(147,164,187,.28)", "info-circle"),
+    "favorable": ("#10e39a", "rgba(16,227,154,.10)", "rgba(16,227,154,.30)", "check-circle"),
+    "aviso": ("#fbbf24", "rgba(251,191,36,.10)", "rgba(251,191,36,.30)", "exclamation-triangle"),
+    "riesgo": ("#fb5e6d", "rgba(251,94,109,.10)", "rgba(251,94,109,.30)", "shield-exclamation"),
+    "accion": ("#3b82f6", "rgba(59,130,246,.10)", "rgba(59,130,246,.32)", "compass"),
+}
+
+
+def render_aviso(texto: str, tono: str = "neutro", titulo: str | None = None) -> None:
+    """Aviso con la identidad del sistema.
+
+    Sustituye a ``st.info``/``st.success``/``st.warning``/``st.error``, que
+    traen su propio azul, verde, ámbar y rojo del tema por defecto de Streamlit
+    y conviven mal con la paleta del terminal: el mismo concepto acababa
+    pintado de dos colores distintos según quién lo dibujara.
+    """
+    color, fondo, borde, icono = _TONOS_AVISO.get(tono, _TONOS_AVISO["neutro"])
+    cabecera = (
+        f"<div style='font-weight:700; color:{color}; margin-bottom:2px;'>"
+        f"{html.escape(str(titulo))}</div>"
+        if titulo else ""
+    )
+    escribir_html(
+        f"""
+        <div style="display:flex; gap:10px; align-items:flex-start;
+                    background:{fondo}; border:1px solid {borde};
+                    border-left:3px solid {color}; border-radius:10px;
+                    padding:12px 14px; margin:8px 0;">
+            <i class="bi bi-{icono}" style="color:{color}; font-size:15px; line-height:1.5;"></i>
+            <div style="font-size:.9rem; line-height:1.55; color:#c3cede;">
+                {cabecera}{html.escape(str(texto))}
+            </div>
+        </div>
+        """
+    )
+
+
+def render_lista_puntos(puntos, tono: str = "neutro") -> None:
+    """Lista de conclusiones con jerarquía visual.
+
+    El contenido de la tesis se volcaba con ``st.write("- " + texto)``: una
+    lista plana de markdown, sin jerarquía ni ritmo, que a partir de cuatro
+    puntos se lee como un muro. Aquí cada punto es una fila con su marca.
+    """
+    puntos = [str(p) for p in (puntos or []) if str(p).strip()]
+    if not puntos:
+        return
+
+    color = _TONOS_AVISO.get(tono, _TONOS_AVISO["neutro"])[0]
+    filas = "".join(
+        f"<li style='display:flex; gap:10px; align-items:flex-start; padding:7px 0;"
+        f" border-bottom:1px solid rgba(147,164,187,.10);'>"
+        f"<span style='color:{color}; font-size:15px; line-height:1.4;'>&#8226;</span>"
+        f"<span style='font-size:.9rem; line-height:1.55; color:#c3cede;'>{html.escape(p)}</span>"
+        f"</li>"
+        for p in puntos
+    )
+    escribir_html(f"<ul style='list-style:none; padding:0; margin:4px 0 0;'>{filas}</ul>")
+
+
+def render_titulo_seccion(texto: str, icono: str = "dot", nivel: str = "h4") -> None:
+    """Título de sección con azulejo de icono en vez de emoji."""
+    escribir_html(
+        f"""
+        <div style="display:flex; align-items:center; gap:12px; margin:18px 0 10px;">
+            <span class="vq-azulejo"><i class="bi bi-{html.escape(icono)}"></i></span>
+            <{nivel} style="margin:0; font-size:1.02rem; font-weight:700;">{html.escape(str(texto))}</{nivel}>
+        </div>
+        """
+    )
