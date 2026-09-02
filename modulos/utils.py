@@ -5,9 +5,44 @@ from textblob import TextBlob
 import pandas as pd
 import requests
 import xml.etree.ElementTree as ET
-from modulos.config import DEBT_EQUITY_RED_FLAG, DEBT_EQUITY_WARNING
+from modulos.config import (
+    BUFFETT_CAPEX_ACEPTABLE,
+    BUFFETT_CAPEX_EXCELENTE,
+    BUFFETT_DEUDA_EXCELENTE,
+    BUFFETT_MARGEN_BRUTO_BUENO,
+    BUFFETT_MARGEN_BRUTO_EXCELENTE,
+    BUFFETT_MARGEN_NETO_BUENO,
+    BUFFETT_MARGEN_NETO_EXCELENTE,
+    BUFFETT_ROE_MINIMO,
+    BUFFETT_ROIC_MINIMO,
+    COLOR_BG,
+    COLOR_BORDER_SOFT,
+    COLOR_GRID,
+    COLOR_SURFACE,
+    COLOR_TEXT,
+    COLOR_TEXT_MUTED,
+    DEBT_EQUITY_RED_FLAG,
+    DEBT_EQUITY_WARNING,
+    FONT_STACK,
+    PLOTLY_COLORWAY,
+)
 from modulos.fmp_api import extraer_datos_fundamentales_fmp
 from modulos.yahoo_resilience import safe_yfinance_fetch, safe_yfinance_info
+from modulos.yfinance_fundamentals import obtener_fundamentales_yfinance, resumen_cobertura
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_ticker_info_safe(ticker: str) -> dict:
+    """Punto de entrada único y cacheado para ``yf.Ticker(...).info``.
+
+    Delega en ``safe_yfinance_info``, que ya reintenta con backoff exponencial y
+    descarta los payloads de relleno que Yahoo devuelve cuando rechaza
+    quoteSummary (un dict de 3-5 claves que antes se interpretaba como datos
+    válidos y acababa pintando 0.0 en la interfaz).
+
+    Devuelve ``{}`` cuando no hay dato utilizable; nunca lanza.
+    """
+    return safe_yfinance_info(yf, ticker, context=f"utils:get_ticker_info_safe:{ticker}")
+
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def obtener_transacciones_insiders(ticker):
@@ -296,6 +331,15 @@ def render_tradingview_widget(ticker):
     components.html(html_code, height=600)
 
 def cargar_datos(ticker: str, años: int):
+    """Estados financieros con FMP como fuente principal y yfinance de respaldo.
+
+    FMP devuelve 402/403 ("restricted_plan") para un subconjunto de símbolos que
+    no depende del tamaño de la empresa (IBM, MCD o KHC fallan; AAPL o MSFT no).
+    Antes eso terminaba en un error rojo sin salida, porque reintentar no arregla
+    una restricción de plan. Ahora se degrada a yfinance, que cubre los mismos
+    conceptos con menos histórico y sin key metrics.
+    """
+    resultado = (None, None, None, None)
     try:
         resultado = extraer_datos_fundamentales_fmp(ticker, años)
 
@@ -306,11 +350,25 @@ def cargar_datos(ticker: str, años: int):
             except Exception:
                 pass
             resultado = extraer_datos_fundamentales_fmp(ticker, años)
-
-        return resultado
     except Exception as e:
-        st.error(f"Error descargando datos desde FMP: {e}")
+        # No se corta aquí: todavía queda el respaldo de yfinance por intentar.
+        st.warning(f"FMP no respondió para {ticker} ({type(e).__name__}). Probando respaldo de Yahoo Finance...")
+        resultado = (None, None, None, None)
+
+    if resultado[0] is not None or resultado[1] is not None:
+        return resultado
+
+    is_df, bs_df, cf_df, metrics_df = obtener_fundamentales_yfinance(ticker, años)
+    if is_df is None and bs_df is None and cf_df is None:
         return None, None, None, None
+
+    st.info(
+        f"📉 FMP no cubre `{ticker}` con el plan actual. Mostrando datos de respaldo de "
+        f"Yahoo Finance: {resumen_cobertura(is_df, bs_df, cf_df)}. "
+        "El histórico es más corto y no hay key metrics, así que algunos ratios derivados "
+        "pueden aparecer como no disponibles."
+    )
+    return is_df, bs_df, cf_df, metrics_df
 
 def calcular_score_buffett(df_is, df_bs, df_cf):
     """Calcula una nota del 0 al 100 basada en las reglas estrictas de Buffett"""
@@ -332,23 +390,103 @@ def calcular_score_buffett(df_is, df_bs, df_cf):
     buybacks = get_last(df_cf, "Recompras (B USD)")
 
     # 1. Poder de Precios (25 pts)
-    if mb is not None and mb > 40: score += 10
-    elif mb is not None and mb > 20: score += 5
-    if mn is not None and mn > 20: score += 15
-    elif mn is not None and mn > 10: score += 7
+    if mb is not None and mb > BUFFETT_MARGEN_BRUTO_EXCELENTE: score += 10
+    elif mb is not None and mb > BUFFETT_MARGEN_BRUTO_BUENO: score += 5
+    if mn is not None and mn > BUFFETT_MARGEN_NETO_EXCELENTE: score += 15
+    elif mn is not None and mn > BUFFETT_MARGEN_NETO_BUENO: score += 7
 
     # 2. Eficiencia (30 pts)
-    if roe is not None and roe > 15: score += 15
-    if roic is not None and roic > 15: score += 15
+    if roe is not None and roe > BUFFETT_ROE_MINIMO: score += 15
+    if roic is not None and roic > BUFFETT_ROIC_MINIMO: score += 15
 
     # 3. Solidez (25 pts)
-    if deuda is not None and deuda < 0.8: score += 15
+    if deuda is not None and deuda < BUFFETT_DEUDA_EXCELENTE: score += 15
     elif deuda is not None and deuda < DEBT_EQUITY_RED_FLAG: score += 7
-    if capex is not None and capex < 25: score += 10
-    elif capex is not None and capex < 50: score += 5
+    if capex is not None and capex < BUFFETT_CAPEX_EXCELENTE: score += 10
+    elif capex is not None and capex < BUFFETT_CAPEX_ACEPTABLE: score += 5
 
     # 4. Trato al Accionista (20 pts)
     if fcf is not None and fcf > 0: score += 10
     if buybacks is not None and buybacks > 0: score += 10
 
     return score
+
+
+# =============================================================================
+# TEMA VISUAL DE GRÁFICOS
+# =============================================================================
+
+_PLOTLY_LAYOUT_BASE = {
+    "paper_bgcolor": COLOR_SURFACE,
+    "plot_bgcolor": COLOR_BG,
+    "font": {"family": FONT_STACK, "color": COLOR_TEXT, "size": 13},
+    "colorway": list(PLOTLY_COLORWAY),
+    "margin": {"l": 56, "r": 24, "t": 56, "b": 48},
+    "hoverlabel": {
+        "bgcolor": COLOR_SURFACE,
+        "bordercolor": COLOR_BORDER_SOFT,
+        "font": {"family": FONT_STACK, "color": COLOR_TEXT, "size": 12},
+    },
+    "legend": {
+        "bgcolor": "rgba(0,0,0,0)",
+        "bordercolor": COLOR_BORDER_SOFT,
+        "borderwidth": 0,
+        "font": {"color": COLOR_TEXT_MUTED, "size": 12},
+    },
+    "title": {"font": {"color": COLOR_TEXT, "size": 16}},
+}
+
+_PLOTLY_AXIS_BASE = {
+    "gridcolor": COLOR_GRID,
+    "zerolinecolor": COLOR_BORDER_SOFT,
+    "linecolor": COLOR_BORDER_SOFT,
+    "tickfont": {"color": COLOR_TEXT_MUTED, "size": 11},
+    "title": {"font": {"color": COLOR_TEXT_MUTED, "size": 12}},
+}
+
+
+def apply_plotly_theme(fig, *, show_grid: bool = True, transparent: bool = False):
+    """Aplica el sistema visual de ValueQuant a cualquier figura Plotly.
+
+    Se llama justo antes de ``st.plotly_chart(fig)``. Es idempotente y tolerante:
+    si ``fig`` no es una figura válida se devuelve tal cual en vez de romper la
+    pantalla (varios módulos construyen figuras condicionalmente y pueden pasar
+    ``None``).
+
+    Parámetros
+    ----------
+    show_grid:
+        ``False`` para gráficos donde la rejilla estorba (treemaps, tartas,
+        indicadores). El sistema pide rejilla discreta, nunca protagonista.
+    transparent:
+        ``True`` cuando la figura ya vive dentro de una card con su propio fondo
+        y se quiere evitar el doble panel.
+    """
+    if fig is None or not hasattr(fig, "update_layout"):
+        return fig
+
+    layout = dict(_PLOTLY_LAYOUT_BASE)
+    if transparent:
+        layout["paper_bgcolor"] = "rgba(0,0,0,0)"
+        layout["plot_bgcolor"] = "rgba(0,0,0,0)"
+
+    try:
+        fig.update_layout(**layout)
+
+        ejes = dict(_PLOTLY_AXIS_BASE)
+        if not show_grid:
+            ejes["showgrid"] = False
+        else:
+            ejes["showgrid"] = True
+
+        fig.update_xaxes(**ejes)
+        fig.update_yaxes(**ejes)
+    except Exception:
+        # Algunas figuras (treemap, sunburst, indicator) no aceptan ejes
+        # cartesianos: el layout ya se aplicó y con eso basta.
+        try:
+            fig.update_layout(**layout)
+        except Exception:
+            return fig
+
+    return fig

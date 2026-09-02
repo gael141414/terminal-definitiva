@@ -8,6 +8,11 @@ from modulos.config import DEBT_EQUITY_RED_FLAG, DEBT_EQUITY_WARNING
 from modulos.utils import renderizar_grafico_tradingview, escanear_vulnerabilidades
 from modulos.scoring_engine import render_valuequant_score_card
 from modulos.ui_components import kpi_status_from_thresholds, render_kpi_card
+from modulos.historial import (
+    registrar_analisis,
+    render_badge_ultima_revision,
+    render_evolucion_kpis,
+)
 
 # Importa tus gráficos personalizados si los usas aquí
 from charts import plot_dashboard_interactivo, plot_calidad_beneficios 
@@ -15,7 +20,19 @@ from charts import plot_dashboard_interactivo, plot_calidad_beneficios
 def ejecutar_resumen_ejecutivo(ticker_input, is_df, bs_df, cf_df, res_is, res_bs, res_cf, res_val, nota_buffett, valuequant_score=None):
     """Muestra la vista general, KPIs principales y dashboard interactivo de la empresa."""
     st.markdown(f"### 📊 Resumen Ejecutivo: {ticker_input}")
-    
+
+    # El registro va ANTES de pintar el badge: así "Última revisión" compara
+    # contra el análisis anterior y no contra el que se acaba de guardar.
+    dias_previos = None
+    try:
+        from modulos.historial import dias_desde_ultima_revision
+
+        dias_previos = dias_desde_ultima_revision(ticker_input)
+        registrar_analisis(ticker_input, res_is, res_bs, res_cf, nota_buffett, valuequant_score)
+    except Exception:
+        # El historial es una ayuda, nunca un bloqueo para ver la ficha.
+        pass
+
     # ======== HERO SECTION & SCORECARD ========
     precio_mercado = res_val.get('precio_actual', 0) if res_val else 0
 
@@ -24,6 +41,17 @@ def ejecutar_resumen_ejecutivo(ticker_input, is_df, bs_df, cf_df, res_is, res_bs
     with col_hero1:
         st.markdown(f"<h1 style='font-size: 3.5rem; margin-bottom: 0px;'>{ticker_input}</h1>", unsafe_allow_html=True)
         st.caption("Value Intelligence Terminal | Análisis Cuantitativo")
+        try:
+            render_badge_ultima_revision(ticker_input) if dias_previos is None else st.markdown(
+                "<span class='vq-badge vq-badge-primary'><i class='bi bi-clock-history'></i> "
+                + ("Última revisión: hoy" if dias_previos == 0
+                   else "Última revisión: ayer" if dias_previos == 1
+                   else f"Última revisión: hace {dias_previos} días")
+                + "</span>",
+                unsafe_allow_html=True,
+            )
+        except Exception:
+            pass
     
     with col_hero2:
         st.metric("Precio de Mercado", f"${precio_mercado:.2f}" if precio_mercado else "N/A")
@@ -95,6 +123,14 @@ def ejecutar_resumen_ejecutivo(ticker_input, is_df, bs_df, cf_df, res_is, res_bs
             status=deuda_status,
             detail=deuda_detail,
         )
+
+    # El scorecard de arriba es una foto fija del último ejercicio; esto añade
+    # la dimensión que le falta: si esos mismos ratios mejoran o empeoran
+    # respecto a las veces anteriores que se analizó la empresa.
+    try:
+        render_evolucion_kpis(ticker_input)
+    except Exception:
+        pass
 
     st.markdown("### 📈 Gráfico Interactivo Pro")
     renderizar_grafico_tradingview(ticker_input)

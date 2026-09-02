@@ -11,33 +11,47 @@ def inject_terminal_theme() -> None:
             @import url('https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css');
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
+            /* ---------------------------------------------------------------
+               SISTEMA DE DISEÑO ValueQuant — capa de tokens.
+               Los nombres de token (--vq-*) se mantienen a propósito: unos 40
+               módulos y todas las clases .vq-* ya los consumen, así que la
+               identidad visual se cambia aquí, en un único punto, sin tocar el
+               resto del terminal. Los valores son los del sistema definitivo
+               (mismos hex que modulos/config.py, que alimenta los gráficos).
+               --------------------------------------------------------------- */
             :root {
-                --vq-bg: #080B10;
-                --vq-bg-soft: #0B111A;
-                --vq-panel: #101722;
-                --vq-panel-elevated: #141D2B;
-                --vq-panel-muted: #0E1520;
-                --vq-border: #243044;
-                --vq-border-soft: rgba(148, 163, 184, .16);
+                --vq-bg: #070a0f;
+                --vq-bg-soft: #0d1117;
+                --vq-panel: #121926;
+                --vq-panel-elevated: #18202f;
+                --vq-panel-muted: #0d1117;
+                --vq-sidebar: #0d1117;
 
-                --vq-text: #F4F7FB;
-                --vq-text-soft: #CBD5E1;
-                --vq-muted: #8C9AAF;
+                --vq-border: rgba(147, 164, 187, .35);
+                --vq-border-soft: rgba(147, 164, 187, .20);
 
-                --vq-primary: #3B82F6;
-                --vq-primary-soft: rgba(59, 130, 246, .14);
-                --vq-cyan: #22D3EE;
+                --vq-text: #e8edf5;
+                --vq-text-soft: #c3cede;
+                --vq-muted: #93a4bb;
 
-                --vq-green: #22C55E;
-                --vq-red: #EF4444;
-                --vq-amber: #F59E0B;
+                --vq-primary: #4f8cff;
+                --vq-primary-hover: #6fa3ff;
+                --vq-primary-soft: rgba(79, 140, 255, .14);
+                --vq-cyan: #37c6e6;
+
+                --vq-green: #3ddc97;
+                --vq-red: #f36c6c;
+                --vq-amber: #f5b04c;
 
                 --vq-radius-sm: 8px;
-                --vq-radius-md: 12px;
-                --vq-radius-lg: 18px;
+                --vq-radius-md: 10px;
+                --vq-radius-lg: 12px;
 
-                --vq-shadow-soft: 0 18px 45px rgba(0, 0, 0, .28);
-                --vq-shadow-card: 0 10px 30px rgba(0, 0, 0, .22);
+                /* El sistema pide bordes sutiles, no sombras duras: las sombras
+                   quedan neutralizadas en vez de eliminadas para no romper las
+                   ~30 reglas que ya referencian estas dos variables. */
+                --vq-shadow-soft: none;
+                --vq-shadow-card: none;
             }
 
             html, body, .stApp, [class*="css"] {
@@ -47,9 +61,9 @@ def inject_terminal_theme() -> None:
 
             .stApp {
                 background:
-                    radial-gradient(circle at 12% 0%, rgba(59, 130, 246, .10), transparent 34rem),
-                    radial-gradient(circle at 88% 10%, rgba(34, 211, 238, .07), transparent 30rem),
-                    linear-gradient(180deg, #080B10 0%, #0A0F16 100%) !important;
+                    radial-gradient(circle at 12% 0%, rgba(79, 140, 255, .08), transparent 34rem),
+                    radial-gradient(circle at 88% 10%, rgba(55, 198, 230, .05), transparent 30rem),
+                    var(--vq-bg) !important;
                 color: var(--vq-text) !important;
             }
 
@@ -105,7 +119,7 @@ def inject_terminal_theme() -> None:
                 display: flex;
                 align-items: center;
                 overflow: hidden;
-                background: #05070B;
+                background: var(--vq-bg);
                 border-bottom: 1px solid rgba(148, 163, 184, .16);
             }
 
@@ -305,19 +319,19 @@ def inject_terminal_theme() -> None:
             .vq-badge-primary {
                 border-color: rgba(59, 130, 246, .35);
                 background: rgba(59, 130, 246, .12);
-                color: #BFDBFE;
+                color: var(--vq-primary);
             }
 
             .vq-badge-success {
                 border-color: rgba(34, 197, 94, .32);
                 background: rgba(34, 197, 94, .10);
-                color: #BBF7D0;
+                color: var(--vq-green);
             }
 
             .vq-badge-warning {
                 border-color: rgba(245, 158, 11, .32);
                 background: rgba(245, 158, 11, .10);
-                color: #FDE68A;
+                color: var(--vq-amber);
             }
 
             /* ============================= */
@@ -374,7 +388,7 @@ def inject_terminal_theme() -> None:
                 border-radius: 999px;
                 background: rgba(59, 130, 246, .14);
                 border: 1px solid rgba(59, 130, 246, .32);
-                color: #BFDBFE;
+                color: var(--vq-primary);
                 font-size: .75rem;
                 font-weight: 800;
                 text-transform: uppercase;
@@ -490,7 +504,7 @@ def inject_terminal_theme() -> None:
                 height: 34px;
                 border-radius: 10px;
                 margin-bottom: .75rem;
-                color: #BFDBFE;
+                color: var(--vq-primary);
                 background: rgba(59, 130, 246, .14);
                 border: 1px solid rgba(59, 130, 246, .28);
             }
@@ -519,7 +533,7 @@ def inject_terminal_theme() -> None:
                 width: 100%;
                 height: 128px;
                 object-fit: cover;
-                background: #0B1421;
+                background: var(--vq-panel);
                 filter: saturate(.9) contrast(1.04);
                 border-radius: 6px 6px 0 0;
             }
@@ -530,7 +544,7 @@ def inject_terminal_theme() -> None:
 
             .vq-news-title {
                 margin: .35rem 0 0;
-                color: #F4F7FB;
+                color: var(--vq-text);
                 font-size: .94rem;
                 line-height: 1.38;
                 font-weight: 750;
@@ -564,7 +578,7 @@ def inject_terminal_theme() -> None:
 
             .stButton > button {
                 border-radius: var(--vq-radius-sm) !important;
-                background: #172033 !important;
+                background: var(--vq-panel-elevated) !important;
                 color: var(--vq-text) !important;
                 border: 1px solid rgba(148, 163, 184, .20) !important;
                 box-shadow: none !important;
@@ -575,7 +589,7 @@ def inject_terminal_theme() -> None:
 
             .stButton > button:hover {
                 transform: translateY(-1px) !important;
-                background: #1D2A40 !important;
+                background: var(--vq-panel-elevated) !important;
                 border-color: rgba(59, 130, 246, .45) !important;
             }
 
@@ -588,7 +602,7 @@ def inject_terminal_theme() -> None:
             .stTextInput input,
             .stNumberInput input,
             .stSelectbox [data-baseweb="select"] {
-                background: #0B111A !important;
+                background: var(--vq-bg-soft) !important;
                 border: 1px solid var(--vq-border-soft) !important;
                 border-radius: var(--vq-radius-sm) !important;
                 color: var(--vq-text) !important;
@@ -643,17 +657,17 @@ def inject_terminal_theme() -> None:
             }
 
             ::-webkit-scrollbar-track {
-                background: #080B10;
+                background: var(--vq-bg);
             }
 
             ::-webkit-scrollbar-thumb {
-                background: #243044;
+                background: var(--vq-border);
                 border-radius: 999px;
-                border: 2px solid #080B10;
+                border: 2px solid var(--vq-bg);
             }
 
             ::-webkit-scrollbar-thumb:hover {
-                background: #334155;
+                background: var(--vq-border);
             }
 
             @media (max-width: 900px) {
@@ -695,7 +709,191 @@ def inject_terminal_theme() -> None:
                     padding: 0 1rem;
                 }
             }
+
+            /* ===============================================================
+               COMPONENTES NATIVOS DE STREAMLIT
+               El sistema de diseño se aplicaba hasta ahora sobre todo a las
+               clases propias .vq-*, dejando los widgets nativos con el tema por
+               defecto de Streamlit: por eso convivían dos estéticas en la misma
+               pantalla (una card .vq- junto a un st.dataframe azul claro).
+               Este bloque los alinea con el mismo sistema.
+               =============================================================== */
+
+            /* 1. SIDEBAR ------------------------------------------------- */
+            section[data-testid="stSidebar"] > div,
+            section[data-testid="stSidebar"] {
+                background: var(--vq-sidebar) !important;
+                border-right: 1px solid var(--vq-border-soft) !important;
+            }
+            section[data-testid="stSidebar"] hr {
+                border-color: var(--vq-border-soft) !important;
+                opacity: 1 !important;
+            }
+            section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h1,
+            section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h2,
+            section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h3 {
+                color: var(--vq-text) !important;
+                letter-spacing: .01em;
+            }
+
+            /* 2. MÉTRICAS ------------------------------------------------ */
+            /* Valor siempre en blanco; el color lo lleva el delta, que es quien
+               comunica dirección. Streamlit ya marca el signo en el atributo
+               data-testid, así que no hace falta tocar Python para colorear. */
+            [data-testid="stMetric"] {
+                background: var(--vq-panel) !important;
+                border: 1px solid var(--vq-border) !important;
+                border-radius: var(--vq-radius-md) !important;
+                padding: .85rem 1rem !important;
+            }
+            [data-testid="stMetricValue"] {
+                color: #FFFFFF !important;
+                font-weight: 700 !important;
+                letter-spacing: -.01em;
+            }
+            [data-testid="stMetricLabel"],
+            [data-testid="stMetricLabel"] p {
+                color: var(--vq-muted) !important;
+                font-size: .78rem !important;
+                text-transform: uppercase;
+                letter-spacing: .08em;
+            }
+            [data-testid="stMetricDelta"] svg { display: none; }
+            [data-testid="stMetricDelta"] {
+                font-weight: 600 !important;
+                font-size: .85rem !important;
+            }
+            /* Streamlit expone la dirección del delta por el color inline del
+               SVG; estos selectores cubren las dos variantes de su DOM. */
+            [data-testid="stMetricDelta"][class*="positive"],
+            [data-testid="stMetricDelta"] > div:has(svg[fill="#09ab3b"]),
+            div[data-testid="stMetricDelta"] > div[style*="rgb(9, 171, 59)"] {
+                color: var(--vq-green) !important;
+            }
+            [data-testid="stMetricDelta"][class*="negative"],
+            [data-testid="stMetricDelta"] > div:has(svg[fill="#ff2b2b"]),
+            div[data-testid="stMetricDelta"] > div[style*="rgb(255, 43, 43)"] {
+                color: var(--vq-red) !important;
+            }
+
+            /* 3. TABLAS -------------------------------------------------- */
+            [data-testid="stDataFrame"],
+            [data-testid="stTable"] {
+                background: var(--vq-panel) !important;
+                border: 1px solid var(--vq-border) !important;
+                border-radius: var(--vq-radius-md) !important;
+                overflow: hidden;
+            }
+            [data-testid="stDataFrame"] [role="columnheader"],
+            [data-testid="stTable"] thead th {
+                background: var(--vq-panel-elevated) !important;
+                color: var(--vq-primary) !important;
+                font-weight: 700 !important;
+                text-transform: uppercase;
+                letter-spacing: .06em;
+                font-size: .74rem !important;
+                border-bottom: 1px solid var(--vq-border) !important;
+            }
+            [data-testid="stDataFrame"] [role="gridcell"],
+            [data-testid="stTable"] tbody td {
+                background: var(--vq-panel) !important;
+                color: var(--vq-text) !important;
+                border-color: var(--vq-border-soft) !important;
+            }
+            [data-testid="stTable"] tbody tr:hover td,
+            [data-testid="stDataFrame"] [role="row"]:hover [role="gridcell"] {
+                background: var(--vq-panel-elevated) !important;
+            }
+
+            /* 4. EXPANDERS ----------------------------------------------- */
+            [data-testid="stExpander"],
+            details[data-testid="stExpander"] {
+                background: var(--vq-panel) !important;
+                border: 1px solid var(--vq-border) !important;
+                border-radius: var(--vq-radius-md) !important;
+                box-shadow: none !important;
+            }
+            [data-testid="stExpander"] summary,
+            [data-testid="stExpander"] details > summary {
+                color: var(--vq-text) !important;
+                font-weight: 600 !important;
+            }
+            [data-testid="stExpander"] summary:hover {
+                color: var(--vq-primary) !important;
+            }
+
+            /* 5. BOTONES ------------------------------------------------- */
+            .stButton > button[kind="primary"],
+            .stDownloadButton > button[kind="primary"],
+            [data-testid="baseButton-primary"] {
+                background: var(--vq-primary) !important;
+                border: 1px solid var(--vq-primary) !important;
+                color: #070a0f !important;
+                font-weight: 700 !important;
+                border-radius: var(--vq-radius-sm) !important;
+                box-shadow: none !important;
+                transition: background .15s ease, border-color .15s ease;
+            }
+            .stButton > button[kind="primary"]:hover,
+            .stDownloadButton > button[kind="primary"]:hover,
+            [data-testid="baseButton-primary"]:hover {
+                background: var(--vq-primary-hover) !important;
+                border-color: var(--vq-primary-hover) !important;
+                color: #070a0f !important;
+            }
+            .stButton > button[kind="secondary"],
+            [data-testid="baseButton-secondary"] {
+                background: transparent !important;
+                border: 1px solid var(--vq-border) !important;
+                color: var(--vq-text-soft) !important;
+                border-radius: var(--vq-radius-sm) !important;
+                box-shadow: none !important;
+            }
+            .stButton > button[kind="secondary"]:hover,
+            [data-testid="baseButton-secondary"]:hover {
+                border-color: var(--vq-primary) !important;
+                color: var(--vq-primary) !important;
+            }
+
+            /* 6. CONTENEDORES Y CONTROLES -------------------------------- */
+            [data-testid="stVerticalBlockBorderWrapper"] {
+                background: var(--vq-panel);
+                border: 1px solid var(--vq-border);
+                border-radius: var(--vq-radius-md);
+            }
+            [data-testid="stTabs"] [role="tab"] {
+                color: var(--vq-muted) !important;
+                font-weight: 600;
+            }
+            [data-testid="stTabs"] [role="tab"][aria-selected="true"] {
+                color: var(--vq-primary) !important;
+                border-bottom-color: var(--vq-primary) !important;
+            }
+            .stTextInput input,
+            .stNumberInput input,
+            .stTextArea textarea,
+            .stSelectbox [data-baseweb="select"] > div,
+            .stMultiSelect [data-baseweb="select"] > div {
+                background: var(--vq-bg-soft) !important;
+                border-color: var(--vq-border) !important;
+                color: var(--vq-text) !important;
+                border-radius: var(--vq-radius-sm) !important;
+            }
+            .stTextInput input:focus,
+            .stNumberInput input:focus,
+            .stTextArea textarea:focus {
+                border-color: var(--vq-primary) !important;
+                box-shadow: 0 0 0 1px var(--vq-primary) !important;
+            }
+            /* Alertas nativas: mismo lenguaje de card con filo de color. */
+            [data-testid="stAlert"] {
+                background: var(--vq-panel) !important;
+                border: 1px solid var(--vq-border) !important;
+                border-radius: var(--vq-radius-md) !important;
+                color: var(--vq-text) !important;
+            }
         </style>
+        
         """,
         unsafe_allow_html=True,
     )

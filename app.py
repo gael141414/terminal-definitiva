@@ -48,6 +48,7 @@ from modulos.tool_catalog import (
     obtener_modos_navegacion,
 )
 from modulos.tool_router import CompanyToolContext, render_company_tool, render_independent_tool
+from modulos.html_markdown import escribir_html
 
 # ---------------- CONFIGURACIÓN ---------------- #
 # 1. CONFIGURACIÓN DE PÁGINA movida al inicio del archivo para cumplir Streamlit.
@@ -166,8 +167,7 @@ etiquetas_bloque = [h["label"] for h in herramientas_bloque]
 tool_labels = [strip_visual_prefix(label) for label in etiquetas_bloque]
 tool_icons = [TOOL_UI_ICONS.get(label, "circle") for label in etiquetas_bloque]
 
-st.markdown(
-    f"""
+escribir_html(f"""
     <div class="vq-control-panel">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-bottom:.75rem;">
             <div>
@@ -180,9 +180,7 @@ st.markdown(
                 <i class="bi bi-command"></i> Command Center
             </span>
         </div>
-    """,
-    unsafe_allow_html=True,
-)
+    """)
 
 seleccion_herramienta = render_option_menu_safe(
     tool_labels,

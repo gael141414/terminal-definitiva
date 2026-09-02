@@ -13,6 +13,7 @@ from modulos.sec_fmp_cross_validation import (
 )
 from modulos.tool_catalog import obtener_herramientas_por_grupo_consolidado
 from modulos.tool_consolidation import CONSOLIDATION_GROUPS, get_navigation_groups_ordered
+from modulos.html_markdown import escribir_html
 
 
 def render_navigation_group_card(group_key: str, *, index: int | None = None) -> None:
@@ -51,8 +52,7 @@ def render_navigation_group_card(group_key: str, *, index: int | None = None) ->
     if remaining > 0:
         items_html += f"<span style='color:#5b6a80;'>+ {remaining} más</span>"
 
-    st.markdown(
-        f"""
+    escribir_html(f"""
         <div style="background:rgba(18,25,38,0.92); border:1px solid rgba(147,164,187,0.1); border-radius:12px;
                     padding:20px 22px; display:flex; flex-direction:column; gap:12px; height:100%;">
             <div style="display:flex; align-items:baseline; gap:10px;">
@@ -64,9 +64,7 @@ def render_navigation_group_card(group_key: str, *, index: int | None = None) ->
                 {items_html}
             </div>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+        """)
 
 
 def render_navigation_groups_grid() -> None:
@@ -253,8 +251,7 @@ def render_kpi_card(
             f"color:{style['delta_color']};'>{html.escape(str(delta))}</span>"
         )
 
-    st.markdown(
-        f"""
+    escribir_html(f"""
         <div style="background:{style['card_bg']}; border:{style['border']}; box-shadow:{style['left_edge']};
                     border-radius:12px; padding:18px 20px; display:flex; flex-direction:column; gap:8px;">
             <div style="display:flex; align-items:center; gap:8px;">
@@ -269,9 +266,7 @@ def render_kpi_card(
             </div>
             <div style="font-size:11.5px; color:#5b6a80;">{html.escape(str(detail_text))}</div>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+        """)
 
 
 def pillar_semantic_color(score: float | None) -> str:

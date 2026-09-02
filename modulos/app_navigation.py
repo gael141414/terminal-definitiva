@@ -10,6 +10,7 @@ except Exception:
     option_menu = None
 
 from modulos.app_assets import strip_visual_prefix
+from modulos.html_markdown import escribir_html
 
 
 BLOQUE_UI = {
@@ -88,8 +89,7 @@ def render_context_header(
     if herramienta.get("input_mode") == "etf":
         badges.append("<span class='vq-badge vq-badge-warning'><i class='bi bi-diagram-3'></i> ETF / Fondo</span>")
 
-    st.markdown(
-        f"""
+    escribir_html(f"""
         <section class="vq-context-header">
             <div>
                 <div class="vq-context-eyebrow">{html.escape(nombre_bloque)}</div>
@@ -100,9 +100,7 @@ def render_context_header(
                 {''.join(badges)}
             </div>
         </section>
-        """,
-        unsafe_allow_html=True,
-    )
+        """)
 
 
 def render_option_menu_safe(options: list[str], icons: list[str], key: str, default_index: int = 0) -> str:

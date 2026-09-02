@@ -11,6 +11,7 @@ import yfinance as yf
 
 from modulos.config import DEBT_EQUITY_RED_FLAG
 from modulos.yahoo_resilience import safe_yfinance_fetch, safe_yfinance_info
+from modulos.html_markdown import escribir_html
 
 try:
     from modulos.utils import analizar_sentimiento_noticias
@@ -1044,8 +1045,7 @@ def render_valuequant_score_card(score: ValueQuantScore) -> None:
         else "Score bruto antes de gates: no disponible"
     )
 
-    st.markdown(
-        f"""
+    escribir_html(f"""
         <div style="
             border: 1px solid rgba(148,163,184,.18);
             border-radius: 16px;
@@ -1073,9 +1073,7 @@ def render_valuequant_score_card(score: ValueQuantScore) -> None:
                 Confianza predictiva: {predictive_text}. Basado en fundamentales, valoración, riesgo, momentum y proxies macro.
             </div>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+        """)
 
     with st.expander("Desglose del ValueQuant Score", expanded=False):
         st.dataframe(score.to_dataframe(), use_container_width=True, hide_index=True)

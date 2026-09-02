@@ -116,3 +116,86 @@ CONFIG = get_config()
 # apalancamiento que el modelo considera peligroso.
 DEBT_EQUITY_WARNING = 1.2
 DEBT_EQUITY_RED_FLAG = 1.5
+
+
+# =============================================================================
+# SISTEMA DE DISEÑO — fuente única de verdad del color
+# =============================================================================
+# Extraído del mockup docs/design (Exploracion_Navegacion.html). Antes cada
+# módulo hardcodeaba su propio hex ("#00ff88", "#00C0F2", "#1e4bd8"...), lo que
+# hacía imposible cambiar la identidad visual sin editar 40 archivos. El CSS
+# (modulos/app_theme.py) y los gráficos Plotly (modulos.utils.apply_plotly_theme)
+# consumen estas mismas constantes.
+
+COLOR_BG = "#070a0f"          # Fondo principal de la app
+COLOR_SURFACE = "#121926"     # Fondo de cards / paneles
+COLOR_SIDEBAR = "#0d1117"     # Fondo del sidebar
+COLOR_PRIMARY = "#4f8cff"     # Azul acento (acciones, headers de tabla)
+COLOR_ACCENT = "#37c6e6"      # Cian acento (deltas neutros, detalles)
+COLOR_POSITIVE = "#3ddc97"    # Verde: métrica favorable
+COLOR_NEGATIVE = "#f36c6c"    # Rojo: métrica de riesgo
+COLOR_WARNING = "#f5b04c"     # Ámbar: zona de vigilancia (entre aviso y red flag)
+COLOR_TEXT = "#e8edf5"        # Texto primario
+COLOR_TEXT_MUTED = "#93a4bb"  # Texto secundario / borde base
+
+FONT_STACK = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif"
+
+# El borde del sistema es el color muted a distinta opacidad, no un hex propio.
+COLOR_BORDER = "rgba(147, 164, 187, 0.35)"
+COLOR_BORDER_SOFT = "rgba(147, 164, 187, 0.20)"
+COLOR_GRID = "rgba(147, 164, 187, 0.15)"
+
+# Paleta cualitativa para series múltiples. El ORDEN no es decorativo: se validó
+# con el verificador de contraste/daltonismo del sistema de diseño sobre el fondo
+# de card (#121926). Con verde y cian adyacentes la separación caía a ΔE 14.5 en
+# visión normal (por debajo del mínimo de 15: dos series indistinguibles). Este
+# orden los separa y sube el peor par adyacente a ΔE 25.3 normal / 9.4 en
+# deuteranopía, con contraste >= 3:1 en los cinco tonos.
+# No reordenar sin volver a validar.
+PLOTLY_COLORWAY = (
+    COLOR_PRIMARY,    # azul
+    COLOR_WARNING,    # ámbar
+    COLOR_ACCENT,     # cian
+    COLOR_NEGATIVE,   # rojo
+    COLOR_POSITIVE,   # verde
+    "#a78bfa",        # violeta (6ª serie; fuera del núcleo de marca)
+)
+
+
+# =============================================================================
+# UMBRALES DEL BUFFETT SCORE
+# =============================================================================
+# Antes vivían como números mágicos dentro de calcular_score_buffett() en
+# modulos/utils.py. Centralizarlos permite auditarlos y reutilizarlos en el
+# screener/treemap sin duplicar la regla.
+
+BUFFETT_MARGEN_BRUTO_EXCELENTE = 40.0
+BUFFETT_MARGEN_BRUTO_BUENO = 20.0
+BUFFETT_MARGEN_NETO_EXCELENTE = 20.0
+BUFFETT_MARGEN_NETO_BUENO = 10.0
+BUFFETT_ROE_MINIMO = 15.0
+BUFFETT_ROIC_MINIMO = 15.0
+BUFFETT_DEUDA_EXCELENTE = 0.8
+BUFFETT_CAPEX_EXCELENTE = 25.0
+BUFFETT_CAPEX_ACEPTABLE = 50.0
+
+# Cortes de interpretación del score final (0-100), compartidos por la tabla del
+# screener, el treemap de mercado y las tarjetas KPI.
+BUFFETT_SCORE_BAJO = 40.0
+BUFFETT_SCORE_MEDIO = 60.0
+
+
+def color_por_buffett_score(score: float | int | None) -> str:
+    """Devuelve el color del sistema que corresponde a un Buffett Score.
+
+    Escala pedida por producto: rojo 0-40, ámbar 40-60, verde 60-100.
+    """
+    try:
+        valor = float(score)
+    except (TypeError, ValueError):
+        return COLOR_TEXT_MUTED
+    if valor < BUFFETT_SCORE_BAJO:
+        return COLOR_NEGATIVE
+    if valor < BUFFETT_SCORE_MEDIO:
+        return COLOR_WARNING
+    return COLOR_POSITIVE

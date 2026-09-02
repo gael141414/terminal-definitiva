@@ -20,6 +20,7 @@ from modulos.market_widgets import (
     obtener_market_treemap_data,
     obtener_ultimas_noticias,
 )
+from modulos.html_markdown import escribir_html
 
 MAX_TICKERS_RECIENTES = 3
 
@@ -219,17 +220,15 @@ def render_home_page(logo_path, home_bg_path) -> None:
     bg_style = f"url('{bg_uri}')" if bg_uri else "linear-gradient(135deg, #09111f, #05070b)"
     logo_html = f"<img class='vq-home-logo' src='{logo_uri}' alt='ValueQuant Terminal'>" if logo_uri else ""
 
-    # Hero Principal (Ajustado al margen izquierdo estricto para evitar bugs de markdown)
-    st.markdown(
-f"""<section class="vq-home-hero" style="--home-bg: {bg_style};">
+    # Hero Principal. El sangrado a cero ya no hace falta como truco:
+    # escribir_html aplana el bloque antes de entregárselo a Markdown.
+    escribir_html(f"""<section class="vq-home-hero" style="--home-bg: {bg_style};">
 <div class="vq-home-content">
 {logo_html}
 <h1 class="vq-home-title">ValueQuant Terminal</h1>
 <p class="vq-home-subtitle">Research fundamental, riesgo, timing cuantitativo y automatización de alertas en una mesa de análisis unificada.</p>
 </div>
-</section>""",
-        unsafe_allow_html=True,
-    )
+</section>""")
 
     # 1. RELOJES DE MERCADO (Market Status Bar)
     ahora_utc = datetime.now(timezone.utc)
