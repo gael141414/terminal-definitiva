@@ -127,18 +127,21 @@ DEBT_EQUITY_RED_FLAG = 1.5
 # (modulos/app_theme.py) y los gráficos Plotly (modulos.utils.apply_plotly_theme)
 # consumen estas mismas constantes.
 
-COLOR_BG = "#070a0f"          # Fondo principal de la app
-COLOR_SURFACE = "#121926"     # Fondo de cards / paneles
+COLOR_BG = "#05070d"          # Fondo principal de la app
+COLOR_SURFACE = "#101827"     # Fondo de cards / paneles
 COLOR_SIDEBAR = "#0d1117"     # Fondo del sidebar
-COLOR_PRIMARY = "#4f8cff"     # Azul acento (acciones, headers de tabla)
-COLOR_ACCENT = "#37c6e6"      # Cian acento (deltas neutros, detalles)
-COLOR_POSITIVE = "#3ddc97"    # Verde: métrica favorable
-COLOR_NEGATIVE = "#f36c6c"    # Rojo: métrica de riesgo
-COLOR_WARNING = "#f5b04c"     # Ámbar: zona de vigilancia (entre aviso y red flag)
+COLOR_PRIMARY = "#3b82f6"     # Azul acento (acciones, headers de tabla)
+COLOR_ACCENT = "#22d3ee"      # Cian acento (deltas neutros, detalles)
+COLOR_POSITIVE = "#10e39a"    # Verde: métrica favorable
+COLOR_NEGATIVE = "#fb5e6d"    # Rojo: métrica de riesgo
+COLOR_WARNING = "#fbbf24"     # Ámbar: zona de vigilancia (entre aviso y red flag)
 COLOR_TEXT = "#e8edf5"        # Texto primario
 COLOR_TEXT_MUTED = "#93a4bb"  # Texto secundario / borde base
 
-FONT_STACK = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif"
+FONT_STACK = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+# Familias por papel; deben coincidir con las de modulos/app_theme.py.
+FONT_TITULO = "Space Grotesk, Inter, sans-serif"
+FONT_DATO = "JetBrains Mono, ui-monospace, Menlo, monospace"
 
 # El borde del sistema es el color muted a distinta opacidad, no un hex propio.
 COLOR_BORDER = "rgba(147, 164, 187, 0.35)"

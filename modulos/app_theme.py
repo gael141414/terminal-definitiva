@@ -9,7 +9,10 @@ def inject_terminal_theme() -> None:
         """
         <style>
             @import url('https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css');
-            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+            /* Tres familias, tres papeles. JetBrains Mono se venía usando en
+               todas las cifras del terminal SIN importarse nunca, así que cada
+               número caía al monoespaciado por defecto del navegador. */
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@500;600;700;800&display=swap');
 
             /* ---------------------------------------------------------------
                SISTEMA DE DISEÑO ValueQuant — capa de tokens.
@@ -20,10 +23,10 @@ def inject_terminal_theme() -> None:
                (mismos hex que modulos/config.py, que alimenta los gráficos).
                --------------------------------------------------------------- */
             :root {
-                --vq-bg: #070a0f;
+                --vq-bg: #05070d;
                 --vq-bg-soft: #0d1117;
-                --vq-panel: #121926;
-                --vq-panel-elevated: #18202f;
+                --vq-panel: #101827;
+                --vq-panel-elevated: #162032;
                 --vq-panel-muted: #0d1117;
                 --vq-sidebar: #0d1117;
 
@@ -34,36 +37,85 @@ def inject_terminal_theme() -> None:
                 --vq-text-soft: #c3cede;
                 --vq-muted: #93a4bb;
 
-                --vq-primary: #4f8cff;
-                --vq-primary-hover: #6fa3ff;
-                --vq-primary-soft: rgba(79, 140, 255, .14);
-                --vq-cyan: #37c6e6;
+                --vq-primary: #3b82f6;
+                --vq-primary-hover: #60a5fa;
+                --vq-primary-soft: rgba(59, 130, 246, .16);
+                --vq-cyan: #22d3ee;
 
-                --vq-green: #3ddc97;
-                --vq-red: #f36c6c;
-                --vq-amber: #f5b04c;
+                --vq-green: #10e39a;
+                --vq-red: #fb5e6d;
+                --vq-amber: #fbbf24;
 
                 --vq-radius-sm: 8px;
                 --vq-radius-md: 10px;
-                --vq-radius-lg: 12px;
+                --vq-radius-lg: 14px;
 
-                /* El sistema pide bordes sutiles, no sombras duras: las sombras
-                   quedan neutralizadas en vez de eliminadas para no romper las
-                   ~30 reglas que ya referencian estas dos variables. */
-                --vq-shadow-soft: none;
-                --vq-shadow-card: none;
+                /* Tipografía por papel, no por elemento. */
+                --vq-font-titulo: "Space Grotesk", Inter, ui-sans-serif, system-ui, sans-serif;
+                --vq-font-texto: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+                --vq-font-dato: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+                /* Escala de espaciado de 4px: el "texto pegado al margen" venía
+                   de que cada componente inventaba su propio padding. */
+                --vq-esp-1: 4px;
+                --vq-esp-2: 8px;
+                --vq-esp-3: 12px;
+                --vq-esp-4: 16px;
+                --vq-esp-5: 24px;
+                --vq-esp-6: 32px;
+
+                /* Profundidad: sombra que asienta la tarjeta sobre el fondo, más
+                   un halo azul tenue que es lo que da el aire "de luz" de la
+                   referencia. Antes ambas estaban a none y todo se veía plano. */
+                --vq-shadow-soft:
+                    0 1px 2px rgba(0, 0, 0, .35),
+                    0 8px 24px rgba(0, 0, 0, .28);
+                --vq-shadow-card:
+                    0 1px 2px rgba(0, 0, 0, .40),
+                    0 12px 32px rgba(0, 0, 0, .34),
+                    0 0 40px rgba(59, 130, 246, .06);
+                --vq-shadow-glow: 0 0 0 1px rgba(59, 130, 246, .30), 0 8px 30px rgba(59, 130, 246, .18);
             }
 
             html, body, .stApp, [class*="css"] {
-                font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+                font-family: var(--vq-font-texto) !important;
                 letter-spacing: 0 !important;
             }
 
+            /* El tracking depende del tamaño: los titulares grandes se leen
+               separados si no se aprietan, y las microetiquetas al revés. Un
+               único letter-spacing global está mal en algún tamaño siempre. */
+            h1, h2, h3, .vq-panel-titulo, .vq-section-title {
+                font-family: var(--vq-font-titulo) !important;
+                letter-spacing: -0.022em !important;
+                line-height: 1.15 !important;
+            }
+
+            h4, h5, h6 {
+                font-family: var(--vq-font-titulo) !important;
+                letter-spacing: -0.01em !important;
+            }
+
+            /* Toda cifra, ticker o dato en monoespaciado tabular: las columnas
+               de números dejan de bailar al cambiar de dígito. */
+            .vq-dato,
+            [data-testid="stMetricValue"],
+            .vq-market-value,
+            .vq-ruta-actual {
+                font-family: var(--vq-font-dato) !important;
+                font-variant-numeric: tabular-nums;
+                letter-spacing: -0.01em;
+            }
+
             .stApp {
+                /* Rejilla de puntos + dos focos de luz: la textura técnica de la
+                   referencia, resuelta en CSS y sin coste de descarga. */
                 background:
-                    radial-gradient(circle at 12% 0%, rgba(79, 140, 255, .08), transparent 34rem),
-                    radial-gradient(circle at 88% 10%, rgba(55, 198, 230, .05), transparent 30rem),
+                    radial-gradient(circle at 12% 0%, rgba(59, 130, 246, .10), transparent 34rem),
+                    radial-gradient(circle at 88% 10%, rgba(34, 211, 238, .07), transparent 30rem),
+                    radial-gradient(rgba(147, 164, 187, .09) 1px, transparent 1px),
                     var(--vq-bg) !important;
+                background-size: auto, auto, 26px 26px, auto !important;
                 color: var(--vq-text) !important;
             }
 
@@ -958,11 +1010,9 @@ def inject_terminal_theme() -> None:
             }
 
             /* 6. CONTENEDORES Y CONTROLES -------------------------------- */
-            [data-testid="stVerticalBlockBorderWrapper"] {
-                background: var(--vq-panel);
-                border: 1px solid var(--vq-border);
-                border-radius: var(--vq-radius-md);
-            }
+            /* La primitiva de tarjeta se define una sola vez, más arriba. Aquí
+               había una segunda regla que la pisaba con otro radio y sin
+               padding: dos definiciones del mismo componente. */
             [data-testid="stTabs"] [role="tab"] {
                 color: var(--vq-muted) !important;
                 font-weight: 600;
@@ -994,6 +1044,150 @@ def inject_terminal_theme() -> None:
                 border-radius: var(--vq-radius-md) !important;
                 color: var(--vq-text) !important;
             }
+
+            /* ===============================================================
+               MOVIMIENTO
+
+               Streamlit elimina las etiquetas <script> de st.markdown, así que
+               todo esto es CSS puro: es lo único fiable aquí. Nada de esto
+               depende de JavaScript ni de librerías externas.
+
+               Regla de fondo: la respuesta se da al PULSAR, no al soltar. En
+               cuanto aparece latencia entre el gesto y la reacción, la
+               sensación de manipulación directa se cae.
+               =============================================================== */
+
+            /* --- Pulsación: reacción inmediata al bajar el dedo ---------- */
+            .stButton > button,
+            .stDownloadButton > button,
+            [data-testid="stFormSubmitButton"] > button,
+            [data-testid="stPopover"] button {
+                transition:
+                    transform .1s cubic-bezier(.2, 0, .2, 1),
+                    background .15s ease,
+                    border-color .15s ease,
+                    box-shadow .15s ease !important;
+            }
+
+            .stButton > button:active,
+            .stDownloadButton > button:active,
+            [data-testid="stFormSubmitButton"] > button:active {
+                transform: scale(.97);
+            }
+
+            .stButton > button[kind="primary"]:hover,
+            [data-testid="stFormSubmitButton"] > button:hover {
+                box-shadow: var(--vq-shadow-glow) !important;
+            }
+
+            /* --- Tarjetas: elevación al pasar por encima ------------------
+               Solo las que son navegables. Una tarjeta puramente informativa
+               que se mueve al pasar el cursor promete una interacción que no
+               existe. */
+            .vq-market-card,
+            .vq-news-card,
+            .vq-group-card {
+                transition:
+                    transform .14s cubic-bezier(.2, 0, .2, 1),
+                    border-color .14s ease,
+                    box-shadow .14s ease;
+                will-change: transform;
+            }
+
+            .vq-market-card:hover,
+            .vq-news-card:hover,
+            .vq-group-card:hover {
+                transform: translateY(-2px);
+                border-color: rgba(59, 130, 246, .45);
+                box-shadow: var(--vq-shadow-card);
+            }
+
+            /* --- Entrada: la rejilla se construye, no aparece de golpe ---- */
+            @keyframes vq-entrada {
+                from { opacity: 0; transform: translateY(8px); }
+                to   { opacity: 1; transform: none; }
+            }
+
+            div[data-testid="stVerticalBlockBorderWrapper"],
+            .vq-market-grid > *,
+            .vq-news-grid > * {
+                animation: vq-entrada .32s cubic-bezier(.2, 0, .2, 1) both;
+            }
+
+            /* Escalonado: 40ms por tarjeta. Lo justo para leerse como cascada
+               y no como espera. */
+            .vq-market-grid > *:nth-child(1),  .vq-news-grid > *:nth-child(1)  { animation-delay: 0ms; }
+            .vq-market-grid > *:nth-child(2),  .vq-news-grid > *:nth-child(2)  { animation-delay: 40ms; }
+            .vq-market-grid > *:nth-child(3),  .vq-news-grid > *:nth-child(3)  { animation-delay: 80ms; }
+            .vq-market-grid > *:nth-child(4),  .vq-news-grid > *:nth-child(4)  { animation-delay: 120ms; }
+            .vq-market-grid > *:nth-child(5),  .vq-news-grid > *:nth-child(5)  { animation-delay: 160ms; }
+            .vq-market-grid > *:nth-child(n+6), .vq-news-grid > *:nth-child(n+6) { animation-delay: 200ms; }
+
+            /* --- Carga: esqueleto con barrido, en vez del spinner por defecto */
+            @keyframes vq-barrido {
+                from { background-position: -160% 0; }
+                to   { background-position: 260% 0; }
+            }
+
+            .vq-esqueleto {
+                border-radius: var(--vq-radius-sm);
+                background: linear-gradient(
+                    90deg,
+                    var(--vq-panel) 25%,
+                    var(--vq-panel-elevated) 50%,
+                    var(--vq-panel) 75%);
+                background-size: 220% 100%;
+                animation: vq-barrido 1.4s ease-in-out infinite;
+            }
+
+            [data-testid="stSpinner"] > div {
+                border-top-color: var(--vq-primary) !important;
+            }
+
+            /* --- Azulejo de icono: el nodo de la referencia --------------- */
+            .vq-azulejo {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 36px;
+                height: 36px;
+                flex: 0 0 36px;
+                border-radius: 10px;
+                background: linear-gradient(160deg, rgba(59, 130, 246, .18), rgba(34, 211, 238, .08));
+                border: 1px solid rgba(59, 130, 246, .28);
+                color: var(--vq-primary);
+                font-size: 16px;
+                box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
+            }
+
+            /* --- Accesibilidad ------------------------------------------
+               Reducir movimiento no es quitar la respuesta: es cambiarla por
+               una que no active el sistema vestibular. Se conservan color y
+               opacidad, que ayudan a entender; se eliminan desplazamientos,
+               escalas y bucles. Hay gente a quien esto le provoca mareo. */
+            @media (prefers-reduced-motion: reduce) {
+                *,
+                *::before,
+                *::after {
+                    animation-duration: .01ms !important;
+                    animation-iteration-count: 1 !important;
+                    transition-duration: .01ms !important;
+                    scroll-behavior: auto !important;
+                }
+
+                .vq-market-card:hover,
+                .vq-news-card:hover,
+                .vq-group-card:hover,
+                .stButton > button:active {
+                    transform: none;
+                }
+
+                .vq-esqueleto {
+                    animation: none;
+                    background: var(--vq-panel-elevated);
+                }
+            }
+
         </style>
         
         """,
