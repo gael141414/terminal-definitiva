@@ -44,7 +44,13 @@ def simulate_monte_carlo(
     try:
         initial = float(initial_portfolio_value)
         mu = float(expected_return)
-        sigma = max(float(volatility), 0.0001)
+        sigma = float(volatility)
+        if not np.isfinite(sigma) or sigma <= 0:
+            # Antes se elevaba a 0,0001. El efecto era una proyección casi
+            # determinista: P5, P50 y P95 prácticamente idénticos, es decir, un
+            # abanico sin incertidumbre presentado como si tuviera precisión.
+            # Sin volatilidad no hay simulación que hacer.
+            return np.empty((0, 0), dtype=float)
         horizon = max(int(years), 1)
         simulations = max(int(num_simulations), 100)
         steps = horizon * TRADING_DAYS
@@ -142,7 +148,14 @@ def render_montecarlo() -> None:
         percentiles = extract_percentiles(paths)
 
     if percentiles is None:
-        st.error("No se pudo ejecutar la simulación.")
+        if not np.isfinite(volatility) or volatility <= 0:
+            st.error(
+                "Sin volatilidad no hay nada que simular: una proyección con volatilidad "
+                "cero devolvería una única trayectoria y la presentaría como si fuese "
+                "una certeza. Indica una volatilidad mayor que cero."
+            )
+        else:
+            st.error("No se pudo ejecutar la simulación con los parámetros indicados.")
         return
 
     final_p50 = float(percentiles.p50[-1])

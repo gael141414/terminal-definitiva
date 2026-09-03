@@ -597,7 +597,14 @@ def _capital_allocation_component(r_cf: pd.DataFrame, res_val: dict[str, Any] | 
     if _is_valid(buybacks) and _is_valid(fcf) and fcf > 0:
         buyback_score = _score_linear(buybacks / fcf, 0.0, 0.6)
 
-    dividend_score = 65 if _is_valid(dividends) and dividends > 0 else 50
+    # Un dividendo de 0 es un dato (la empresa no reparte) y puntúa neutral. Un
+    # dividendo AUSENTE no es un dato: pasa None para que _weighted_mean lo
+    # excluya, igual que hacen buyback_score y fcf_yield justo al lado. Con un 50
+    # fijo se fabricaba una observación que además inflaba la cobertura.
+    if not _is_valid(dividends):
+        dividend_score = None
+    else:
+        dividend_score = 65 if dividends > 0 else 50
 
     score = _weighted_mean(
         [

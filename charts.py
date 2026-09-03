@@ -1858,9 +1858,13 @@ def plot_visor_reversion_media(ticker, period="1y"):
         # 2. Calculamos Estocástico del RSI
         rolling_min = df['RSI'].rolling(window=14).min()
         rolling_max = df['RSI'].rolling(window=14).max()
-        # Evitamos divisiones por cero
+        # Cuando el RSI lleva 14 sesiones perfectamente plano, max == min y el
+        # Estocástico es 0/0: indefinido. Sustituir el rango por 1e-10 daba
+        # StochRSI = 0, que se lee como SOBREVENTA EXTREMA — una señal alcista
+        # inventada a partir de la ausencia de movimiento. Con NaN el gráfico
+        # deja un hueco, que es la lectura honesta.
         rango = rolling_max - rolling_min
-        rango = rango.replace(0, 1e-10) 
+        rango = rango.replace(0, np.nan)
         
         df['StochRSI'] = ((df['RSI'] - rolling_min) / rango) * 100
         df['Stoch_K'] = df['StochRSI'].rolling(window=3).mean() # Línea rápida

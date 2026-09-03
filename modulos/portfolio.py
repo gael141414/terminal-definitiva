@@ -144,7 +144,13 @@ def calcular_frontera_eficiente(tickers: Sequence[str], capital_euros: float) ->
             cash_weight = weights[-1]
             expected = float(risky_weights @ mean_returns + cash_weight * risk_free_rate)
             variance = float(risky_weights.T @ cov @ risky_weights)
-            vol = float(np.sqrt(max(variance, 1e-12)))
+            if not np.isfinite(variance) or variance <= 0:
+                # Elevar la varianza a 1e-12 hacía que el Sharpe se disparase a
+                # ~1e6. Como el optimizador MAXIMIZA el Sharpe, ese suelo no era
+                # inofensivo: creaba un óptimo artificial hacia el que empujar.
+                # Una cartera sin varianza no tiene Sharpe definido.
+                return expected, 0.0, float("-inf")
+            vol = float(np.sqrt(variance))
             sharpe = (expected - risk_free_rate) / vol
             return expected, vol, sharpe
 

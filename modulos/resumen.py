@@ -150,28 +150,36 @@ def ejecutar_resumen_ejecutivo(ticker_input, is_df, bs_df, cf_df, res_is, res_bs
     st.subheader("Veredicto del Algoritmo")
     
     nota_global = valuequant_score.final_score if valuequant_score is not None else nota_buffett
-    confianza = valuequant_score.confidence if valuequant_score is not None else 1.0
+    # Sin ValueQuantScore no hay confianza que declarar. Antes se ponía 1.0 y la
+    # pantalla imprimía "Confianza del modelo: 100%" justo cuando NO había
+    # modelo: la ausencia de información presentada como certeza máxima.
+    confianza = valuequant_score.confidence if valuequant_score is not None else None
+    texto_confianza = (
+        f"Confianza del modelo: {confianza * 100:.0f}%."
+        if confianza is not None
+        else "Sin ValueQuant Score: la nota es el Buffett Score histórico, sin confianza asociada."
+    )
 
     if nota_global >= 80:
         st.success(
             f"**Tesis de alta calidad:** {ticker_input} obtiene un ValueQuant Score de "
             f"{nota_global:.1f}/100. Combina calidad, valoración, riesgo, crecimiento, "
             f"momentum y contexto macro. Estado actual: **{estado_precio}**. "
-            f"Confianza del modelo: {confianza*100:.0f}%."
+            f"{texto_confianza}"
         )
     elif nota_global >= 65:
         st.info(
             f"**Empresa atractiva con matices:** {ticker_input} obtiene un ValueQuant Score de "
             f"{nota_global:.1f}/100. La tesis es razonable, pero conviene revisar valoración, "
             f"riesgos y catalizadores. Estado actual: **{estado_precio}**. "
-            f"Confianza del modelo: {confianza*100:.0f}%."
+            f"{texto_confianza}"
         )
     elif nota_global >= 50:
         st.warning(
             f"**Tesis neutral/exigente:** {ticker_input} obtiene un ValueQuant Score de "
             f"{nota_global:.1f}/100. Hay fortalezas, pero no suficientes para una lectura "
             f"claramente favorable. Estado actual: **{estado_precio}**. "
-            f"Confianza del modelo: {confianza*100:.0f}%."
+            f"{texto_confianza}"
         )
     else:
         st.error(
