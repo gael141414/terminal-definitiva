@@ -10,6 +10,7 @@ from roboadvisor_engine import PortfolioOptimizer
 
 from modulos.config import DEBT_EQUITY_RED_FLAG
 from modulos.yahoo_resilience import safe_yfinance_fetch
+from modulos.forense_scores import altman_z_score, beneish_m_score
 
 # ---------------- VALUEQUANT GLOBAL PLOTLY THEME ---------------- #
 VQ_COLORS = ['#4f8cff', '#37c6e6', '#36c486', '#e2a93b', '#ef5b6b', '#93a4bb']
@@ -546,51 +547,52 @@ def plot_auditoria_forense(ticker, precio_actual, acciones_actuales):
         if bs.empty or is_stmt.empty:
             return None, ["Datos insuficientes en Yahoo Finance para la auditoría."], None
 
-        # Extraer los datos más recientes (columna 0)
+        # Devuelve None cuando el dato no está, en vez del antiguo 0.001: con
+        # el sentinela, una empresa SIN dato de activo corriente daba un ratio
+        # de liquidez de casi cero y se marcaba "Liquidez Crítica" sin base.
         def get_safe(df, keys):
             for k in keys:
                 if k in df.index:
                     val = df.loc[k].iloc[0]
-                    if pd.notna(val) and val != 0: return val
-            return 0.001 # Evitar divisiones por cero
+                    if pd.notna(val) and val != 0:
+                        return float(val)
+            return None
 
-        # 1. Recolección de Datos Contables
-        total_assets = get_safe(bs, ['Total Assets'])
-        total_liabilities = get_safe(bs, ['Total Liabilities Net Minority Interest', 'Total Liabilities'])
+        # 1. Recolección de Datos Contables (solo para las banderas rojas: el
+        #    Z-Score lo calcula modulos.forense_scores, que es la única
+        #    implementación de la fórmula).
         current_assets = get_safe(bs, ['Current Assets'])
         current_liabilities = get_safe(bs, ['Current Liabilities'])
-        retained_earnings = get_safe(bs, ['Retained Earnings'])
-        
         ebit = get_safe(is_stmt, ['EBIT', 'Operating Income'])
-        sales = get_safe(is_stmt, ['Total Revenue', 'Operating Revenue'])
         interest_expense = get_safe(is_stmt, ['Interest Expense'])
         net_income = get_safe(is_stmt, ['Net Income'])
-        
-        # 2. CÁLCULO DEL ALTMAN Z-SCORE (Modelo para empresas públicas)
-        # Z = 1.2(X1) + 1.4(X2) + 3.3(X3) + 0.6(X4) + 1.0(X5)
-        working_capital = current_assets - current_liabilities
-        market_cap = precio_actual * acciones_actuales if precio_actual and acciones_actuales else 0
-        
-        x1 = working_capital / total_assets
-        x2 = retained_earnings / total_assets
-        x3 = ebit / total_assets
-        x4 = market_cap / total_liabilities
-        x5 = sales / total_assets
-        
-        z_score = (1.2 * x1) + (1.4 * x2) + (3.3 * x3) + (0.6 * x4) + (1.0 * x5)
+
+        # 2. ALTMAN Z-SCORE
+        market_cap = precio_actual * acciones_actuales if precio_actual and acciones_actuales else None
+        altman = altman_z_score(bs, is_stmt, capitalizacion=market_cap)
+        if not altman.evaluable:
+            # Antes, un dato ausente se sustituía por 0,001 y la división daba
+            # un Z-Score enorme que se pintaba como "zona segura". Ahora se dice
+            # que no se sabe.
+            faltan = ", ".join(altman.campos_ausentes) or "datos contables"
+            return None, [f"No se puede calcular el Altman Z-Score: falta {faltan}."], None
+        z_score = altman.valor
         
         # 3. ESCÁNER DE BANDERAS ROJAS (Red Flags del PDF)
         red_flags = []
         
         # Bandera 1: Liquidez Crítica (Current Ratio)
-        current_ratio = current_assets / current_liabilities
-        if current_ratio < 1.0:
+        current_ratio = (current_assets / current_liabilities
+                         if current_assets is not None and current_liabilities else None)
+        if current_ratio is None:
+            red_flags.append("ℹ️ **Liquidez:** sin datos de circulante para evaluarla.")
+        elif current_ratio < 1.0:
             red_flags.append(f"🔴 **Liquidez Crítica:** Los pasivos a corto plazo superan a los activos líquidos (Ratio: {current_ratio:.2f}x). Riesgo de impagos a proveedores.")
         elif current_ratio > 3.0:
             red_flags.append(f"🟡 **Efectivo Ocioso:** El ratio de circulante es muy alto ({current_ratio:.2f}x). La empresa acumula efectivo que no está invirtiendo productivamente.")
 
         # Bandera 2: Cobertura de Intereses (¿Puede pagar su deuda?)
-        if interest_expense > 0: # En YF los gastos a veces vienen en positivo o negativo
+        if interest_expense and ebit is not None:  # en YF el gasto puede venir con cualquier signo
             interest_expense = abs(interest_expense)
             interest_coverage = ebit / interest_expense
             if interest_coverage < 1.5:
@@ -600,7 +602,7 @@ def plot_auditoria_forense(ticker, precio_actual, acciones_actuales):
 
         # Bandera 3: Dividendos Tóxicos (Payout Ratio)
         divs = _cached_dividends(ticker)
-        if not divs.empty and net_income > 0:
+        if not divs.empty and net_income is not None and net_income > 0:
             div_anual = divs.groupby(divs.index.year).sum().iloc[-1]
             payout_ratio = (div_anual * acciones_actuales) / net_income
             if payout_ratio > 1.0:
@@ -775,65 +777,18 @@ def plot_beneish_m_score(ticker):
         if bs.empty or is_stmt.empty or len(bs.columns) < 2 or len(is_stmt.columns) < 2:
             return None, "Datos históricos insuficientes para el análisis de manipulación (M-Score).", []
 
-        def get_safe_2y(df, keys):
-            """Extrae el valor del año actual (0) y del año anterior (1) de forma segura"""
-            for k in keys:
-                if k in df.index:
-                    val0 = df.loc[k].iloc[0]
-                    val1 = df.loc[k].iloc[1]
-                    if pd.notna(val0) and pd.notna(val1) and val1 != 0:
-                        return val0, val1
-            return 0.001, 0.001 # Prevenir división por cero
+        # El cálculo vive en modulos.forense_scores: una sola implementación de
+        # los ocho índices, sin sustituir los datos ausentes por 0,001.
+        beneish = beneish_m_score(bs, is_stmt, cf)
+        if not beneish.evaluable:
+            faltan = ", ".join(beneish.campos_ausentes) or "datos contables"
+            return None, f"No se puede calcular el M-Score: falta {faltan}.", []
 
-        # 1. Extracción de variables de Año Actual (0) y Año Anterior (1)
-        ventas_0, ventas_1 = get_safe_2y(is_stmt, ['Total Revenue', 'Operating Revenue'])
-        cogs_0, cogs_1 = get_safe_2y(is_stmt, ['Cost Of Revenue', 'Cost of Goods Sold'])
-        rec_0, rec_1 = get_safe_2y(bs, ['Accounts Receivable', 'Net Receivables'])
-        act_tot_0, act_tot_1 = get_safe_2y(bs, ['Total Assets'])
-        act_curr_0, act_curr_1 = get_safe_2y(bs, ['Current Assets', 'Total Current Assets'])
-        ppe_0, ppe_1 = get_safe_2y(bs, ['Net PPE', 'Property Plant And Equipment'])
-        dep_0, dep_1 = get_safe_2y(cf, ['Depreciation', 'Depreciation And Amortization'])
-        sga_0, sga_1 = get_safe_2y(is_stmt, ['Selling General And Administration', 'SG&A'])
-        pas_curr_0, pas_curr_1 = get_safe_2y(bs, ['Current Liabilities', 'Total Current Liabilities'])
-        deuda_lp_0, deuda_lp_1 = get_safe_2y(bs, ['Long Term Debt', 'Total Long Term Debt'])
-        
-        # Datos especiales para Accruals (Solo año actual)
-        net_income = get_safe_2y(is_stmt, ['Net Income', 'Net Income Continuous Operations'])[0]
-        cfo = get_safe_2y(cf, ['Operating Cash Flow', 'Total Cash From Operating Activities'])[0]
-
-        # 2. Cálculo de los 8 Índices de Beneish
-        # DSRI: Índice de Ventas a Cobrar (Si es > 1, están inflando ventas dando crédito falso)
-        dsri = (rec_0 / ventas_0) / (rec_1 / ventas_1) if ventas_0 > 0 and ventas_1 > 0 else 1.0
-        
-        # GMI: Índice de Margen Bruto (Si es > 1, los márgenes están empeorando)
-        gmi = ((ventas_1 - cogs_1) / ventas_1) / ((ventas_0 - cogs_0) / ventas_0) if ventas_0 > 0 and ventas_1 > 0 else 1.0
-        
-        # AQI: Índice de Calidad de Activos (Si es > 1, están metiendo basura intangible en el balance)
-        aqi_0 = 1 - ((act_curr_0 + ppe_0) / act_tot_0) if act_tot_0 > 0 else 1.0
-        aqi_1 = 1 - ((act_curr_1 + ppe_1) / act_tot_1) if act_tot_1 > 0 else 1.0
-        aqi = aqi_0 / aqi_1 if aqi_1 > 0 else 1.0
-        
-        # SGI: Índice de Crecimiento de Ventas
-        sgi = ventas_0 / ventas_1 if ventas_1 > 0 else 1.0
-        
-        # DEPI: Índice de Depreciación (Si es > 1, están ralentizando la depreciación para inflar beneficios artificialmente)
-        tasa_dep_0 = dep_0 / (ppe_0 + dep_0) if (ppe_0 + dep_0) > 0 else 1.0
-        tasa_dep_1 = dep_1 / (ppe_1 + dep_1) if (ppe_1 + dep_1) > 0 else 1.0
-        depi = tasa_dep_1 / tasa_dep_0 if tasa_dep_0 > 0 else 1.0
-        
-        # SGAI: Índice de Gastos Generales
-        sgai = (sga_0 / ventas_0) / (sga_1 / ventas_1) if ventas_0 > 0 and ventas_1 > 0 else 1.0
-        
-        # LVGI: Índice de Apalancamiento (Deuda)
-        lvg_0 = (pas_curr_0 + deuda_lp_0) / act_tot_0 if act_tot_0 > 0 else 1.0
-        lvg_1 = (pas_curr_1 + deuda_lp_1) / act_tot_1 if act_tot_1 > 0 else 1.0
-        lvgi = lvg_0 / lvg_1 if lvg_1 > 0 else 1.0
-        
-        # TATA: Acumulaciones Totales vs Activos Totales (Dinero de papel vs Activos reales)
-        tata = (net_income - cfo) / act_tot_0 if act_tot_0 > 0 else 0.0
-
-        # 3. La Fórmula Maestra del M-Score (8 Variables)
-        m_score = -4.84 + (0.920 * dsri) + (0.528 * gmi) + (0.404 * aqi) + (0.892 * sgi) + (0.115 * depi) - (0.172 * sgai) + (4.679 * tata) - (0.327 * lvgi)
+        m_score = beneish.valor
+        dsri = beneish.indices["DSRI"]
+        gmi = beneish.indices["GMI"]
+        depi = beneish.indices["DEPI"]
+        tata = beneish.indices["TATA"]
 
         # 4. Renderizado Visual del Gauge (Medidor)
         # Umbral: > -2.22 = Riesgo de manipulación. < -2.22 = Limpio.
