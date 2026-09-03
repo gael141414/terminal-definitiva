@@ -202,3 +202,66 @@ def color_por_buffett_score(score: float | int | None) -> str:
     if valor < BUFFETT_SCORE_MEDIO:
         return COLOR_WARNING
     return COLOR_POSITIVE
+
+
+# ==========================================================================
+# DECISIÓN DE VENTA (modulos/decision_venta.py)
+#
+# Ningún número de este bloque debe repetirse dentro del módulo: si un umbral
+# se toca, se toca aquí.
+#
+# ADVERTENCIA sobre la evidencia disponible. modulos/swing_salidas.py contiene
+# una validación sobre 2.377 operaciones donde NINGUNA gestión activa de salida
+# batió a aguantar hasta el horizonte (0,39R aguantar · 0,39R salir por señal ·
+# 0,28R stop dinámico). Aquella prueba cubría el pilar técnico en horizonte
+# swing, no valoración ni fundamentales, así que no invalida este módulo — pero
+# es el prior con el que hay que leer cualquier resultado de aquí.
+# ==========================================================================
+
+PERFIL_LARGO_PLAZO = "largo_plazo"
+PERFIL_SWING = "swing"
+
+# Pesos de los tres pilares por perfil. Suman 1,0.
+PESOS_VENTA: dict[str, dict[str, float]] = {
+    PERFIL_LARGO_PLAZO: {"valoracion": 0.40, "fundamentales": 0.40, "tecnico": 0.20},
+    PERFIL_SWING: {"valoracion": 0.20, "fundamentales": 0.30, "tecnico": 0.50},
+}
+
+# Bandas del sell score (0-100).
+UMBRAL_REDUCIR = 30.0
+UMBRAL_VENDER = 60.0
+
+# Fracción a reducir cuando la decisión es REDUCIR, antes de los topes de
+# concentración. Un tercio es el estándar de la toma por tercios.
+FRACCION_REDUCCION = 1 / 3
+
+# Stop duro desde el precio de entrada. O'Neil usa −7/−8%; se toma el extremo
+# conservador porque aquí cubre posiciones de largo plazo, no solo swing.
+STOP_DURO_PCT = 8.0
+
+# Margen sobre el valor razonable a partir del cual se vende del todo: por
+# debajo solo se recorta.
+MARGEN_SOBREVALORACION_VENTA = 0.25
+
+# Umbrales de tesis rota. Altman clásico y Z'' NO comparten escala.
+UMBRAL_ALTMAN_TESIS_ROTA = 1.81
+UMBRAL_ALTMAN_DP_TESIS_ROTA = 1.10
+UMBRAL_BENEISH_TESIS_ROTA = -1.78
+UMBRAL_PIOTROSKI_TESIS_ROTA = 3
+
+# Percentil de múltiplos a partir del cual la acción está cara frente a su
+# propia historia.
+PERCENTIL_MULTIPLOS_CARO = 80.0
+
+# El régimen de mercado endurece o relaja el pilar técnico: la misma señal
+# bajista pesa más cuando el mercado ya está en distribución.
+FACTOR_REGIMEN_ADVERSO = 1.25
+FACTOR_REGIMEN_FAVORABLE = 0.80
+
+# Regla de las 8 semanas de O'Neil: una subida fuerte y rápida merece dejarla
+# correr antes de recortar.
+SEMANAS_REGLA_OCHO = 8
+SUBIDA_REGLA_OCHO_PCT = 20.0
+
+# Fiscalidad española: informativo, nunca decide.
+DIAS_RECOMPRA_ES = 60  # regla de los dos meses para valores cotizados
