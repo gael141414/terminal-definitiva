@@ -36,15 +36,15 @@ EXPECTED_GROUP_COUNTS = {
     "market_terminal": 6,  # +1: Swing Trading
     "discovery_engine": 8,
     "historical_lab": 3,  # Predictor de Techos/Suelos se trasladó a utilities_postmvp (Fase 7)
-    "portfolio_risk": 6,
+    "portfolio_risk": 7,
     "automation_watchlist": 8,  # +1: Diario de Decisiones
     "utilities_postmvp": 5,  # +1 tras el traslado anterior; mockup original pedía 5 aquí
 }
 
 
-def test_catalogo_tiene_37_herramientas():
+def test_catalogo_tiene_38_herramientas():
     # 35 originales de la consolidación + Swing Trading + Diario de Decisiones.
-    assert len(TOOL_CATALOG) == 37
+    assert len(TOOL_CATALOG) == 38
 
 
 def test_todas_las_herramientas_del_catalogo_tienen_metadatos_de_consolidacion():
@@ -66,7 +66,7 @@ def test_conteo_por_grupo_coincide_con_lo_documentado():
     counts.pop("research_core", None)
 
     assert dict(counts) == EXPECTED_GROUP_COUNTS
-    assert sum(EXPECTED_GROUP_COUNTS.values()) == 36  # 34 consolidadas + Swing Trading + Diario
+    assert sum(EXPECTED_GROUP_COUNTS.values()) == 37  # 34 consolidadas + Swing Trading + Diario + Decisión de Venta
     assert sum(EXPECTED_GROUP_COUNTS.values()) + 1 == len(TOOL_CATALOG)  # +1 = Research Core
 
 

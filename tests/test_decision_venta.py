@@ -129,11 +129,14 @@ def test_la_decision_es_serializable_a_json():
 
 
 def test_la_decision_arrastra_siempre_la_advertencia_de_evidencia():
-    """Ninguna gestión activa de salida batió a aguantar en la prueba histórica
-    del repositorio. La interfaz no puede omitirlo."""
+    """La regla no batió a aguantar en la prueba propia. No se puede omitir."""
+    from modulos.decision_venta import RESULTADO_VALIDACION
+
     decision = evaluar_posicion(_datos(), Posicion("TEST", entrada=100.0))
     assert decision.advertencia == ADVERTENCIA_EVIDENCIA
-    assert "2.377" in decision.advertencia
+    assert "4.199" in decision.advertencia
+    assert RESULTADO_VALIDACION["retorno_regla_pct"] < RESULTADO_VALIDACION["retorno_aguantar_pct"]
+    assert RESULTADO_VALIDACION["retorno_regla_pct"] > RESULTADO_VALIDACION["retorno_aleatoria_pct"]
 
 
 # ==========================================================================
@@ -172,17 +175,24 @@ def test_sin_valor_razonable_no_se_inventan_precios_objetivo():
 # ==========================================================================
 
 
-def test_el_stop_duro_vende_aunque_todo_lo_demas_este_bien():
-    """Por debajo del stop la entrada ya no se sostiene: no es cuestión de grado."""
+def test_el_stop_duro_vende_en_swing_pero_solo_avisa_en_largo_plazo():
+    """MEDIDO: aplicar el stop de −8% a posiciones de un año rindió 11,03%
+    frente al 36,31% de aguantar. Corta caídas normales de valores que luego se
+    recuperan, y se pierde toda la subida posterior. Así que decide en swing,
+    que es el horizonte para el que la regla se diseñó, y avisa en largo plazo.
+    """
     precio = 100.0 * (1 - (STOP_DURO_PCT + 2) / 100)
-    decision = evaluar_posicion(
-        _datos(precio_actual=precio), Posicion("TEST", entrada=100.0),
-    )
+    posicion = Posicion("TEST", entrada=100.0)
 
-    assert decision.accion == VENDER
-    assert decision.flags["override_stop"]
-    assert decision.reducir_pct == 100.0
-    assert any("Stop duro" in t for t in decision.triggers)
+    swing = evaluar_posicion(_datos(precio_actual=precio), posicion, perfil=PERFIL_SWING)
+    assert swing.accion == VENDER
+    assert swing.flags["override_stop"]
+    assert swing.reducir_pct == 100.0
+    assert any("Stop duro" in t for t in swing.triggers)
+
+    largo = evaluar_posicion(_datos(precio_actual=precio), posicion, perfil=PERFIL_LARGO_PLAZO)
+    assert not largo.flags["override_stop"]
+    assert any("aviso, no una orden" in t for t in largo.triggers)
 
 
 def test_una_caida_menor_que_el_stop_no_dispara_el_override():
@@ -211,11 +221,11 @@ def test_la_tesis_rota_por_riesgo_de_quiebra_vende():
 
 
 def test_un_override_manda_por_encima_del_score():
-    """Aunque el score diga MANTENER, el stop roto vende."""
+    """Aunque el score diga MANTENER, el stop roto vende (en swing)."""
     precio = 100.0 * (1 - (STOP_DURO_PCT + 5) / 100)
     datos = _datos(precio_actual=precio, fair_value=400.0,
                    margen_seguridad=(400.0 - precio) / precio)
-    decision = evaluar_posicion(datos, Posicion("TEST", entrada=100.0))
+    decision = evaluar_posicion(datos, Posicion("TEST", entrada=100.0), perfil=PERFIL_SWING)
 
     assert decision.sell_score < UMBRAL_VENDER, "el score por sí solo no vendería"
     assert decision.accion == VENDER
@@ -305,7 +315,9 @@ def test_un_peso_excesivo_obliga_a_recortar_hasta_el_tope():
 
 def test_vender_suelta_el_cien_por_cien():
     precio = 100.0 * (1 - (STOP_DURO_PCT + 5) / 100)
-    decision = evaluar_posicion(_datos(precio_actual=precio), Posicion("TEST", entrada=100.0))
+    decision = evaluar_posicion(_datos(precio_actual=precio), Posicion("TEST", entrada=100.0),
+                                perfil=PERFIL_SWING)
+    assert decision.accion == VENDER
     assert decision.reducir_pct == 100.0
 
 
@@ -364,7 +376,8 @@ def test_sin_precio_de_entrada_no_se_evalua_el_stop():
 
 def test_la_explicacion_dice_la_accion_y_los_motivos():
     precio = 100.0 * (1 - (STOP_DURO_PCT + 5) / 100)
-    decision = evaluar_posicion(_datos(precio_actual=precio), Posicion("TEST", entrada=100.0))
+    decision = evaluar_posicion(_datos(precio_actual=precio), Posicion("TEST", entrada=100.0),
+                                perfil=PERFIL_SWING)
 
     assert "Vender" in decision.explicacion
     assert "Stop duro" in decision.explicacion or "stop duro" in decision.explicacion
@@ -375,7 +388,8 @@ def test_la_explicacion_avisa_de_la_fiscalidad_solo_al_vender_o_reducir():
     assert not mantener.flags["fiscal_es"]
 
     precio = 100.0 * (1 - (STOP_DURO_PCT + 5) / 100)
-    vender = evaluar_posicion(_datos(precio_actual=precio), Posicion("TEST", entrada=100.0))
+    vender = evaluar_posicion(_datos(precio_actual=precio), Posicion("TEST", entrada=100.0),
+                              perfil=PERFIL_SWING)
     assert vender.flags["fiscal_es"]
     assert "base del ahorro" in vender.explicacion
 
@@ -394,3 +408,31 @@ def test_el_pilar_tecnico_se_evalua_de_verdad_con_datos_normales():
     decision = evaluar_posicion(_datos(), Posicion("TEST", entrada=100.0))
     assert decision.sub_scores["tecnico"] is not None
     assert 0 <= decision.sub_scores["tecnico"] <= 100
+
+
+# ==========================================================================
+# ALERTAS
+# ==========================================================================
+
+
+def test_mantener_no_genera_alerta():
+    """Avisar de que no hay que hacer nada es ruido, y el ruido entrena a
+    ignorar las alertas de verdad."""
+    from modulos.watchlist_alerts import alertas_por_decision_venta
+
+    decision = evaluar_posicion(_datos(), Posicion("TEST", entrada=100.0))
+    assert decision.accion == MANTENER
+    assert alertas_por_decision_venta(decision) == []
+
+
+def test_solo_la_tesis_rota_sube_la_alerta_a_prioridad_alta():
+    """Una lectura de precio no puede tener la misma urgencia que un hecho
+    sobre el negocio, sobre todo cuando la regla no batió a aguantar."""
+    from modulos.decision_venta import DecisionVenta
+    from modulos.watchlist_alerts import alertas_por_decision_venta
+
+    por_precio = DecisionVenta("X", accion=VENDER, sell_score=70.0, flags={"tesis_rota": False})
+    por_negocio = DecisionVenta("X", accion=VENDER, sell_score=70.0, flags={"tesis_rota": True})
+
+    assert alertas_por_decision_venta(por_precio)[0].priority == "Media"
+    assert alertas_por_decision_venta(por_negocio)[0].priority == "Alta"

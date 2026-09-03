@@ -235,9 +235,18 @@ UMBRAL_VENDER = 60.0
 # concentración. Un tercio es el estándar de la toma por tercios.
 FRACCION_REDUCCION = 1 / 3
 
-# Stop duro desde el precio de entrada. O'Neil usa −7/−8%; se toma el extremo
-# conservador porque aquí cubre posiciones de largo plazo, no solo swing.
+# Stop duro desde el precio de entrada (regla de O'Neil, −7/−8%).
 STOP_DURO_PCT = 8.0
+
+# MEDIDO: aplicar ese stop a posiciones de un año destruye el resultado. Sobre
+# 4.199 operaciones, solo-stop-fijo rindió +11,03% frente a +36,31% de aguantar,
+# con un 17,1% de acierto: el stop corta las caídas normales de un valor que
+# luego se recupera, y se pierde toda la subida posterior.
+#
+# Así que el stop hace de override —fuerza la venta por sí solo— únicamente en
+# swing, que es el horizonte para el que la regla se diseñó. En largo plazo
+# sigue apareciendo como aviso y suma al pilar técnico, pero no decide.
+STOP_DURO_ES_OVERRIDE_EN = (PERFIL_SWING,)
 
 # Margen sobre el valor razonable a partir del cual se vende del todo: por
 # debajo solo se recorta.

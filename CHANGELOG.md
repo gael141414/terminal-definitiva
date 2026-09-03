@@ -4,6 +4,40 @@ Todos los cambios relevantes de ValueQuant Terminal se documentan en este archiv
 
 El formato sigue una estructura práctica inspirada en Keep a Changelog y versionado semántico interno. Mientras el producto siga en prototipo local, las versiones se marcan como `internal`.
 
+## [0.2.0-internal] - 2026-09-03
+
+### Added
+
+- **Decisión de venta sobre posiciones abiertas** (`modulos/decision_venta.py`): dada una acción con
+  precio y fecha de entrada, devuelve MANTENER / REDUCIR / VENDER, cuánto reducir y precios objetivo,
+  combinando valoración, deterioro fundamental y técnica en un *sell score* con pesos por perfil.
+- Métricas forenses como funciones puras (`modulos/forense_scores.py`): Altman Z y Z'', Beneish M y
+  F-Score de Piotroski, que antes no existía. Estaban entrelazadas con el dibujo dentro de `charts.py`.
+- Múltiplos en el percentil de su propia historia (`modulos/multiplos_historicos.py`), con retardo de
+  publicación de 75 días para no contaminar la serie con información futura.
+- Backtest honesto de la regla de salida (`scripts/backtest_decision_venta.py`) contra aguantar, venta
+  aleatoria de igual frecuencia y solo-stop-fijo.
+- Alertas de watchlist derivadas del veredicto de venta.
+
+### Changed
+
+- El stop duro de −8% deja de forzar la venta en el perfil de largo plazo y pasa a ser solo un aviso.
+  **Medido**: aplicado a posiciones de un año rindió 11,03% frente al 36,31% de aguantar, con un 17,1%
+  de acierto. Sigue decidiendo en swing, que es el horizonte para el que la regla se diseñó.
+
+### Fixed
+
+- Los datos contables ausentes se sustituían por `0.001` "para evitar divisiones por cero". Dividir
+  entre 0,001 produce ratios de miles que se presentaban como puntuaciones legítimas: una empresa sin
+  el dato de activos totales salía con un Altman Z enorme, es decir, **en zona segura**. Ahora devuelve
+  `None` y enumera los campos que faltan.
+
+### Evidencia
+
+- La regla de salida bate a la venta aleatoria por 15,5 puntos sobre 4.199 operaciones (lleva
+  información) pero **no bate a aguantar** (−0,55). Los pilares de valoración y fundamentales quedan
+  **sin validar**: reconstruirlos sin look-ahead exige datos point-in-time que el repositorio no tiene.
+
 ## [0.1.0-internal] - 2026-07-08
 
 ### Added

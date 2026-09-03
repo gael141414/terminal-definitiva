@@ -131,6 +131,7 @@ TOOL_CONSOLIDATION: dict[str, dict[str, str | int | bool]] = {
     "🦢 Test Cisnes Negros (Crisis)": {"group": "historical_lab", "status": "merge", "order": 30, "visible_in_mvp": False},
 
     # Portfolio & Risk (6)
+    "🚪 Decisión de Venta": {"group": "portfolio_risk", "status": "core", "order": 26, "visible_in_mvp": True},
     "📓 Diario de Decisiones": {"group": "automation_watchlist", "status": "core", "order": 25, "visible_in_mvp": True},
     "📚 Análisis Guardados": {"group": "portfolio_risk", "status": "core", "order": 10, "visible_in_mvp": True},
     "⚖️ Optimizador de Cartera": {"group": "portfolio_risk", "status": "merge", "order": 20, "visible_in_mvp": True},

@@ -40,7 +40,8 @@ from modulos.config import (
     DIAS_RECOMPRA_ES, FACTOR_REGIMEN_ADVERSO, FACTOR_REGIMEN_FAVORABLE,
     FRACCION_REDUCCION, MARGEN_SOBREVALORACION_VENTA, PERCENTIL_MULTIPLOS_CARO,
     PERFIL_LARGO_PLAZO, PERFIL_SWING, PESOS_VENTA, SEMANAS_REGLA_OCHO,
-    STOP_DURO_PCT, SUBIDA_REGLA_OCHO_PCT, UMBRAL_ALTMAN_DP_TESIS_ROTA,
+    STOP_DURO_ES_OVERRIDE_EN, STOP_DURO_PCT, SUBIDA_REGLA_OCHO_PCT,
+    UMBRAL_ALTMAN_DP_TESIS_ROTA,
     UMBRAL_ALTMAN_TESIS_ROTA, UMBRAL_BENEISH_TESIS_ROTA,
     UMBRAL_PIOTROSKI_TESIS_ROTA, UMBRAL_REDUCIR, UMBRAL_VENDER,
 )
@@ -55,7 +56,7 @@ __all__ = [
     "COL_SMA50", "COL_SMA200", "COL_RSI",
     "Posicion", "DatosPosicion", "SubScore", "DecisionVenta",
     "evaluar_posicion", "decidir_venta",
-    "ADVERTENCIA_EVIDENCIA",
+    "ADVERTENCIA_EVIDENCIA", "RESULTADO_VALIDACION",
 ]
 
 # Nombres de columna de modulos.indicadores.enriquecer_ohlcv. Se declaran aquí
@@ -69,11 +70,28 @@ MANTENER = "MANTENER"
 REDUCIR = "REDUCIR"
 VENDER = "VENDER"
 
+# Medido por scripts/backtest_decision_venta.py sobre 57 valores, 10 años y
+# 4.199 operaciones, con coste del 0,1% por lado.
+RESULTADO_VALIDACION = {
+    "operaciones": 4199,
+    "retorno_aguantar_pct": 36.31,
+    "retorno_regla_pct": 35.76,
+    "retorno_aleatoria_pct": 20.22,
+    "retorno_solo_stop_pct": 11.03,
+    "conclusion": (
+        "La regla técnica bate a la venta aleatoria por 15,5 puntos —lleva "
+        "información— pero NO bate a aguantar (−0,55). El stop fijo a −8% aplicado "
+        "a posiciones de un año es destructivo: 11,03% frente a 36,31%. Valoración "
+        "y fundamentales quedan sin validar por falta de datos point-in-time."
+    ),
+}
+
 ADVERTENCIA_EVIDENCIA = (
-    "Sobre 2.377 operaciones históricas, ninguna gestión activa de salida batió a "
-    "aguantar hasta el horizonte (swing_salidas.RESULTADO_VALIDACION). Aquella prueba "
-    "cubría solo el pilar técnico a 30 sesiones. Trata esta decisión como un panel de "
-    "diagnóstico, no como una orden."
+    "Medido sobre 4.199 operaciones: la regla bate a la venta aleatoria (+15,5 puntos), "
+    "así que lleva información, pero NO bate a limitarse a aguantar (−0,55). El stop "
+    "fijo a −8% aplicado a posiciones de un año rindió 11% frente al 36% de aguantar. "
+    "Los pilares de valoración y fundamentales quedan SIN VALIDAR. Trátalo como un "
+    "panel de diagnóstico, no como una orden."
 )
 
 
@@ -340,17 +358,28 @@ def evaluar_tecnico(datos: DatosPosicion, posicion: Posicion) -> SubScore:
 # ==========================================================================
 
 
-def _overrides(datos: DatosPosicion, posicion: Posicion) -> tuple[list[str], dict[str, bool]]:
+def _overrides(datos: DatosPosicion, posicion: Posicion,
+               perfil: str = PERFIL_LARGO_PLAZO) -> tuple[list[str], dict[str, bool]]:
     """Sucesos binarios que mandan por sí solos. No son cuestión de grado."""
     triggers: list[str] = []
     flags = {"override_stop": False, "tesis_rota": False}
 
     plusvalia = posicion.plusvalia_pct(datos.precio_actual)
     if plusvalia is not None and plusvalia <= -STOP_DURO_PCT:
-        flags["override_stop"] = True
-        triggers.append(
-            f"Stop duro: {plusvalia:.1f}% desde la entrada, por debajo de −{STOP_DURO_PCT}%."
-        )
+        # El stop solo DECIDE donde la evidencia lo respalda. Aplicado a
+        # posiciones de un año rindió +11,03% frente a +36,31% de aguantar
+        # (ver RESULTADO_VALIDACION): corta caídas normales de valores que luego
+        # se recuperan. En largo plazo se avisa, pero no manda.
+        if perfil in STOP_DURO_ES_OVERRIDE_EN:
+            flags["override_stop"] = True
+            triggers.append(
+                f"Stop duro: {plusvalia:.1f}% desde la entrada, por debajo de −{STOP_DURO_PCT}%."
+            )
+        else:
+            triggers.append(
+                f"Por debajo del stop de −{STOP_DURO_PCT}% ({plusvalia:.1f}%). En largo plazo "
+                "esto es un aviso, no una orden: vender aquí empeoró el resultado en la prueba."
+            )
 
     altman = altman_z_score(datos.balance, datos.resultados, capitalizacion=datos.capitalizacion)
     if not altman.evaluable:
@@ -469,7 +498,7 @@ def evaluar_posicion(
     else:
         decision.avisos.append("Ningún pilar evaluable: no hay decisión que dar.")
 
-    triggers_duros, flags = _overrides(datos, posicion)
+    triggers_duros, flags = _overrides(datos, posicion, perfil)
     decision.triggers.extend(triggers_duros)
     decision.flags = dict(flags)
 

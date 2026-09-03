@@ -456,3 +456,59 @@ def alert_summary(df_alerts: pd.DataFrame) -> dict[str, int]:
 
     counts = df_alerts["Prioridad"].value_counts().to_dict()
     return {priority: int(counts.get(priority, 0)) for priority in ("Alta", "Media", "Baja", "Info")}
+
+
+# ==========================================================================
+# DECISIÓN DE VENTA
+# ==========================================================================
+
+
+def alertas_por_decision_venta(decision: Any) -> list[WatchlistAlert]:
+    """Convierte un veredicto de venta en alertas de la watchlist.
+
+    Solo genera alerta cuando la decisión sale de MANTENER: avisar de que no hay
+    que hacer nada sería ruido, y el ruido entrena a ignorar las alertas de
+    verdad.
+
+    La prioridad NUNCA es "Alta" por sí sola. Sobre 4.199 operaciones medidas
+    (``decision_venta.RESULTADO_VALIDACION``) la regla no batió a aguantar, así
+    que esto es un aviso para mirar, no una orden de ejecutar.
+    """
+    from modulos.decision_venta import MANTENER, REDUCIR, VENDER
+
+    accion = getattr(decision, "accion", MANTENER)
+    if accion == MANTENER:
+        return []
+
+    ticker = getattr(decision, "ticker", "")
+    score = getattr(decision, "sell_score", None)
+    motivos = getattr(decision, "triggers", []) or []
+    tesis_rota = bool((getattr(decision, "flags", {}) or {}).get("tesis_rota"))
+
+    # Solo la tesis rota sube a prioridad alta: es un hecho sobre el negocio, no
+    # una lectura de precio.
+    prioridad = "Alta" if tesis_rota else ("Media" if accion == VENDER else "Baja")
+
+    if accion == VENDER:
+        titulo = "Revisar para venta total"
+        sugerida = "Contrastar la tesis antes de ejecutar."
+    else:
+        reducir = getattr(decision, "reducir_pct", 0.0)
+        titulo = f"Revisar para reducir ~{reducir:.0f}%"
+        sugerida = "Valorar un recorte parcial."
+
+    detalle = motivos[0] if motivos else "Sin motivo destacado."
+    if score is not None:
+        detalle = f"Sell score {score:.0f}/100. {detalle}"
+
+    return [
+        WatchlistAlert(
+            ticker=ticker,
+            priority=prioridad,
+            category="Decisión de venta",
+            title=titulo,
+            detail=detalle,
+            action=sugerida,
+            score=int(score) if score is not None else 0,
+        )
+    ]
