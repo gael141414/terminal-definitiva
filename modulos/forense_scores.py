@@ -25,13 +25,14 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Sequence
 
+import numpy as np
 import pandas as pd
 
 LOGGER = logging.getLogger("valuequant.forense")
 
 __all__ = [
     "AltmanZ", "BeneishM", "PiotroskiF",
-    "altman_z_score", "beneish_m_score", "piotroski_f_score",
+    "altman_z_score", "beneish_m_score", "piotroski_f_score", "normalizar_estados",
     "ZONA_PELIGRO", "ZONA_GRIS", "ZONA_SEGURA", "ZONA_DESCONOCIDA",
 ]
 
@@ -88,6 +89,48 @@ def _dividir(numerador: float | None, denominador: float | None) -> float | None
     if numerador is None or denominador is None or denominador == 0:
         return None
     return numerador / denominador
+
+
+def normalizar_estados(df: Any) -> Any:
+    """Deja un estado financiero como espera este módulo: conceptos en el
+    índice y el ejercicio MÁS RECIENTE primero.
+
+    Hace falta porque el repositorio maneja las dos orientaciones. yfinance
+    entrega conceptos en el índice y fechas en columnas; el respaldo
+    ``yfinance_fundamentals`` traduce al esquema de FMP, que pone las FECHAS en
+    el índice, los conceptos en columnas y además en orden ascendente.
+
+    Sin normalizar, ``_serie`` busca los conceptos en el índice, no encuentra
+    ninguno y todas las métricas salen no evaluables. No falla nada: el pilar de
+    fundamentales sencillamente no se calcula, y eso es peor que un error porque
+    no se ve.
+    """
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        return df
+
+    resultado = df
+    # Índice de fechas => los conceptos están en columnas: hay que transponer.
+    if isinstance(df.index, pd.DatetimeIndex):
+        resultado = df.T
+    else:
+        try:
+            fechas = pd.to_datetime(pd.Index(df.index), errors="coerce")
+            if fechas.notna().all() and len(df.index) > 1:
+                resultado = df.T
+        except Exception:
+            pass
+
+    # El ejercicio más reciente va primero: todo el módulo lee iloc[0] como
+    # "año actual" e iloc[1] como "año anterior".
+    try:
+        columnas = pd.to_datetime(pd.Index(resultado.columns), errors="coerce")
+        if columnas.notna().all() and len(resultado.columns) > 1:
+            orden = np.argsort(columnas.values)[::-1]
+            resultado = resultado.iloc[:, orden]
+    except Exception:
+        pass
+
+    return resultado
 
 
 # ==========================================================================

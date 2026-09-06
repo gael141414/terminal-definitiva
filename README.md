@@ -142,6 +142,22 @@ no es azar. Pero **no bate a limitarse a aguantar**. Y el stop fijo a −8% apli
 año es destructivo, porque corta caídas normales de valores que luego se recuperan; por eso solo
 decide en el perfil de swing.
 
+### Actualización 2026-09-06: revalidación sobre entradas reales
+
+El backtest anterior usaba entradas sintéticas mensuales, un diseño sesgado contra las salidas por
+construcción. Se repitió sobre **7.212 entradas reales** generadas por el catálogo de estrategias:
+
+| Regla | Retorno medio | Diferencia vs aguantar (IC95) |
+|---|---|---|
+| Aguantar | **+1,44%** | — |
+| Regla técnica | +1,44% | −0,004 pts [−0,042, +0,031] · **no significativa** |
+| Stop fijo −8% | +0,78% | −0,660 pts [−1,112, −0,290] · **peor** |
+| Compuesta | +0,79% | −0,658 pts [−1,110, −0,290] · **peor** |
+
+Las tres hipótesis pre-registradas quedaron refutadas, dos de ellas **en dirección contraria** a lo
+esperado: las salidas hacen más daño en régimen bajista y sobre las entradas de peor calidad. Detalle
+completo en [docs/resultado_validacion_salidas.md](docs/resultado_validacion_salidas.md).
+
 Los pilares de **valoración y fundamentales quedan sin validar**: reconstruirlos sin look-ahead exige
 las cuentas tal y como se conocían en cada fecha pasada, y el repositorio no tiene esos datos
 point-in-time generados. Trata la herramienta como un panel de diagnóstico, no como una orden.

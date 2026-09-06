@@ -247,3 +247,64 @@ def test_sin_ningun_dato_no_hay_puntuacion():
     f = piotroski_f_score(vacio, vacio, vacio)
     assert f.valor is None
     assert not f.evaluable
+
+
+# ==========================================================================
+# ORIENTACIÓN DE LOS ESTADOS FINANCIEROS
+# ==========================================================================
+
+
+def test_normalizar_acepta_la_orientacion_de_fmp_con_fechas_en_el_indice():
+    """El respaldo yfinance_fundamentals traduce al esquema de FMP, que pone las
+    FECHAS en el índice y los conceptos en columnas — al revés de lo que espera
+    este módulo. Sin normalizar no encuentra ni un concepto, todas las métricas
+    salen no evaluables y el pilar de fundamentales no se calcula NUNCA, sin
+    error visible. Es lo que ocurría en producción.
+    """
+    from modulos.forense_scores import normalizar_estados
+
+    al_reves = pd.DataFrame(
+        {"totalAssets": [800.0, 900.0, 1000.0], "retainedEarnings": [200.0, 250.0, 300.0]},
+        index=pd.to_datetime(["2022-12-31", "2023-12-31", "2024-12-31"]),
+    )
+    normalizado = normalizar_estados(al_reves)
+
+    assert "totalAssets" in normalizado.index, "los conceptos deben quedar en el índice"
+    assert float(normalizado.loc["totalAssets"].iloc[0]) == 1000.0, (
+        "el ejercicio más reciente va primero: todo el módulo lee iloc[0] como año actual"
+    )
+
+
+def test_normalizar_no_toca_lo_que_ya_viene_bien():
+    from modulos.forense_scores import normalizar_estados
+
+    correcto = _balance_sano()
+    resultado = normalizar_estados(correcto)
+
+    assert list(resultado.index) == list(correcto.index)
+    assert float(resultado.loc["Total Assets"].iloc[0]) == 1000.0
+
+
+def test_una_tabla_normalizada_si_produce_un_altman_evaluable():
+    """La prueba de que la normalización arregla el fallo de verdad."""
+    from modulos.forense_scores import normalizar_estados
+
+    al_reves = _balance_sano().T
+    resultados_al_reves = _resultados_sanos().T
+
+    sin_normalizar = altman_z_score(al_reves, resultados_al_reves, capitalizacion=2000.0)
+    assert not sin_normalizar.evaluable, "así fallaba en silencio"
+
+    con_normalizar = altman_z_score(
+        normalizar_estados(al_reves), normalizar_estados(resultados_al_reves),
+        capitalizacion=2000.0,
+    )
+    assert con_normalizar.evaluable
+    assert con_normalizar.valor == pytest.approx(5.075, abs=0.01)
+
+
+def test_normalizar_tolera_entradas_vacias_o_nulas():
+    from modulos.forense_scores import normalizar_estados
+
+    assert normalizar_estados(None) is None
+    assert normalizar_estados(pd.DataFrame()).empty

@@ -624,15 +624,54 @@ def reunir_datos(ticker: str) -> DatosPosicion:
     except Exception as exc:
         LOGGER.warning("Sin histórico para %s: %s", ticker, exc)
 
+    resultados = balance = flujos = None
     try:
+        from modulos.forense_scores import normalizar_estados
         from modulos.yfinance_fundamentals import obtener_fundamentales_yfinance
 
         # Devuelve la 4-tupla (is_df, bs_df, cf_df, key_metrics) para respetar
         # la firma de extraer_datos_fundamentales_fmp; el cuarto es siempre None.
         resultados, balance, flujos, _metricas = obtener_fundamentales_yfinance(ticker)
-        datos.resultados, datos.balance, datos.flujos = resultados, balance, flujos
+
+        # CRÍTICO: esta fuente entrega las FECHAS en el índice y los conceptos
+        # en columnas, en orden ascendente. forense_scores espera lo contrario.
+        # Sin normalizar no encuentra ni un concepto, todas las métricas salen
+        # no evaluables y el pilar de fundamentales no se calcula nunca — sin
+        # error visible, que es lo peor que puede pasar.
+        datos.resultados = normalizar_estados(resultados)
+        datos.balance = normalizar_estados(balance)
+        datos.flujos = normalizar_estados(flujos)
     except Exception as exc:
         LOGGER.warning("Sin fundamentales para %s: %s", ticker, exc)
+
+    # Pilar de valoración: sin esto quedaba permanentemente sin evaluar, porque
+    # nadie rellenaba fair_value ni los múltiplos actuales.
+    try:
+        from financials.valuator import valorar_empresa
+
+        res_val = valorar_empresa(resultados, balance, flujos, None, ticker) or {}
+        precio = datos.precio_actual or res_val.get("precio_actual")
+
+        # Mediana de las valoraciones disponibles: ningún método manda solo.
+        candidatos = [res_val.get(k) for k in ("dcf_value", "epv_value", "graham_value", "lynch_value")]
+        validos = [float(v) for v in candidatos
+                   if v is not None and np.isfinite(float(v)) and float(v) > 0]
+        if validos:
+            datos.fair_value = float(np.median(validos))
+            if precio:
+                datos.margen_seguridad = (datos.fair_value - precio) / precio
+
+        eps = res_val.get("eps_actual")
+        if precio and eps and float(eps) > 0:
+            datos.per_actual = precio / float(eps)
+        fcf_accion = res_val.get("fcf_per_share")
+        if precio and fcf_accion and float(fcf_accion) > 0:
+            datos.pfcf_actual = precio / float(fcf_accion)
+        acciones = res_val.get("acciones_actuales")
+        if precio and acciones and float(acciones) > 0:
+            datos.capitalizacion = precio * float(acciones)
+    except Exception as exc:
+        LOGGER.warning("Sin valoración para %s: %s", ticker, exc)
 
     try:
         from modulos.swing_regimen import clasificar_regimen

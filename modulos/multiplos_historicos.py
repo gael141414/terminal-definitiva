@@ -64,17 +64,37 @@ def _fila(df: Any, claves: Sequence[str]) -> pd.Series | None:
 
 def _a_fechas(indice) -> pd.DatetimeIndex | None:
     try:
-        return pd.to_datetime(pd.Index(indice), errors="coerce")
+        return _sin_zona(pd.to_datetime(pd.Index(indice), errors="coerce"))
     except Exception:
         return None
+
+
+def _sin_zona(indice):
+    """Quita la zona horaria si la hay.
+
+    Los precios de Yahoo llegan con tz (America/New_York) y las fechas
+    contables sin ella. Comparar ambas lanza TypeError, y como aquí todo son
+    fechas de día —no instantes—, la zona no aporta nada.
+    """
+    try:
+        if getattr(indice, "tz", None) is not None:
+            return indice.tz_localize(None)
+    except (AttributeError, TypeError):
+        pass
+    return indice
 
 
 def _precio_tras_cierre(precios: pd.Series, cierre: pd.Timestamp, retardo: int) -> float | None:
     """Primer precio disponible una vez publicadas las cuentas."""
     if precios is None or precios.empty or pd.isna(cierre):
         return None
-    objetivo = cierre + pd.Timedelta(days=retardo)
-    posteriores = precios[precios.index >= objetivo]
+    objetivo = pd.Timestamp(cierre)
+    if objetivo.tz is not None:
+        objetivo = objetivo.tz_localize(None)
+    objetivo = objetivo + pd.Timedelta(days=retardo)
+
+    indice = _sin_zona(precios.index)
+    posteriores = precios[indice >= objetivo]
     if posteriores.empty:
         return None
     return float(posteriores.iloc[0])
@@ -105,6 +125,7 @@ def serie_multiplos(
     if not isinstance(precios.index, pd.DatetimeIndex):
         precios.index = pd.to_datetime(precios.index, errors="coerce")
         precios = precios[precios.index.notna()]
+    precios.index = _sin_zona(precios.index)
 
     beneficio = _fila(resultados, ["Net Income", "netIncome", "Net Income Continuous Operations"])
     if beneficio is None:

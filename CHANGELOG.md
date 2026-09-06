@@ -4,6 +4,38 @@ Todos los cambios relevantes de ValueQuant Terminal se documentan en este archiv
 
 El formato sigue una estructura práctica inspirada en Keep a Changelog y versionado semántico interno. Mientras el producto siga en prototipo local, las versiones se marcan como `internal`.
 
+## [0.3.0-internal] - 2026-09-06
+
+### Added
+
+- Validación de reglas de salida sobre **entradas reales** (`modulos/backtest_salidas.py`,
+  `scripts/backtest_salidas_entradas_reales.py`), pre-registrada en
+  `docs/preregistro_validacion_salidas.md` y con resultado en `docs/resultado_validacion_salidas.md`.
+- Registro **forward** de decisiones (`modulos/congelado_forward.py`, `jobs/congelar_decisiones.py`),
+  iniciado el 2026-09-06: guarda cada decisión y sus tres sub-scores antes de conocer el retorno.
+- `forense_scores.normalizar_estados`, que acepta las dos orientaciones de estados financieros
+  que conviven en el repositorio.
+
+### Fixed
+
+- **El pilar de fundamentales no se calculaba nunca en producción.** El respaldo de yfinance
+  entrega las fechas en el índice y los conceptos en columnas, al revés de lo que espera
+  `forense_scores`. No fallaba nada: las métricas salían no evaluables y el pilar se omitía en
+  silencio.
+- **El pilar de valoración tampoco.** `reunir_datos` no rellenaba `fair_value`, margen de
+  seguridad ni múltiplos, así que quedaba permanentemente sin evaluar.
+- Choque de zona horaria entre precios (con tz) y fechas contables (sin tz) en el cálculo de
+  múltiplos históricos, que afloró al ejecutarse ese camino por primera vez.
+
+### Evidencia
+
+- Sobre **7.212 entradas reales**: aguantar +1,44%, técnica +1,44% (diferencia −0,004 pts, IC95
+  [−0,042, +0,031], **no significativa**), compuesta y stop fijo −0,66 pts (**significativamente
+  peores**). Las tres hipótesis pre-registradas quedan **refutadas**, dos de ellas del revés.
+- La regla técnica se dispara en el 0,7% de las operaciones: es inerte, no dañina. Replica lo que
+  ya medía `swing_salidas` (0,9%) con otro diseño y otra muestra.
+- CAGR y max drawdown se retiran por no ser computables con este diseño; el motivo se documenta.
+
 ## [0.2.0-internal] - 2026-09-03
 
 ### Added
