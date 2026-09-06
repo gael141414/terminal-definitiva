@@ -4,6 +4,30 @@ Todos los cambios relevantes de ValueQuant Terminal se documentan en este archiv
 
 El formato sigue una estructura práctica inspirada en Keep a Changelog y versionado semántico interno. Mientras el producto siga en prototipo local, las versiones se marcan como `internal`.
 
+## [0.5.0-internal] - 2026-09-06
+
+### Added
+
+- Eje de riesgo de las reglas de salida (`modulos/riesgo_salidas.py`,
+  `scripts/riesgo_salidas_informe.py`): construcción de cartera a partir de operaciones
+  solapadas, maxDD con duración, Sortino, Calmar, Ulcer, CVaR5, MAE, asimetría y curtosis,
+  todo con IC por bootstrap. No existía ninguna de estas primitivas en el repositorio.
+- Tres gráficas en `docs/img/`: curvas de capital, curvas de drawdown con el episodio COVID
+  marcado, y distribución por operación con la cola señalada.
+
+### Evidencia
+
+- **Veredicto según criterio pre-registrado: las salidas son un seguro caro.** El canje sale
+  NEGATIVO en la construcción principal (−0,89 puntos de maxDD por punto de CAGR cedido): se
+  paga la prima y además se recibe más caída.
+- **En el episodio COVID, donde el seguro debía pagar, cobró**: la compuesta casi dobló la
+  pérdida (−23,1% frente a −12,8% de aguantar) y cayó más hondo.
+- Hallazgo metodológico: **cortar la cola por operación no es cortar el drawdown de cartera.**
+  El CVaR5 de la compuesta mejora a la mitad y su peor operación pasa de −71% a −15%, y aun así
+  el drawdown de la cartera empeora.
+- Con peso fijo del 2% el criterio B pasa por dos centésimas (3,08 frente a 3,00), por un efecto
+  de construcción de cartera —el capital liberado va a efectivo— y no por acierto de la regla.
+
 ## [0.4.0-internal] - 2026-09-06
 
 ### Added

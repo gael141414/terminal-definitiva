@@ -158,6 +158,24 @@ Las tres hipótesis pre-registradas quedaron refutadas, dos de ellas **en direcc
 esperado: las salidas hacen más daño en régimen bajista y sobre las entradas de peor calidad. Detalle
 completo en [docs/resultado_validacion_salidas.md](docs/resultado_validacion_salidas.md).
 
+### El eje de riesgo: ¿son las salidas un seguro que merece la pena?
+
+Nueve de diez años negativos y solo 2020 positivo sugería que las salidas eran una **cobertura de
+cola**. Se midió con criterio pre-registrado (`docs/preregistro_eje_riesgo.md`). **No lo son:**
+
+| Regla | CAGR | maxDD | Calmar | CVaR5 |
+|---|---|---|---|---|
+| **Aguantar** | **13,85%** | −33,43% | **0,414** | −17,94% |
+| Compuesta | 10,48% | **−36,43%** | 0,288 | −8,27% |
+
+El canje sale **negativo**: se cede retorno *y* se recibe más caída. Y en el episodio COVID —donde
+el seguro debía pagar— la compuesta **casi dobló la pérdida** (−23,1% frente a −12,8%).
+
+Matiz que sí se sostiene: el stop recorta drásticamente la cola **por operación** (peor operación
+de −71% a −15%). Eso tiene valor si operas una sola posición; lo que no compra es menos drawdown
+de cartera. Detalle, gráficas y límites en
+[docs/resultado_validacion_salidas.md](docs/resultado_validacion_salidas.md).
+
 ### Validación point-in-time de los pilares fundamentales
 
 740 observaciones sobre 79 grandes capitalizaciones, cada una situada el día siguiente a la **fecha

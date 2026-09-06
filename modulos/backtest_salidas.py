@@ -178,6 +178,10 @@ class Cierre:
     dias: int
     motivo: str
     anticipada: bool
+    # Necesarios para el eje de riesgo: la curva de equity exige saber cuándo
+    # está abierta cada posición, y el MAE exige mirar dentro de la operación.
+    fecha_salida: Any = None
+    mae: float | None = None      # máxima excursión adversa, fracción negativa
 
 
 def puntuacion_tecnica(df: pd.DataFrame, indice: int, regimen_favorable: bool | None = None) -> float | None:
@@ -233,6 +237,19 @@ def _cerrar(entrada: Entrada, regla: str, df: pd.DataFrame, indice_salida: int,
     bruto = (precio_salida - entrada.precio_entrada) / entrada.precio_entrada
     neto = bruto - 2 * COSTE_POR_LADO
     movimiento = precio_salida - entrada.precio_entrada
+
+    # MAE: lo más en contra que llegó a ir la posición ANTES de cerrarse. Se mide
+    # sobre el mínimo intradía, no sobre el cierre: es la pérdida que el inversor
+    # llegó a ver en pantalla, que es la que hace vender por nervios.
+    mae = None
+    if indice_salida > entrada.indice_entrada:
+        try:
+            minimo = float(df["Low"].iloc[entrada.indice_entrada : indice_salida + 1].min())
+            if np.isfinite(minimo) and entrada.precio_entrada > 0:
+                mae = min(0.0, (minimo - entrada.precio_entrada) / entrada.precio_entrada)
+        except Exception:
+            mae = None
+
     return Cierre(
         regla=regla, ticker=entrada.ticker, estrategia=entrada.estrategia,
         fecha_entrada=entrada.fecha_entrada,
@@ -241,6 +258,8 @@ def _cerrar(entrada: Entrada, regla: str, df: pd.DataFrame, indice_salida: int,
         dias=int(indice_salida - entrada.indice_entrada),
         motivo=motivo,
         anticipada=indice_salida < fin,
+        fecha_salida=df.index[indice_salida],
+        mae=mae,
     )
 
 

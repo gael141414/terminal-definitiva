@@ -134,9 +134,15 @@ def test_la_decision_arrastra_siempre_la_advertencia_de_evidencia():
 
     decision = evaluar_posicion(_datos(), Posicion("TEST", entrada=100.0))
     assert decision.advertencia == ADVERTENCIA_EVIDENCIA
-    assert "4.199" in decision.advertencia
-    assert RESULTADO_VALIDACION["retorno_regla_pct"] < RESULTADO_VALIDACION["retorno_aguantar_pct"]
-    assert RESULTADO_VALIDACION["retorno_regla_pct"] > RESULTADO_VALIDACION["retorno_aleatoria_pct"]
+    assert "27.544" in decision.advertencia
+    # El veredicto del eje de riesgo: peor en retorno Y peor en caída.
+    assert RESULTADO_VALIDACION["calmar_compuesta"] < RESULTADO_VALIDACION["calmar_aguantar"]
+    assert abs(RESULTADO_VALIDACION["maxdd_compuesta_pct"]) > abs(RESULTADO_VALIDACION["maxdd_aguantar_pct"])
+    assert RESULTADO_VALIDACION["canje_maxdd_por_punto_cagr"] < 0, (
+        "canje negativo: se cede retorno y además se recibe más caída"
+    )
+    # Y el matiz que sí se sostiene: la cola por operación sí mejora.
+    assert RESULTADO_VALIDACION["cvar5_compuesta_pct"] > RESULTADO_VALIDACION["cvar5_aguantar_pct"]
 
 
 # ==========================================================================

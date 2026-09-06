@@ -73,25 +73,43 @@ VENDER = "VENDER"
 # Medido por scripts/backtest_decision_venta.py sobre 57 valores, 10 años y
 # 4.199 operaciones, con coste del 0,1% por lado.
 RESULTADO_VALIDACION = {
-    "operaciones": 4199,
-    "retorno_aguantar_pct": 36.31,
-    "retorno_regla_pct": 35.76,
-    "retorno_aleatoria_pct": 20.22,
-    "retorno_solo_stop_pct": 11.03,
+    # Entradas REALES del catálogo sobre 119 grandes capitalizaciones, 10 años.
+    # Sustituye a la primera medición sobre entradas sintéticas mensuales, que
+    # estaba sesgada contra las salidas por construcción.
+    "operaciones": 27544,
+    "retorno_medio_aguantar_pct": 1.12,
+    "retorno_medio_compuesta_pct": 0.82,
+    "diferencia_pts": -0.29,
+    # Eje de riesgo, cartera equiponderada.
+    "cagr_aguantar_pct": 13.85,
+    "cagr_compuesta_pct": 10.48,
+    "maxdd_aguantar_pct": -33.43,
+    "maxdd_compuesta_pct": -36.43,
+    "calmar_aguantar": 0.414,
+    "calmar_compuesta": 0.288,
+    "cvar5_aguantar_pct": -17.94,
+    "cvar5_compuesta_pct": -8.27,
+    "covid_retorno_aguantar_pct": -12.82,
+    "covid_retorno_compuesta_pct": -23.11,
+    "canje_maxdd_por_punto_cagr": -0.89,
+    "veredicto": "seguro caro",
     "conclusion": (
-        "La regla técnica bate a la venta aleatoria por 15,5 puntos —lleva "
-        "información— pero NO bate a aguantar (−0,55). El stop fijo a −8% aplicado "
-        "a posiciones de un año es destructivo: 11,03% frente a 36,31%. Valoración "
-        "y fundamentales quedan sin validar por falta de datos point-in-time."
+        "Ninguna regla de salida bate a aguantar, ni en retorno ni ajustada a riesgo. "
+        "El canje sale NEGATIVO: se cede retorno y además se recibe más drawdown. En el "
+        "episodio COVID, donde debía actuar de cobertura, casi dobló la pérdida. Lo que "
+        "sí hace el stop es recortar la cola POR OPERACIÓN (peor caso de −71% a −15%), "
+        "y eso tiene valor si se opera una sola posición; lo que no compra es menos "
+        "caída de cartera."
     ),
 }
 
 ADVERTENCIA_EVIDENCIA = (
-    "Medido sobre 4.199 operaciones: la regla bate a la venta aleatoria (+15,5 puntos), "
-    "así que lleva información, pero NO bate a limitarse a aguantar (−0,55). El stop "
-    "fijo a −8% aplicado a posiciones de un año rindió 11% frente al 36% de aguantar. "
-    "Los pilares de valoración y fundamentales quedan SIN VALIDAR. Trátalo como un "
-    "panel de diagnóstico, no como una orden."
+    "Medido sobre 27.544 entradas reales: ninguna regla de salida bate a aguantar, ni en "
+    "retorno (−0,29 puntos) ni ajustada a riesgo (Calmar 0,29 frente a 0,41). El canje es "
+    "NEGATIVO: se cede retorno y además se recibe más caída. En el desplome del COVID, "
+    "donde debía cubrir, casi dobló la pérdida (−23% frente a −13%). Sí recorta la cola "
+    "POR OPERACIÓN: el peor caso pasa de −71% a −15%, útil si operas una sola posición. "
+    "Trátalo como un panel de diagnóstico, no como una orden."
 )
 
 

@@ -26,12 +26,12 @@ def run_contract_checks() -> list[str]:
     checks.append("release manifest files exist")
 
     version = _read("VERSION").strip()
-    assert_true(version == "0.4.0-internal", f"Versión inesperada: {version}")
+    assert_true(version == "0.5.0-internal", f"Versión inesperada: {version}")
     checks.append("version marker is stable")
 
     changelog = _read("CHANGELOG.md")
     for token in [
-        "0.4.0-internal",
+        "0.5.0-internal",
         "Research Core",
         "ValueQuant Score",
         "Backtesting básico",

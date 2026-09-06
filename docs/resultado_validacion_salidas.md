@@ -166,3 +166,185 @@ Mientras tanto, la vía principal es el **registro forward**
 (`jobs/congelar_decisiones.py`), iniciado el **2026-09-06**, que guarda cada
 decisión y sus tres sub-scores antes de conocer el retorno posterior. Ninguna
 reconstrucción del pasado puede ofrecer esa garantía.
+
+---
+
+# Segunda parte: el eje de riesgo
+
+Ejecución del pre-registro `docs/preregistro_eje_riesgo.md` (commit `1a664f4`),
+escrito antes de ver un solo número de esta sección.
+
+La pregunta: la media ya dijo que las salidas pierden. Pero nueve de diez años
+negativos y solo 2020 positivo apuntaba a una **cobertura de cola** — que paga en
+el desplome y resta el resto. Si esa prima compra suficiente reducción de caída,
+podría merecer la pena para un inversor averso a las caídas.
+
+**No la compra.** Y en el episodio donde debía pagar, cobró.
+
+## MEDIDO · cartera equiponderada (construcción principal)
+
+27.544 entradas, 137.720 cierres, coste 0,1% por lado.
+
+| Regla | CAGR | maxDD | Duración DD | Vol. | Sharpe | Sortino | **Calmar** | Ulcer | **CVaR5** | Peor op. | MAE | Asim. | Curt. |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| **Aguantar** | **13,85%** | **−33,43%** | 440 | 16,8% | 0,856 | **1,018** | **0,414** | 5,74 | −17,94% | −71,2% | −5,8% | 0,86 | 11,4 |
+| Técnica | 13,76% | −33,43% | 439 | 16,9% | 0,849 | 1,011 | 0,412 | 5,73 | −17,91% | −71,2% | −5,8% | 0,64 | 8,2 |
+| Aleatoria | 10,71% | −33,13% | 544 | 16,8% | 0,689 | 0,825 | 0,323 | 6,60 | −13,88% | −71,6% | −4,1% | 0,45 | 9,3 |
+| Stop fijo | 10,44% | −36,43% | 452 | 15,7% | 0,710 | 0,817 | 0,287 | 6,99 | **−8,27%** | −14,9% | −4,7% | 1,85 | 13,4 |
+| Compuesta | 10,48% | **−36,43%** | 447 | 15,8% | 0,712 | 0,819 | 0,288 | 6,89 | **−8,27%** | −14,9% | −4,7% | 1,62 | 8,9 |
+
+IC95 del CVaR5: aguantar [−18,43 · −17,47] · compuesta [−8,29 · −8,26].
+
+### Veredicto según el criterio pre-registrado
+
+| Regla | Criterio A | Criterio B | Canje | **Veredicto** |
+|---|---|---|---|---|
+| Compuesta | no | no | **−0,89** | **SEGURO CARO** |
+| Stop fijo | no | no | −0,88 | **SEGURO CARO** |
+| Técnica | no | no | −0,00 | **SEGURO CARO** |
+
+**El canje es negativo.** No es que el seguro salga caro: es que se paga la prima
+**y además se recibe más caída**. La compuesta cede 3,4 puntos de CAGR y empeora
+el maxDD en 3 puntos.
+
+## El hallazgo que decide: cortar la cola de la operación NO es cortar el drawdown
+
+El CVaR5 de la compuesta es menos de la mitad que el de aguantar (−8,27% frente a
+−17,94%), y su peor operación pasa de −71% a −15%. **El stop hace exactamente lo
+que promete a nivel de operación.** Y aun así el drawdown de la cartera EMPEORA.
+
+Interpretación: en una caída general todas las posiciones tocan el stop a la vez,
+así que la salida no diversifica nada — el daño ya está hecho cuando se ejecuta.
+Y después, el capital no participa del rebote. La cola por operación mejora; la
+cola que importa, la de la cartera, no.
+
+Es un aviso metodológico general: **una métrica de riesgo por operación puede
+halagar a una regla que empeora el riesgo real.**
+
+## El episodio COVID: donde el seguro debía pagar, cobró
+
+Sub-veredicto pre-declarado como independiente del agregado. Del 19 de febrero al
+30 de abril de 2020:
+
+| Regla | maxDD del episodio | Retorno del episodio |
+|---|---|---|
+| **Aguantar** | **−33,43%** | **−12,82%** |
+| Técnica | −33,43% | −13,36% |
+| Aleatoria | −33,13% | −9,64% |
+| Stop fijo | −36,43% | −23,02% |
+| **Compuesta** | **−36,43%** | **−23,11%** |
+
+**La compuesta casi dobló la pérdida** (−23,1% frente a −12,8%) y cayó más hondo.
+La gráfica `img/riesgo_drawdown.png` lo muestra con claridad: la línea roja no
+solo baja más, sino que sigue cerca del −20% meses después de que la azul haya
+recuperado su máximo.
+
+Interpretación: el COVID fue el desplome en V más rápido de la historia moderna.
+Un stop del 8% vende cerca del suelo y el capital se queda fuera del rebote. Es
+el peor entorno posible para un stop, y era justo el año que la Tarea 1 había
+señalado como favorable — pero aquello medía las entradas *abiertas durante 2020*,
+incluida la recuperación, no el episodio de caída.
+
+**La tesis de la cobertura de cola queda refutada por el propio evento que se
+suponía que la sostenía.**
+
+## Por régimen
+
+| | Aguantar | Compuesta |
+|---|---|---|
+| **Alcista** · CAGR | 9,50% | 9,15% |
+| **Alcista** · maxDD | −34,02% | −27,21% |
+| **Bajista** · CAGR | **21,57%** | **5,15%** |
+| **Bajista** · maxDD | **−26,41%** | **−31,46%** |
+
+En régimen bajista la compuesta gana **un cuarto** de lo que gana aguantar y cae
+más. La hipótesis de Kaminski-Lo vuelve a salir invertida, ahora también en el
+eje de riesgo. Curiosamente, el único sitio donde el stop recorta caída de verdad
+es en régimen **alcista** (−27,2% frente a −34,0%): justo donde menos falta hace.
+
+## Sin 2020
+
+| Regla | CAGR | maxDD | Calmar | CVaR5 |
+|---|---|---|---|---|
+| Aguantar | 12,42% | −19,10% | **0,650** | −15,70% |
+| Compuesta | 10,88% | −18,83% | 0,578 | −8,28% |
+
+Quitando 2020, la compuesta recorta 0,27 puntos de maxDD cediendo 1,54 de CAGR.
+Sigue perdiendo en Calmar. **El resultado no depende de un solo año.**
+
+## Sensibilidad a la construcción: aquí el veredicto se da la vuelta
+
+Con peso fijo del 2% por operación en vez de equiponderar entre lo abierto:
+
+| Regla | CAGR | maxDD | Calmar | Sortino | CVaR5 |
+|---|---|---|---|---|---|
+| Aguantar | 13,85% | −33,43% | 0,414 | 1,019 | −17,94% |
+| Compuesta | 10,87% | **−24,25%** | **0,448** | 0,967 | −8,27% |
+
+Canje: 9,18 puntos de maxDD por 2,98 de CAGR = **3,08**, por encima del 3,0
+pre-registrado. Con esta construcción la compuesta **cumple el criterio B**.
+
+El pre-registro contemplaba este caso: *«si las dos construcciones dan veredictos
+distintos, el veredicto es depende de la construcción y se dice así»*.
+
+Por qué cambia (interpretación): al equiponderar entre lo abierto, cerrar una
+posición **reconcentra** el capital en las que quedan. Con peso fijo, el capital
+liberado va a efectivo y desapalanca de verdad. **El stop solo reduce la caída de
+la cartera si lo que libera se queda en efectivo**, y eso es una decisión de
+gestión de cartera, no una propiedad del stop.
+
+Y aun así: 3,08 frente a un umbral de 3,00 es pasar por dos centésimas. Con el
+episodio COVID en contra, no sostiene una recomendación.
+
+---
+
+## VEREDICTO
+
+**Aplicando el criterio pre-registrado: la regla compuesta y el stop fijo son un
+seguro caro.** No merecen la pena para un inversor averso a las caídas, en ningún
+horizonte ni régimen de los medidos. Tres razones, en orden de peso:
+
+1. **Fallan en el evento que debían cubrir.** En el COVID casi doblaron la
+   pérdida y cayeron más hondo. Un seguro que agrava el siniestro no es un seguro.
+2. **El canje es negativo** en la construcción principal: se cede retorno *y* se
+   recibe más drawdown.
+3. **En régimen bajista** —donde la tesis decía que aportarían— la compuesta gana
+   un cuarto que aguantar y cae más.
+
+El único apoyo, con peso fijo del 2%, pasa el umbral por dos centésimas y se
+explica por un efecto de construcción de cartera, no por acierto de la regla.
+
+**Lo que sí se sostiene, y no es poco:** el stop recorta drásticamente la cola
+*por operación* (CVaR5 de −17,9% a −8,3%; peor operación de −71% a −15%). Si
+alguien opera con una sola posición, o con capital que no puede permitirse un
+−71% en un valor concreto, eso tiene valor propio. Lo que no compra es un
+drawdown de cartera menor.
+
+## Gráficas
+
+![Curvas de capital](img/riesgo_equity.png)
+
+*Las curvas de aguantar y técnica se superponen casi exactamente: la regla técnica
+se dispara en el 0,6% de las operaciones y es prácticamente inerte.*
+
+![Caída desde máximos](img/riesgo_drawdown.png)
+
+*La franja roja marca el episodio COVID. La compuesta cae más hondo y tarda meses
+más en recuperar.*
+
+![Distribución por operación](img/riesgo_distribucion.png)
+
+*El stop trunca la cola izquierda: es real y visible. No se traduce en menos
+drawdown de cartera.*
+
+## Límites de esta sección
+
+- **El sub-veredicto COVID descansa sobre n=1 evento.** Un desplome en V es el
+  peor caso posible para un stop; un mercado bajista lento y sostenido (2000-2002)
+  podría dar lo contrario, y esta década no contiene ninguno.
+- **Sesgo de supervivencia**, que aquí va en contra de las salidas.
+- **Operaciones solapadas**: el bootstrap asume independencia y los intervalos
+  reales son más anchos.
+- **Sin apalancamiento ni reglas de tamaño por volatilidad.** Una gestión de
+  cartera más elaborada podría cambiar la conclusión, y la sensibilidad al peso
+  fijo ya insinúa por dónde.
