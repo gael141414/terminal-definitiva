@@ -112,7 +112,7 @@ def render_pie_modo() -> None:
     with izquierda:
         st.caption(
             "MVP muestra solo el producto principal · Consolidado agrupa por arquitectura "
-            "objetivo · Completo muestra las 38 herramientas."
+            "objetivo · Completo muestra las 39 herramientas."
         )
     with derecha:
         st.selectbox(

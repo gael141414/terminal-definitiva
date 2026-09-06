@@ -33,7 +33,55 @@ def build_digest() -> str:
     except Exception as exc:
         sections.append(f"⚠️ Error scan: {exc}")
 
+    try:
+        resumen = resumen_cartera_vs_indice()
+        if resumen:
+            sections.append(resumen)
+    except Exception as exc:
+        sections.append(f"⚠️ Error cartera: {exc}")
+
     return "\n\n".join(sections)
+
+
+def resumen_cartera_vs_indice() -> str | None:
+    """Una línea con la cartera frente al benchmark de flujos igualados.
+
+    Devuelve None si no hay cartera guardada: el digest no debe llevar una
+    sección vacía diciendo que no hay nada.
+    """
+    from modulos.rendimiento_cartera import calcular_rendimiento
+    from modulos.rendimiento_cartera_ui import cargar_cartera
+
+    df = cargar_cartera()
+    if df is None or df.empty:
+        return None
+
+    transacciones = [
+        (str(fila["Ticker"]).strip().upper(), float(fila["Importe (€)"]), fila["Fecha"])
+        for _, fila in df.dropna(subset=["Ticker"]).iterrows()
+    ]
+    if not transacciones:
+        return None
+
+    resultado = calcular_rendimiento(transacciones)
+    if not resultado.valido:
+        return None
+
+    r = resultado.resumen
+    signo = "🟢" if (r.get("diferencia_eur") or 0) > 0 else "🔴"
+    lineas = [
+        f"{signo} Cartera vs índice (mismo dinero, mismas fechas)",
+        f"Invertido {r['total_invertido_eur']:,.0f} € · "
+        f"cartera {r['valor_cartera_eur']:,.0f} € · "
+        f"índice {r['valor_benchmark_eur']:,.0f} €",
+        f"Diferencia {r['diferencia_eur']:+,.0f} € ({r['diferencia_pct']:+.1f}%)",
+    ]
+    mejor = max(resultado.atribucion, key=lambda a: a.alfa_eur, default=None)
+    peor = min(resultado.atribucion, key=lambda a: a.alfa_eur, default=None)
+    if mejor and peor and mejor.ticker != peor.ticker:
+        lineas.append(f"Mejor {mejor.ticker} {mejor.alfa_eur:+,.0f} € · "
+                      f"peor {peor.ticker} {peor.alfa_eur:+,.0f} €")
+    return "\n".join(lineas)
 
 
 def send_digest(message: str) -> None:

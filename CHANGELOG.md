@@ -4,6 +4,32 @@ Todos los cambios relevantes de ValueQuant Terminal se documentan en este archiv
 
 El formato sigue una estructura práctica inspirada en Keep a Changelog y versionado semántico interno. Mientras el producto siga en prototipo local, las versiones se marcan como `internal`.
 
+## [0.6.0-internal] - 2026-09-06
+
+### Added
+
+- **Rendimiento de cartera frente a benchmark de flujos igualados**
+  (`modulos/rendimiento_cartera.py`, `modulos/rendimiento_cartera_ui.py`): por cada compra de X €
+  en la fecha D se compran X € del índice en esa misma fecha. Incluye conversión de divisa, XIRR,
+  serie unitizada TWR, atribución por posición y comparación ajustada a riesgo.
+- `riesgo_salidas.metricas_de_serie`: métricas de riesgo sobre una serie de retornos, compartidas
+  entre el análisis de salidas y el de cartera. Una sola implementación.
+- Resumen cartera vs índice en el digest de Telegram.
+- Proxies, pesos y pares de divisa en `config.py`; cartera persistida en `data/cartera.json`.
+
+### Fixed
+
+- La especificación de partida indicaba multiplicar por `EURUSD=X` para pasar de USD a EUR. Ese par
+  cotiza **dólares por euro**, así que hay que **dividir**: multiplicar inflaría cada posición
+  estadounidense un 35%, y como el benchmark en EUR no lleva FX, el sesgo caería entero del lado de
+  la cartera y parecería batir al índice sin hacerlo.
+
+### Notas
+
+- Sin dependencias nuevas: el XIRR usa `scipy.optimize.brentq`, ya presente.
+- Test de aceptación con valores calculados a mano y pre-declarados en el fixture. El ejemplo sale
+  **negativo** a propósito: un test que solo cubre el caso favorable no detecta un signo invertido.
+
 ## [0.5.0-internal] - 2026-09-06
 
 ### Added

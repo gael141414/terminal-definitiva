@@ -42,6 +42,7 @@ INDEPENDENT_TOOL_ROUTES: dict[str, tuple[str, str]] = {
     "📋 Mi Watchlist (Cartera)": ("modulos.watchlist", "ejecutar_watchlist"),
     "📌 Briefing de Oportunidades": ("modulos.opportunity_briefing", "render_opportunity_briefing"),
     "⚙️ Centro de Automatización": ("modulos.automation_center", "render_automation_center"),
+    "📐 Mi Cartera vs Índice": ("modulos.rendimiento_cartera_ui", "render_rendimiento_cartera"),
     "🚪 Decisión de Venta": ("modulos.decision_venta_ui", "render_decision_venta"),
     "📓 Diario de Decisiones": ("modulos.diario_ui", "render_diario"),
     "📚 Análisis Guardados": ("modulos.analysis_store", "render_saved_research_dashboard"),

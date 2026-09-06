@@ -16,6 +16,10 @@ Capacidades principales:
 - **ValueQuant Score**: score institucional orientativo con componentes, confidence diagnostics, quality gates, decision guidance y payload trazable.
 - **Tesis de inversión**: lectura estructurada de acción operativa, valoración, margen de seguridad, riesgos y próximos pasos.
 - **Watchlist**: guardado de análisis y seguimiento de snapshots.
+- **Mi cartera vs índice**: rendimiento real de tu cartera frente a haber invertido **el mismo dinero,
+  en los mismos momentos**, en uno o varios índices ponderados (benchmark *money-weighted*). Incluye
+  TIR de ambos lados, comparación ajustada a riesgo sobre la serie unitizada (TWR) y atribución por
+  posición: qué valores baten al índice y cuáles no.
 - **Decisión de venta**: para una posición YA abierta, con su precio y fecha de entrada, devuelve
   MANTENER / REDUCIR / VENDER, cuánto reducir y precios objetivo, combinando valoración, deterioro
   del negocio y técnica. Ver la advertencia de evidencia más abajo.
@@ -124,6 +128,24 @@ Desde `Research Core -> Informe` se puede descargar:
 - Memo ejecutivo de comité.
 - Metadata JSON estructurada.
 - ZIP institucional con todos los artefactos.
+
+## Cómo se compara la cartera con el índice
+
+La comparación es **money-weighted**: por cada compra de X € en la fecha D se compran X € del índice
+en esa misma fecha D, repartidos por pesos. Así se aísla si la selección de valores aporta algo por
+encima de indexar, sin que el resultado dependa de cuándo se aportó el dinero.
+
+Cuatro decisiones que evitan los fallos silenciosos habituales de estas herramientas:
+
+| Riesgo | Cómo se cierra |
+|---|---|
+| Comparar precio sin dividendos contra índice con dividendos | Ambos lados usan `auto_adjust=True` y los proxies son **ETF de acumulación en EUR** (CSPX.AS, IWDA.AS) |
+| Invertir la dirección del cambio de divisa | `EURUSD=X` cotiza dólares por euro, así que se **divide**. Multiplicar inflaría cada posición en USD un 35% y el sesgo caería entero del lado de la cartera |
+| Calcular volatilidad y Sharpe sobre la serie con aportaciones | Todas las métricas de riesgo se calculan sobre la **serie unitizada (TWR)**; sobre la de valor, un ingreso de 800 € parecería un +160% diario |
+| Fechar una compra en un día no bursátil | Se desplaza a la siguiente sesión **y queda anotado** en los avisos |
+
+Los pesos deben sumar 1: con 0,9 el benchmark invertiría solo el 90% del dinero y la cartera ganaría
+un 10% gratis. Se valida y se rechaza con error explícito.
 
 ## Qué está validado y qué no
 
