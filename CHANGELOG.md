@@ -4,6 +4,31 @@ Todos los cambios relevantes de ValueQuant Terminal se documentan en este archiv
 
 El formato sigue una estructura práctica inspirada en Keep a Changelog y versionado semántico interno. Mientras el producto siga en prototipo local, las versiones se marcan como `internal`.
 
+## [0.7.0-internal] - 2026-09-06
+
+### Added
+
+- **Análisis alfa/beta de la cartera** (`modulos/rendimiento_riesgo.py`,
+  `scripts/analisis_alfa_beta.py`): benchmark igualado en volatilidad, regresión CAPM con IC por
+  bootstrap de bloques, descomposición del exceso, índice de concentración de Herfindahl y
+  recálculo excluyendo la mayor posición.
+- Tipo libre de riesgo en EUR (`XEON.DE`, €STR de acumulación) en `config.py`, verificado con
+  0,237% de volatilidad anualizada antes de fijarlo.
+- El veredicto ajustado a riesgo se muestra en la pantalla de cartera **con el mismo peso visual
+  que la rentabilidad bruta**, no escondido al final.
+
+### Evidencia
+
+- **Insuficiente evidencia de selección** según el criterio pre-registrado: fallan dos de las tres
+  condiciones. El IC del alfa es `[−3,91 · +67,23]` y sin GOOG la cartera pasa de +1,42 a **−10,12
+  puntos** frente al índice igualado en riesgo.
+- La cartera lleva **casi el doble de volatilidad** que el índice (k = 1,894). Igualando el riesgo,
+  la ventaja de +14,6 puntos de CAGR se queda en **+1,42**.
+- **1,25 posiciones efectivas** (Herfindahl 0,798): GOOG concentra el 89% del resultado.
+- La predicción del pre-registro sobre la beta salió **equivocada** (esperaba alta, salió 0,392) y
+  así se documenta. La causa es el R² de 0,043: con tres valores concentrados el índice explica
+  apenas el 4% de los movimientos, y eso hace que el reparto alfa/beta sea poco informativo.
+
 ## [0.6.0-internal] - 2026-09-06
 
 ### Added

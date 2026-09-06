@@ -315,3 +315,32 @@ PARES_FX: dict[str, str] = {
 TOLERANCIA_RECONSTRUCCION_EUR = 0.01
 
 FICHERO_CARTERA = "data/cartera.json"
+
+
+# ==========================================================================
+# ANÁLISIS ALFA/BETA (modulos/rendimiento_riesgo.py)
+# ==========================================================================
+
+# Tipo libre de riesgo en EUR: ETF de acumulación sobre €STR. Su serie de precio
+# ES el retorno libre de riesgo en euros, con la misma convención de retorno
+# total que el resto (auto_adjust, acumulación, sin FX porque ya cotiza en EUR).
+#
+# NO se usa ^TNX pese a existir en charts.obtener_risk_free_real: es el bono
+# estadounidense a 10 años, en dólares y con duración. Aplicarlo a una cartera en
+# euros repetiría el desajuste de divisa que ya costó una corrección en el FX.
+#
+# Verificado antes de fijarlo: 763 sesiones, 2,86% anualizado y 0,237% de
+# volatilidad anualizada — efectivamente sin riesgo.
+TICKER_LIBRE_RIESGO = "XEON.DE"
+
+# Si el proxy no está disponible se usa esta constante, y se avisa. Nunca se
+# sustituye en silencio: el tipo entra en el vol-matched y en el alfa.
+TIPO_LIBRE_RIESGO_FALLBACK = 0.025
+
+# Bootstrap por bloques móviles. Los retornos diarios están autocorrelacionados y
+# tienen colas gordas: un IC gaussiano saldría artificialmente estrecho justo
+# donde más importa no engañarse. La longitud sigue la regla n^(1/3), que con
+# ~670 sesiones da 8,7 y se redondea a 10 (dos semanas de mercado).
+LONGITUD_BLOQUE_BOOTSTRAP = 10
+REMUESTREOS_BLOQUE = 10_000
+NIVEL_CONFIANZA = 0.95

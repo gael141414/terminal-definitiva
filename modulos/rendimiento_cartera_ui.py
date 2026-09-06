@@ -137,6 +137,76 @@ def _render_resumen(resultado: RendimientoCartera) -> None:
                             detail="Mismos flujos, invertidos en el índice.")
 
 
+def _render_veredicto_riesgo(analisis) -> None:
+    """El veredicto ajustado a riesgo, con el MISMO peso visual que el bruto.
+
+    Va antes que las gráficas y con el mismo tamaño que las tarjetas de
+    rentabilidad a propósito: el número bruto es el que apetece mirar, y si el
+    matiz queda escondido al final, el tú del futuro solo recordará el +30%.
+    """
+    v = getattr(analisis, "veredicto", None)
+    if v is None:
+        return
+
+    color = "#10e39a" if v.hay_evidencia else "#fbbf24"
+    titulo = ("Hay evidencia de selección" if v.hay_evidencia
+              else "Insuficiente evidencia de selección")
+
+    escribir_html(f"""
+        <div style="border:1px solid {color}55; border-left:4px solid {color};
+                    background:{color}14; border-radius:12px; padding:18px 22px;">
+            <div style="font-size:11px; letter-spacing:.12em; text-transform:uppercase;
+                        color:#93a4bb;">Veredicto ajustado a riesgo</div>
+            <div style="font-size:21px; font-weight:800; color:{color}; margin-top:4px;">{titulo}</div>
+            <div style="color:#c3cede; font-size:14px; margin-top:6px;">{v.motivo}</div>
+        </div>
+    """)
+
+    capm, vm = analisis.capm, analisis.vol_matched
+    conc, sin_mayor = analisis.concentracion, analisis.vol_sin_mayor
+
+    a, b, c, d = st.columns(4)
+    with a:
+        if capm:
+            bajo, alto = capm.ic_alfa
+            render_kpi_card(
+                "Alfa anual", f"{capm.alfa_anual_pct:+.1f}%",
+                detail=f"IC 95% [{bajo:+.1f} · {alto:+.1f}] · β {capm.beta:.2f} · R² {capm.r2:.2f}",
+                status="favorable" if capm.alfa_significativo else "advertencia",
+            )
+    with b:
+        if vm:
+            render_kpi_card(
+                "Frente al índice con TU riesgo", f"{vm.diferencia_pct:+.1f} pts",
+                detail=f"El índice escalado a tu volatilidad (k={vm.k:.2f}) rinde {vm.cagr_volmatched_pct:.1f}%.",
+                status="favorable" if vm.cartera_gana else "riesgo",
+            )
+    with c:
+        if conc:
+            render_kpi_card(
+                "Posiciones efectivas", f"{1 / conc.herfindahl:.2f}" if conc.herfindahl else "n/d",
+                detail=f"{conc.mayor_ticker} concentra el {conc.cuota_mayor_pct:.0f}% del resultado.",
+                status="riesgo" if conc.cuelga_de_un_nombre else "favorable",
+            )
+    with d:
+        if sin_mayor and conc:
+            render_kpi_card(
+                f"Sin {conc.mayor_ticker}", f"{sin_mayor.diferencia_pct:+.1f} pts",
+                detail="Tu resultado frente al índice con tu riesgo, quitando tu mejor posición.",
+                status="favorable" if sin_mayor.cartera_gana else "riesgo",
+            )
+
+    if analisis.descomposicion:
+        st.caption(analisis.descomposicion.como_texto())
+        if capm and capm.r2 < 0.2:
+            st.caption(
+                f"Aviso: el índice explica solo el {capm.r2 * 100:.0f}% de los movimientos "
+                "de tu cartera (R² bajo). Con tan poca relación con el mercado, el reparto "
+                "entre alfa y beta es poco informativo — el «alfa» acaba recogiendo todo lo "
+                "que el modelo no explica."
+            )
+
+
 def _render_riesgo(resultado: RendimientoCartera) -> None:
     cartera = resultado.resumen.get("riesgo_cartera")
     bench = resultado.resumen.get("riesgo_benchmark")
@@ -183,6 +253,28 @@ def _render_atribucion(resultado: RendimientoCartera) -> None:
 # ==========================================================================
 # PANTALLA
 # ==========================================================================
+
+
+def _analizar_riesgo(resultado: RendimientoCartera, transacciones, pesos):
+    """Alfa, beta, vol-matched y concentración. Nunca rompe la pantalla."""
+    try:
+        from modulos.config import TICKER_LIBRE_RIESGO
+        from modulos.rendimiento_cartera import _descargar_cierres
+        from modulos.rendimiento_riesgo import analizar
+
+        libre = _descargar_cierres([TICKER_LIBRE_RIESGO], "5y").get(TICKER_LIBRE_RIESGO)
+
+        sin_mayor = None
+        if len(resultado.atribucion) > 1:
+            mayor = max(resultado.atribucion, key=lambda a: abs(a.alfa_eur))
+            restantes = [t for t in transacciones if t[0] != mayor.ticker]
+            if restantes:
+                candidato = calcular_rendimiento(restantes, pesos)
+                sin_mayor = candidato if candidato.valido else None
+
+        return analizar(resultado, serie_libre=libre, rendimiento_sin_mayor=sin_mayor)
+    except Exception:
+        return None
 
 
 def render_rendimiento_cartera() -> None:
@@ -269,6 +361,15 @@ def render_rendimiento_cartera() -> None:
 
     _render_resumen(resultado)
     st.markdown("")
+
+    # El veredicto ajustado a riesgo va INMEDIATAMENTE después del bruto y con el
+    # mismo peso visual: si queda al final, solo se recuerda el número grande.
+    with st.spinner("Separando lo que es selección de lo que es riesgo…"):
+        analisis = _analizar_riesgo(resultado, transacciones, pesos)
+    if analisis is not None:
+        _render_veredicto_riesgo(analisis)
+        st.markdown("")
+
     st.markdown("##### Evolución del dinero")
     st.plotly_chart(_grafica_dinero(resultado.series), use_container_width=True)
 

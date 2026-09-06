@@ -198,6 +198,20 @@ de −71% a −15%). Eso tiene valor si operas una sola posición; lo que no com
 de cartera. Detalle, gráficas y límites en
 [docs/resultado_validacion_salidas.md](docs/resultado_validacion_salidas.md).
 
+### ¿La cartera bate al índice por elegir mejor o por asumir más riesgo?
+
+La comparación bruta decía +30%. Descontando el riesgo, con criterio pre-registrado:
+
+| Criterio | Resultado |
+|---|---|
+| IC 95% del alfa por encima de 0 | **NO** — `[−3,91 · +67,23]` |
+| Bate al índice igualado en volatilidad | SÍ — por solo 1,42 puntos |
+| Sobrevive a excluir la mayor posición | **NO** — pasa a −10,12 puntos |
+
+**Insuficiente evidencia de selección.** La cartera lleva casi el doble de volatilidad (k = 1,894) y
+tiene **1,25 posiciones efectivas**: una sola concentra el 89% del resultado. Detalle, gráficas y
+límites en [docs/resultado_cartera_riesgo_ajustado.md](docs/resultado_cartera_riesgo_ajustado.md).
+
 ### Validación point-in-time de los pilares fundamentales
 
 740 observaciones sobre 79 grandes capitalizaciones, cada una situada el día siguiente a la **fecha
