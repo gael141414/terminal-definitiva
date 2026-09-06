@@ -3,9 +3,27 @@
 Ejecución del pre-registro de `docs/preregistro_validacion_salidas.md`, que se
 commiteó **antes** de correr nada (commit `5ac928b`).
 
-Universo: 110 valores con datos de 121 solicitados · 10 años · **7.212 entradas
+Universo A (alfabético, defectuoso — ver abajo): 110 valores de 121 solicitados · 10 años · **7.212 entradas
 reales** generadas por el catálogo de estrategias · 36.060 cierres simulados ·
 coste 0,1% por lado aplicado por igual a las cinco reglas.
+
+---
+
+## Un defecto de universo que encontré a mitad de camino, y cómo lo corregí
+
+La primera ejecución usó `_universo_mercado(120)`, que **no devuelve los 120
+valores mayores**: devuelve los 120 primeros de una lista **alfabética** — A, AA,
+AACG, AADX, AAGH… Un corte dominado por microcaps y sociedades vacías, que no se
+parece a lo que se analiza con esta aplicación y donde además el coste real de
+operar es muy superior al 0,1% que asume el backtest.
+
+Lo detecté al ver nombres como «Antiaging Quantum Living» y «Prevention
+Insurance» en los registros de la SEC. **Es un defecto mío, no del código
+existente**, y afectaba a los dos estudios de esta sesión.
+
+Así que repetí todo sobre `screener_avanzado.FALLBACK_UNIVERSE`: 119 grandes
+capitalizaciones en 11 sectores. **La conclusión no solo sobrevive: se refuerza**,
+porque la muestra pasa de 7.212 a 27.541 entradas. Se publican las dos.
 
 ---
 
@@ -18,6 +36,34 @@ coste 0,1% por lado aplicado por igual a las cinco reglas.
 | Stop fijo −8% | +0,78% | [0,43 · 1,16] | +0,142 | 43,3% | 16,3 | 40,4% |
 | Compuesta | +0,79% | [0,44 · 1,17] | +0,144 | 43,5% | 16,2 | 40,9% |
 | Aleatoria | +0,34% | [0,05 · 0,64] | +0,074 | 50,0% | 12,1 | 94,2% |
+
+### Universo de grandes capitalizaciones (119 valores, 27.541 entradas)
+
+| Regla | Retorno medio | IC95 | Expectativa (R) | Acierto | Días | Salidas anticipadas |
+|---|---|---|---|---|---|---|
+| **Aguantar** | **+1,12%** | [1,01 · 1,22] | **+0,276** | 55,6% | 22,8 | 0% |
+| Técnica | +1,10% | [1,00 · 1,21] | +0,275 | 55,7% | 22,7 | 0,6% |
+| Stop fijo −8% | +0,83% | [0,74 · 0,93] | +0,237 | 52,2% | 19,5 | 23,4% |
+| Compuesta | +0,82% | [0,73 · 0,92] | +0,236 | 52,3% | 19,4 | 23,9% |
+| Aleatoria | +0,43% | [0,35 · 0,50] | +0,135 | 53,0% | 11,9 | 94,6% |
+
+Con este universo, **todas las reglas son significativamente peores que
+aguantar**, incluida la técnica (−0,013 pts, IC [−0,027, −0,002]). Su daño es
+minúsculo, pero con 27.541 operaciones el intervalo ya excluye el cero.
+
+Por régimen: bajista **−0,880** frente a alcista −0,221. La hipótesis de
+Kaminski-Lo vuelve a salir **invertida**, ahora con más muestra.
+
+Por estrategia: peor en `ruptura_maximos` (−0,556) y `squeeze_disparo` (−0,563);
+menos malo en `reversion_rsi2` (−0,085). La hipótesis 3 también vuelve a salir
+invertida.
+
+**Walk-forward: nueve de diez años negativos y significativos.** El único
+positivo es **2020 (+0,464 pts)**, el año del desplome del COVID. Ese matiz
+importa y es lo más cerca que está el resultado de rescatar la intuición del
+stop: en el desplome más rápido de la década, salir pagó. En los otros nueve
+años costó dinero. Un seguro que se cobra una vez cada diez años tiene que
+compensar nueve de primas, y aquí no lo hace.
 
 ### Diferencia frente a aguantar, emparejada por operación
 

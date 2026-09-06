@@ -109,6 +109,35 @@ def normalizar_estados(df: Any) -> Any:
         return df
 
     resultado = df
+
+    # Forma "as-reported" de point_in_time_scoring: el concepto viaja en una
+    # COLUMNA llamada "concept" y los ejercicios son las demás columnas, con un
+    # índice numérico. Es la tercera orientación que convive en el repositorio.
+    if "concept" in df.columns:
+        # Las dos fuentes point-in-time nombran el mismo concepto distinto:
+        # SEC EDGAR entrega "us-gaap_AssetsCurrent" y el as-reported de FMP,
+        # "assetscurrent". Quitando el prefijo de taxonomía y pasando a
+        # minúscula convergen, y basta un vocabulario para las dos.
+        conceptos = (
+            df["concept"].astype(str)
+            .str.replace(r"^[A-Za-z-]+_", "", regex=True)
+            .str.lower()
+        )
+        resultado = df.drop(columns=["concept"]).set_index(conceptos)
+        resultado.index.name = "concept"
+
+        # La forma de SEC EDGAR trae metadatos (label, standard_concept, level,
+        # abstract, dimension) mezclados con los ejercicios. Solo se conservan
+        # las columnas que son un año: lo demás es texto que ensuciaría el
+        # cálculo al convertirlo a número.
+        años = [c for c in resultado.columns if str(c).strip().isdigit()
+                and 1900 < int(str(c).strip()) < 2200]
+        if años:
+            resultado = resultado[sorted(años, key=lambda c: int(str(c)), reverse=True)]
+        else:
+            resultado = resultado.iloc[:, ::-1]
+        return resultado.apply(pd.to_numeric, errors="coerce")
+
     # Índice de fechas => los conceptos están en columnas: hay que transponer.
     if isinstance(df.index, pd.DatetimeIndex):
         resultado = df.T
@@ -201,16 +230,16 @@ def altman_z_score(
             ausentes.append(nombre)
         return valor
 
-    activos = obligatorio("activo total", ["Total Assets", "totalAssets"], balance)
+    activos = obligatorio("activo total", ["Total Assets", "totalAssets", "assets"], balance)
     pasivos = obligatorio(
         "pasivo total",
-        ["Total Liabilities Net Minority Interest", "Total Liabilities", "totalLiabilities"],
+        ["Total Liabilities Net Minority Interest", "Total Liabilities", "totalLiabilities", "liabilities"],
         balance,
     )
-    act_corr = obligatorio("activo corriente", ["Current Assets", "Total Current Assets", "totalCurrentAssets"], balance)
-    pas_corr = obligatorio("pasivo corriente", ["Current Liabilities", "Total Current Liabilities", "totalCurrentLiabilities"], balance)
-    reservas = obligatorio("reservas", ["Retained Earnings", "retainedEarnings"], balance)
-    ebit = obligatorio("EBIT", ["EBIT", "Operating Income", "operatingIncome"], resultados)
+    act_corr = obligatorio("activo corriente", ["Current Assets", "Total Current Assets", "totalCurrentAssets", "assetscurrent"], balance)
+    pas_corr = obligatorio("pasivo corriente", ["Current Liabilities", "Total Current Liabilities", "totalCurrentLiabilities", "liabilitiescurrent"], balance)
+    reservas = obligatorio("reservas", ["Retained Earnings", "retainedEarnings", "retainedearningsaccumulateddeficit"], balance)
+    ebit = obligatorio("EBIT", ["EBIT", "Operating Income", "operatingIncome", "operatingincomeloss"], resultados)
 
     componentes: dict[str, float] = {}
     x1 = _dividir(
@@ -223,7 +252,7 @@ def altman_z_score(
     if modelo == "doble_prima":
         patrimonio = obligatorio(
             "patrimonio neto",
-            ["Stockholders Equity", "Total Stockholder Equity", "totalStockholdersEquity"],
+            ["Stockholders Equity", "Total Stockholder Equity", "totalStockholdersEquity", "stockholdersequity"],
             balance,
         )
         x4 = _dividir(patrimonio, pasivos)
@@ -232,7 +261,7 @@ def altman_z_score(
         if capitalizacion is None:
             ausentes.append("capitalización bursátil")
         x4 = _dividir(capitalizacion, pasivos)
-        ventas = obligatorio("ventas", ["Total Revenue", "Operating Revenue", "revenue"], resultados)
+        ventas = obligatorio("ventas", ["Total Revenue", "Operating Revenue", "revenue", "revenuefromcontractwithcustomerexcludingassessedtax", "revenues"], resultados)
         x5 = _dividir(ventas, activos)
         partes = {"X1": (x1, 1.2), "X2": (x2, 1.4), "X3": (x3, 3.3), "X4": (x4, 0.6), "X5": (x5, 1.0)}
 
@@ -287,19 +316,19 @@ def beneish_m_score(balance: Any, resultados: Any, flujos: Any) -> BeneishM:
             ausentes.append(nombre)
         return actual, previo
 
-    ventas0, ventas1 = par("ventas", ["Total Revenue", "Operating Revenue", "revenue"], resultados)
-    coste0, coste1 = par("coste de ventas", ["Cost Of Revenue", "Cost of Goods Sold", "costOfRevenue"], resultados)
-    clientes0, clientes1 = par("clientes", ["Accounts Receivable", "Net Receivables", "netReceivables"], balance)
-    activos0, activos1 = par("activo total", ["Total Assets", "totalAssets"], balance)
-    corr0, corr1 = par("activo corriente", ["Current Assets", "Total Current Assets", "totalCurrentAssets"], balance)
-    ppe0, ppe1 = par("inmovilizado", ["Net PPE", "Property Plant And Equipment", "propertyPlantEquipmentNet"], balance)
-    amort0, amort1 = par("amortización", ["Depreciation", "Depreciation And Amortization", "depreciationAndAmortization"], flujos)
-    gastos0, gastos1 = par("gastos generales", ["Selling General And Administration", "SG&A", "sellingGeneralAndAdministrativeExpenses"], resultados)
-    pcorr0, pcorr1 = par("pasivo corriente", ["Current Liabilities", "Total Current Liabilities", "totalCurrentLiabilities"], balance)
-    deuda0, deuda1 = par("deuda a largo", ["Long Term Debt", "Total Long Term Debt", "longTermDebt"], balance)
+    ventas0, ventas1 = par("ventas", ["Total Revenue", "Operating Revenue", "revenue", "revenuefromcontractwithcustomerexcludingassessedtax", "revenues"], resultados)
+    coste0, coste1 = par("coste de ventas", ["Cost Of Revenue", "Cost of Goods Sold", "costOfRevenue", "costofgoodsandservicessold"], resultados)
+    clientes0, clientes1 = par("clientes", ["Accounts Receivable", "Net Receivables", "netReceivables", "accountsreceivablenetcurrent"], balance)
+    activos0, activos1 = par("activo total", ["Total Assets", "totalAssets", "assets"], balance)
+    corr0, corr1 = par("activo corriente", ["Current Assets", "Total Current Assets", "totalCurrentAssets", "assetscurrent"], balance)
+    ppe0, ppe1 = par("inmovilizado", ["Net PPE", "Property Plant And Equipment", "propertyPlantEquipmentNet", "propertyplantandequipmentnet"], balance)
+    amort0, amort1 = par("amortización", ["Depreciation", "Depreciation And Amortization", "depreciationAndAmortization", "depreciationdepletionandamortization"], flujos)
+    gastos0, gastos1 = par("gastos generales", ["Selling General And Administration", "SG&A", "sellingGeneralAndAdministrativeExpenses", "sellinggeneralandadministrativeexpense"], resultados)
+    pcorr0, pcorr1 = par("pasivo corriente", ["Current Liabilities", "Total Current Liabilities", "totalCurrentLiabilities", "liabilitiescurrent"], balance)
+    deuda0, deuda1 = par("deuda a largo", ["Long Term Debt", "Total Long Term Debt", "longTermDebt", "longtermdebtnoncurrent"], balance)
 
-    beneficio = _valor(resultados, ["Net Income", "Net Income Continuous Operations", "netIncome"], 0)
-    caja_op = _valor(flujos, ["Operating Cash Flow", "Total Cash From Operating Activities", "netCashProvidedByOperatingActivities"], 0)
+    beneficio = _valor(resultados, ["Net Income", "Net Income Continuous Operations", "netIncome", "netincomeloss"], 0)
+    caja_op = _valor(flujos, ["Operating Cash Flow", "Total Cash From Operating Activities", "netCashProvidedByOperatingActivities", "netcashprovidedbyusedinoperatingactivities"], 0)
     if beneficio is None:
         ausentes.append("beneficio neto")
     if caja_op is None:
@@ -400,23 +429,23 @@ def piotroski_f_score(balance: Any, resultados: Any, flujos: Any) -> PiotroskiF:
             ausentes.append(f"{nombre} (año {ejercicio})")
         return v
 
-    activos0 = dato("activo total", ["Total Assets", "totalAssets"], balance, 0)
-    activos1 = dato("activo total", ["Total Assets", "totalAssets"], balance, 1)
-    beneficio0 = dato("beneficio neto", ["Net Income", "netIncome"], resultados, 0)
-    beneficio1 = dato("beneficio neto", ["Net Income", "netIncome"], resultados, 1)
-    caja0 = dato("flujo operativo", ["Operating Cash Flow", "netCashProvidedByOperatingActivities"], flujos, 0)
-    deuda0 = dato("deuda a largo", ["Long Term Debt", "longTermDebt"], balance, 0)
-    deuda1 = dato("deuda a largo", ["Long Term Debt", "longTermDebt"], balance, 1)
-    corr0 = dato("activo corriente", ["Current Assets", "totalCurrentAssets"], balance, 0)
-    corr1 = dato("activo corriente", ["Current Assets", "totalCurrentAssets"], balance, 1)
-    pcorr0 = dato("pasivo corriente", ["Current Liabilities", "totalCurrentLiabilities"], balance, 0)
-    pcorr1 = dato("pasivo corriente", ["Current Liabilities", "totalCurrentLiabilities"], balance, 1)
-    ventas0 = dato("ventas", ["Total Revenue", "revenue"], resultados, 0)
-    ventas1 = dato("ventas", ["Total Revenue", "revenue"], resultados, 1)
-    coste0 = dato("coste de ventas", ["Cost Of Revenue", "costOfRevenue"], resultados, 0)
-    coste1 = dato("coste de ventas", ["Cost Of Revenue", "costOfRevenue"], resultados, 1)
-    acciones0 = _valor(balance, ["Ordinary Shares Number", "Common Stock Shares Outstanding", "weightedAverageShsOutDil"], 0)
-    acciones1 = _valor(balance, ["Ordinary Shares Number", "Common Stock Shares Outstanding", "weightedAverageShsOutDil"], 1)
+    activos0 = dato("activo total", ["Total Assets", "totalAssets", "assets"], balance, 0)
+    activos1 = dato("activo total", ["Total Assets", "totalAssets", "assets"], balance, 1)
+    beneficio0 = dato("beneficio neto", ["Net Income", "netIncome", "netincomeloss"], resultados, 0)
+    beneficio1 = dato("beneficio neto", ["Net Income", "netIncome", "netincomeloss"], resultados, 1)
+    caja0 = dato("flujo operativo", ["Operating Cash Flow", "netCashProvidedByOperatingActivities", "netcashprovidedbyusedinoperatingactivities"], flujos, 0)
+    deuda0 = dato("deuda a largo", ["Long Term Debt", "longTermDebt", "longtermdebtnoncurrent"], balance, 0)
+    deuda1 = dato("deuda a largo", ["Long Term Debt", "longTermDebt", "longtermdebtnoncurrent"], balance, 1)
+    corr0 = dato("activo corriente", ["Current Assets", "totalCurrentAssets", "assetscurrent"], balance, 0)
+    corr1 = dato("activo corriente", ["Current Assets", "totalCurrentAssets", "assetscurrent"], balance, 1)
+    pcorr0 = dato("pasivo corriente", ["Current Liabilities", "totalCurrentLiabilities", "liabilitiescurrent"], balance, 0)
+    pcorr1 = dato("pasivo corriente", ["Current Liabilities", "totalCurrentLiabilities", "liabilitiescurrent"], balance, 1)
+    ventas0 = dato("ventas", ["Total Revenue", "revenue", "revenuefromcontractwithcustomerexcludingassessedtax", "revenues"], resultados, 0)
+    ventas1 = dato("ventas", ["Total Revenue", "revenue", "revenuefromcontractwithcustomerexcludingassessedtax", "revenues"], resultados, 1)
+    coste0 = dato("coste de ventas", ["Cost Of Revenue", "costOfRevenue", "costofgoodsandservicessold"], resultados, 0)
+    coste1 = dato("coste de ventas", ["Cost Of Revenue", "costOfRevenue", "costofgoodsandservicessold"], resultados, 1)
+    acciones0 = _valor(balance, ["Ordinary Shares Number", "Common Stock Shares Outstanding", "weightedAverageShsOutDil", "weightedaveragenumberofdilutedsharesoutstanding"], 0)
+    acciones1 = _valor(balance, ["Ordinary Shares Number", "Common Stock Shares Outstanding", "weightedAverageShsOutDil", "weightedaveragenumberofdilutedsharesoutstanding"], 1)
 
     roa0 = _dividir(beneficio0, activos0)
     roa1 = _dividir(beneficio1, activos1)

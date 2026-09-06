@@ -144,11 +144,24 @@ def main() -> int:
     parser.add_argument("--tickers", type=int, default=120)
     parser.add_argument("--anios", type=int, default=10)
     parser.add_argument("--salida", type=str, default="")
+    parser.add_argument("--universo", choices=("grandes", "alfabetico"), default="grandes")
     args = parser.parse_args()
 
-    from modulos.swing_ui import _universo_mercado
+    if args.universo == "grandes":
+        # 119 grandes capitalizaciones repartidas en 11 sectores.
+        #
+        # IMPORTANTE: _universo_mercado() devuelve los N PRIMEROS de una lista
+        # ALFABÉTICA (A, AA, AACG, AADX, AAGH...), no los N mayores. Es un corte
+        # dominado por microcaps y sociedades vacías, que no se parece a lo que
+        # se analiza con esta aplicación y donde además el coste real de operar
+        # es muy superior al 0,1% que asume el backtest.
+        from modulos.screener_avanzado import FALLBACK_UNIVERSE
 
-    tickers = _universo_mercado(args.tickers)
+        tickers = sorted({t for lista in FALLBACK_UNIVERSE.values() for t in lista})[: args.tickers]
+    else:
+        from modulos.swing_ui import _universo_mercado
+
+        tickers = _universo_mercado(args.tickers)
     if "SPY" not in tickers:
         tickers.append("SPY")
     print(f"Validación pre-registrada · {len(tickers)} valores · {args.anios} años", flush=True)
