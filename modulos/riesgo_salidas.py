@@ -34,7 +34,7 @@ from modulos.backtest_salidas import COSTE_POR_LADO, REGLAS, SEMILLA, Cierre
 LOGGER = logging.getLogger("valuequant.riesgo_salidas")
 
 __all__ = [
-    "MetricasRiesgo", "PESO_FIJO_SENSIBILIDAD",
+    "MetricasRiesgo", "MetricasSerie", "metricas_de_serie", "PESO_FIJO_SENSIBILIDAD",
     "retornos_diarios_cartera", "curva_equity", "serie_drawdown",
     "metricas_riesgo", "comparar_riesgo", "canje_maxdd_por_retorno",
     "veredicto_seguro", "CRITERIO",
@@ -140,6 +140,88 @@ def serie_drawdown(equity: pd.Series) -> pd.Series:
 
 
 @dataclass(slots=True)
+class MetricasSerie:
+    """Métricas de riesgo de una serie de retornos diarios.
+
+    Separadas de MetricasRiesgo a propósito: estas dependen SOLO de la serie, no
+    de si detrás hay operaciones de un backtest o una cartera real. Tener una
+    única implementación evita que dos copias diverjan con el tiempo, que es lo
+    que pasó con el Altman Z duplicado entre charts.py y forense_scores.
+    """
+
+    sesiones: int
+    cagr_pct: float
+    max_drawdown_pct: float
+    duracion_drawdown_dias: int
+    volatilidad_pct: float
+    downside_pct: float
+    sharpe: float
+    sortino: float
+    calmar: float
+    ulcer: float
+    cvar5_pct: float
+    p5_pct: float
+
+    def como_fila(self) -> dict[str, Any]:
+        return {
+            "CAGR_%": round(self.cagr_pct, 2),
+            "maxDD_%": round(self.max_drawdown_pct, 2),
+            "durDD_d": self.duracion_drawdown_dias,
+            "vol_%": round(self.volatilidad_pct, 2),
+            "Sharpe": round(self.sharpe, 3),
+            "Sortino": round(self.sortino, 3),
+            "Calmar": round(self.calmar, 3),
+            "Ulcer": round(self.ulcer, 2),
+            "CVaR5_%": round(self.cvar5_pct, 2),
+        }
+
+
+def metricas_de_serie(retornos_diarios: pd.Series) -> MetricasSerie | None:
+    """Riesgo de una serie de retornos diarios.
+
+    AVISO IMPORTANTE: la serie tiene que ser de retornos, no de VALOR. Si se le
+    pasa una cartera con aportaciones, cada ingreso de dinero nuevo aparece como
+    un retorno enorme y el Sharpe, la volatilidad y el drawdown mienten. Para una
+    cartera con flujos hay que unitizarla antes (TWR).
+    """
+    if retornos_diarios is None or retornos_diarios.empty:
+        return None
+
+    diarios = pd.Series(retornos_diarios).dropna().to_numpy(dtype=float)
+    if len(diarios) < 2:
+        return None
+
+    equity = np.cumprod(1 + diarios)
+    serie_eq = pd.Series(equity)
+    drawdown = serie_eq / serie_eq.cummax() - 1.0
+
+    anios = max(len(diarios) / SESIONES_ANIO, 1 / SESIONES_ANIO)
+    valor_final = float(equity[-1])
+    cagr = (valor_final ** (1 / anios) - 1) * 100 if valor_final > 0 else float("nan")
+    max_dd = float(drawdown.min() * 100)
+
+    desv = float(diarios.std(ddof=1))
+    negativos = diarios[diarios < 0]
+    desv_bajista = float(negativos.std(ddof=1)) if len(negativos) > 1 else 0.0
+    media = float(diarios.mean())
+
+    return MetricasSerie(
+        sesiones=len(diarios),
+        cagr_pct=float(cagr),
+        max_drawdown_pct=max_dd,
+        duracion_drawdown_dias=_duracion_maxima_drawdown(drawdown),
+        volatilidad_pct=float(desv * np.sqrt(SESIONES_ANIO) * 100),
+        downside_pct=float(desv_bajista * np.sqrt(SESIONES_ANIO) * 100),
+        sharpe=float(media / desv * np.sqrt(SESIONES_ANIO)) if desv else 0.0,
+        sortino=float(media / desv_bajista * np.sqrt(SESIONES_ANIO)) if desv_bajista else 0.0,
+        calmar=float(cagr / abs(max_dd)) if max_dd < 0 else float("nan"),
+        ulcer=float(np.sqrt(np.mean((drawdown.to_numpy() * 100) ** 2))),
+        cvar5_pct=float(_cvar(diarios) * 100),
+        p5_pct=float(np.percentile(diarios, 5) * 100),
+    )
+
+
+@dataclass(slots=True)
 class MetricasRiesgo:
     regla: str
     # Curva
@@ -233,37 +315,23 @@ def metricas_riesgo(regla: str, cierres: Sequence[Cierre],
     r = np.array([c.retorno_neto for c in propios], dtype=float)
     maes = np.array([c.mae for c in propios if c.mae is not None], dtype=float)
 
-    equity = curva_equity(retornos_diarios)
-    drawdown = serie_drawdown(equity)
-    sesiones = len(retornos_diarios)
-    anios = max(sesiones / SESIONES_ANIO, 1 / SESIONES_ANIO)
-
-    valor_final = float(equity.iloc[-1])
-    cagr = (valor_final ** (1 / anios) - 1) * 100 if valor_final > 0 else float("nan")
-    max_dd = float(drawdown.min() * 100)
-
-    diarios = retornos_diarios.to_numpy(dtype=float)
-    vol = float(diarios.std(ddof=1) * np.sqrt(SESIONES_ANIO) * 100) if sesiones > 1 else 0.0
-    negativos = diarios[diarios < 0]
-    downside = float(negativos.std(ddof=1) * np.sqrt(SESIONES_ANIO) * 100) if len(negativos) > 1 else 0.0
-
-    media_diaria = float(diarios.mean())
-    sharpe = (media_diaria / diarios.std(ddof=1) * np.sqrt(SESIONES_ANIO)) if diarios.std(ddof=1) else 0.0
-    sortino = (media_diaria / negativos.std(ddof=1) * np.sqrt(SESIONES_ANIO)) if len(negativos) > 1 and negativos.std(ddof=1) else 0.0
-    calmar = (cagr / abs(max_dd)) if max_dd < 0 else float("nan")
-    ulcer = float(np.sqrt(np.mean((drawdown.to_numpy() * 100) ** 2)))
+    # Las métricas de la serie salen de metricas_de_serie: una sola
+    # implementación compartida con el análisis de cartera.
+    serie = metricas_de_serie(retornos_diarios)
+    if serie is None:
+        return None
 
     return MetricasRiesgo(
         regla=regla,
-        cagr_pct=float(cagr),
-        max_drawdown_pct=max_dd,
-        duracion_drawdown_dias=_duracion_maxima_drawdown(drawdown),
-        volatilidad_pct=vol,
-        downside_pct=downside,
-        sharpe=float(sharpe),
-        sortino=float(sortino),
-        calmar=float(calmar),
-        ulcer=ulcer,
+        cagr_pct=serie.cagr_pct,
+        max_drawdown_pct=serie.max_drawdown_pct,
+        duracion_drawdown_dias=serie.duracion_drawdown_dias,
+        volatilidad_pct=serie.volatilidad_pct,
+        downside_pct=serie.downside_pct,
+        sharpe=serie.sharpe,
+        sortino=serie.sortino,
+        calmar=serie.calmar,
+        ulcer=serie.ulcer,
         p5_pct=float(np.percentile(r, 5) * 100),
         p1_pct=float(np.percentile(r, 1) * 100),
         cvar5_pct=float(_cvar(r) * 100),

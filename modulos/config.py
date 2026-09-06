@@ -274,3 +274,44 @@ SUBIDA_REGLA_OCHO_PCT = 20.0
 
 # Fiscalidad española: informativo, nunca decide.
 DIAS_RECOMPRA_ES = 60  # regla de los dos meses para valores cotizados
+
+
+# ==========================================================================
+# RENDIMIENTO DE CARTERA (modulos/rendimiento_cartera.py)
+# ==========================================================================
+
+MONEDA_BASE = "EUR"
+
+# Proxies del benchmark. Se eligen ACUMULATIVOS y cotizados en EUR a propósito:
+# al estar ya en euros no necesitan conversión de divisa, así que el benchmark
+# no arrastra ningún error de FX. Y al ser de acumulación, su precio incorpora
+# los dividendos, que es la misma convención de retorno total que usamos para
+# las acciones con auto_adjust=True. Comparar un índice de precio pelado contra
+# una cartera con dividendos reinvertidos es el error clásico de estas
+# herramientas, y así queda cerrado por construcción.
+PROXIES_INDICE: dict[str, dict[str, str]] = {
+    "SP500": {"ticker": "CSPX.AS", "nombre": "iShares Core S&P 500 (acc, EUR)", "moneda": "EUR"},
+    "MSCI_WORLD": {"ticker": "IWDA.AS", "nombre": "iShares Core MSCI World (acc, EUR)", "moneda": "EUR"},
+    "NASDAQ100": {"ticker": "CNDX.AS", "nombre": "iShares Nasdaq 100 (acc, EUR)", "moneda": "EUR"},
+    "STOXX600": {"ticker": "MEUD.PA", "nombre": "Amundi Stoxx Europe 600 (acc, EUR)", "moneda": "EUR"},
+}
+
+PESOS_BENCHMARK_DEFECTO: dict[str, float] = {"SP500": 0.40, "MSCI_WORLD": 0.60}
+
+# Pares de divisa. IMPORTANTE: "EURUSD=X" cotiza DÓLARES POR EURO (~1,16), así
+# que para pasar un precio en USD a EUR hay que DIVIDIR, no multiplicar.
+# Multiplicar inflaría cada posición estadounidense en torno a un 35%, y como el
+# benchmark en EUR no lleva FX, el sesgo caería entero del lado de la cartera:
+# parecería batir al índice sin hacerlo. Ver tipo_de_cambio_a_eur().
+PARES_FX: dict[str, str] = {
+    "USD": "EURUSD=X",
+    "GBP": "EURGBP=X",
+    "CHF": "EURCHF=X",
+    "JPY": "EURJPY=X",
+    "CAD": "EURCAD=X",
+}
+
+# Tolerancia de la identidad importe = participaciones x precio, en euros.
+TOLERANCIA_RECONSTRUCCION_EUR = 0.01
+
+FICHERO_CARTERA = "data/cartera.json"
