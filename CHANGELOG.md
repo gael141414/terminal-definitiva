@@ -4,6 +4,34 @@ Todos los cambios relevantes de ValueQuant Terminal se documentan en este archiv
 
 El formato sigue una estructura práctica inspirada en Keep a Changelog y versionado semántico interno. Mientras el producto siga en prototipo local, las versiones se marcan como `internal`.
 
+## [0.4.0-internal] - 2026-09-06
+
+### Added
+
+- Validación point-in-time de los pilares fundamentales (`modulos/validacion_pilares.py`,
+  `scripts/validar_pilares_point_in_time.py`): 740 observaciones sobre 79 grandes
+  capitalizaciones, situadas el día siguiente a la fecha de presentación real ante la SEC.
+- Vocabulario XBRL en `forense_scores`, para que las tres métricas funcionen sobre datos
+  as-reported además de sobre los esquemas de yfinance y FMP.
+
+### Fixed
+
+- **`_universo_mercado(N)` devuelve los N primeros de una lista alfabética**, no los N mayores.
+  Los estudios se repitieron sobre 119 grandes capitalizaciones; la conclusión sobre las salidas
+  se refuerza (27.541 entradas, todas las reglas significativamente peores que aguantar).
+- La reconstrucción point-in-time no leía nada, por tres fallos encadenados: `usar_cache=True`
+  perdía los `filing_dates` (viajan en `.attrs`), las columnas de metadatos de EDGAR se colaban
+  al convertir a número, y EDGAR y FMP nombran el mismo concepto distinto
+  (`us-gaap_AssetsCurrent` frente a `assetscurrent`).
+
+### Evidencia
+
+- **Altman Z'' predice el retorno posterior** entre grandes capitalizaciones: signo correcto en los
+  tres horizontes y reparto monótono por quintiles (16,8% a 26,7% anual). Es un criterio de
+  SELECCIÓN, no de venta.
+- **Piotroski no predice**, y el quintil más alto es el de peor retorno.
+- Beneish es inconsistente entre horizontes: por el criterio pre-declarado, ruido.
+
 ## [0.3.0-internal] - 2026-09-06
 
 ### Added

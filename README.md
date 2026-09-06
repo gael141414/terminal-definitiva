@@ -158,6 +158,22 @@ Las tres hipótesis pre-registradas quedaron refutadas, dos de ellas **en direcc
 esperado: las salidas hacen más daño en régimen bajista y sobre las entradas de peor calidad. Detalle
 completo en [docs/resultado_validacion_salidas.md](docs/resultado_validacion_salidas.md).
 
+### Validación point-in-time de los pilares fundamentales
+
+740 observaciones sobre 79 grandes capitalizaciones, cada una situada el día siguiente a la **fecha
+de presentación real** ante la SEC. Correlación de Spearman con el retorno posterior:
+
+| Pilar | Signo esperado | 63d | 126d | 252d |
+|---|---|---|---|---|
+| **Altman Z''** | positivo | +0,047 ✓ | +0,087 ✓ | **+0,119 ✓** |
+| Beneish M | negativo | −0,098 ✓ | +0,027 ✗ | −0,170 ✓ |
+| Piotroski | positivo | −0,017 ✗ | −0,032 ✗ | −0,045 ✗ |
+
+**Altman Z'' es el único con señal limpia**: signo correcto en los tres horizontes y reparto
+monótono por quintiles, casi 10 puntos anuales entre el más solvente y el menos. **Piotroski no
+predice, y si acaso va al revés.** Detalle y límites —incluidas 15 comparaciones sin corregir— en
+[docs/resultado_validacion_pilares.md](docs/resultado_validacion_pilares.md).
+
 Los pilares de **valoración y fundamentales quedan sin validar**: reconstruirlos sin look-ahead exige
 las cuentas tal y como se conocían en cada fecha pasada, y el repositorio no tiene esos datos
 point-in-time generados. Trata la herramienta como un panel de diagnóstico, no como una orden.
